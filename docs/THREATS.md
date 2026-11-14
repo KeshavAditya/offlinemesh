@@ -1,7 +1,7 @@
 # OfflineMesh threat model
 
 What the system defends against, how, and what it does not defend against.
-Plan references (5.x, section 12) point to Part 5 of `OFFLINEMESH_COMPLETE_GUIDE.md`.
+Plan references (5.x, 13.2, section 12) point to `OFFLINEMESH_COMPLETE_GUIDE.md`.
 
 ## Setting
 
@@ -25,6 +25,11 @@ Plan references (5.x, section 12) point to Part 5 of `OFFLINEMESH_COMPLETE_GUIDE
 | Spam presence beacons | One PRESENCE per key per 10 s; older ones are ignored. | 5.6 step 8 |
 | Connect and say nothing | No valid `HELLO_AUTH` within 5 s closes the link. A link silent for 45 s is closed. | 5.5 |
 | Use the SYNC protocol to amplify | Duplicate IDs in one `SYNC_WANT` are answered once. Envelopes the link already has are not resent. Outstanding wants are capped. | 5.8 |
+| Read a group message it relays | A group message is sent as one ordinary DM to each other member. Every copy is end-to-end encrypted to that member. Relays see only DMs. | 13.2 |
+| Claim or take over someone else's group | The group id is bound to the owner: gid = first 8 bytes of H(ownerId \|\| salt). An invite is dropped unless its gid matches its sender. Only the owner can change membership. | 13.2 |
+| Hide a member's group message by reusing its id | De-duplication is per sender: (group id, sender id, message id). Two senders with the same message id both show. | 13.2 |
+| Fill my group table with invites | At most 4 groups per unverified owner. When the table of 32 is full, the oldest group I never posted in and whose owner is unverified is evicted; if there is no such group, the invite is dropped. Verified owners have a hard cap of 64. | 13.2 |
+| Send a group message without an invite | Dropped. A group message from a non-member, or one that arrives before its invite, is not shown. | 13.2 |
 
 Proof of work is a small extra cost per message. It is not the main defence.
 
@@ -45,6 +50,14 @@ We say these out loud. They are not hidden.
 - **TTL reset.** A malicious relay can reset TTL to its starting value. Duplicate suppression still stops storms.
 - **Desk demo uses software muting** to force two hops. On a desk all phones are in range of each other.
 - **Android only.** No iOS app. An iPhone can join only as a browser guest.
+
+### Group chats (section 13.2)
+
+- **A group message costs one DM, with its own proof of work, per other member.** Groups are capped at 16 members, so at most 15 DMs per message.
+- **Relays can see the fan-out.** A relay can see that one source sent DMs to several ids at the same time, and guess they are a group.
+- **Removal is not erasure.** Only the owner can change membership. A removed member gets no new messages, but keeps the history it already has.
+- **Fake identities can still churn groups.** Many cheap keys (Sybil), 4 groups each, can keep evicting the groups I never posted in. Groups I posted in, and groups owned by verified contacts, are not evicted.
+- **Order matters.** A group message that arrives before its invite is dropped.
 
 ### Found while building
 

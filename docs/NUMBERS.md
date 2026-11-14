@@ -10,6 +10,8 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 | of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 19, all pass |
 | `scripts/e2e.sh` on 3 desktop nodes (TCP, one laptop) | items 1-6 PASS (run twice) |
 | `scripts/e2e.sh` on 3 Android emulators (API 36, emulated Bluetooth) | items 1-6 PASS |
+| `scripts/e2e.sh` on 5 desktop nodes (`NODES=5`, TCP, one laptop, in a line) | items 1-8 PASS; item 7 (group of all 5) showed `Delivered to 4 of 4` in about 1 s |
+| `scripts/e2e.sh` on 4 Android emulators | **TODO: results being collected now, fill in here** |
 | `scripts/e2e.sh` on the 3 real phones | **not run yet** |
 
 ## Broadcast cost (simulator, real core code, virtual time)
@@ -41,6 +43,15 @@ Source: `BroadcastCostTest` and `SimTest.t9_randomGraphBroadcastCost` (lines sta
 - Phones: **not measured yet.** Expect several times slower than the laptop (estimate): a post is still well under a second, the largest DM a few seconds.
 - Source: `PowTimingTest` (lines starting `POW`).
 
+## Cost of one group message
+
+A group message is sent as one ordinary DM to each other member, so it costs **(members − 1) DMs**, each with its own proof of work and its own ACK.
+
+- A short group text (under 2,048 bytes of body) is a DM at 16 bits: 14 + 0 for size + 2 for TTL 8. That is twice the work of a 15-bit post, so about 12 to 18 ms per DM on the laptop (estimate from the 6 to 9 ms post time and the hash rate above).
+- So on the laptop: 3 members about 30 ms, 5 members about 60 ms, the 16-member cap (15 DMs) about 0.2 to 0.3 s of mining in total (estimate).
+- On the network, each of those DMs follows its own route, so the transmissions are the sum of the hop counts to each member.
+- Phones: not measured; expect several times slower (estimate).
+
 ## Bluetooth LE L2CAP (emulators, netsim)
 
 | What | Result |
@@ -61,4 +72,5 @@ Source: `BroadcastCostTest` and `SimTest.t9_randomGraphBroadcastCost` (lines sta
 ## Still to measure
 
 - PoW time on each real phone.
+- `e2e.sh` on 4 emulators (TODO above).
 - `e2e.sh` on the three real phones, and real Bluetooth range and timing.

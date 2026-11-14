@@ -23,7 +23,7 @@ Have the fallback (desktop) ready in a second terminal before you start.
    ```
 3. Open `http://127.0.0.1:8081/`, `:8082/`, `:8083/` side by side in the laptop browser for the projector.
 4. Force two hops. On A's Network tab tick **Muted** for C. On C's Network tab tick **Muted** for A. (All phones on a desk are in range; muting is done in software. Say so.)
-5. Dry run once: `scripts/e2e.sh 8081 8082 8083` must print PASS for items 1 to 6. It bans A on B for 10 minutes at the end, so run it at least 10 minutes before the demo, or restart the apps after it.
+5. Dry run once: `scripts/e2e.sh 8081 8082 8083` must print PASS for items 1 to 7 (7 is the group check). It bans A on B for 10 minutes at the end, so run it at least 10 minutes before the demo, or restart the apps after it.
 
 ### Path 2: emulators (practice only)
 
@@ -40,8 +40,9 @@ Then the same `deploy-all.sh`, `forward-ui.sh`, `e2e.sh` as for phones (serials 
 
 ```
 scripts/run-3-desktop.sh            # A <-> B <-> C over TCP, UIs on 8081..8083
-scripts/e2e.sh 8081 8082 8083       # optional check, all 6 PASS
+scripts/e2e.sh 8081 8082 8083       # optional check, items 1-7 PASS
 scripts/run-3-desktop.sh stop
+NODES=5 scripts/run-3-desktop.sh    # optional: 5 nodes A..E in a line, UIs on 8081..8085
 ```
 Same browser tabs, same script below. Tell judges it is TCP on one laptop instead of Bluetooth. Bluetooth on/off in step 4 becomes ticking **Muted** for B on C (and C on B), then unticking.
 
@@ -50,17 +51,20 @@ Same browser tabs, same script below. Tell judges it is TCP on one laptop instea
 | Time | Do | Say |
 |---|---|---|
 | 0:00 | Show the three phones in airplane mode. Open A's Network tab. | "No internet, no server. Phones talk over Bluetooth. A sees C at 2 hops via B." |
-| 0:20 | A: Messages, pick C, send "meet at the gym". | "This is end-to-end encrypted. B carries it but cannot read it." |
-| 0:35 | Show C has it. Show A: "Delivered, 2 hops via B". Show B's Messages tab is empty. | "C's signed receipt came back the same way." |
-| 0:55 | B: Security tab, tick **Tamper while relaying**. A sends C another DM. | "B now flips one bit in everything it forwards." |
-| 1:10 | Show C's Security tab: `BAD_SIGNATURE` line. Untick Tamper on B. | "C rejects it. B's link is blamed, not A. A is not banned." |
-| 1:25 | Cut C off: turn Bluetooth off on C (below). A posts "C, are you there?". | "C is out of range." |
-| 1:40 | Turn Bluetooth back on on C. Wait up to 20 s. The post appears on C. | "When C comes back, the phones compare lists and fill the gap." |
-| 2:05 | A: Security tab, press **Flood**. | "A tries 4 posts in one 10-second window. The limit is 3." |
-| 2:15 | Show B's Security tab: `RATE_EQUIVOCATION ... banned 10 min`. Show C's feed: only the first three. | "Two signed posts for one slot is proof. B bans A's key and stops relaying it." |
-| 2:35 | One sentence on limits. | "We don't stop one person making many identities, relays see who talks to whom, and there is no forward secrecy. It's all in THREATS.md." |
+| 0:15 | A: Chats, pick C, send "meet at the gym". | "This is end-to-end encrypted. B carries it but cannot read it." |
+| 0:30 | Show C has it. Show A: "Delivered, 2 hops via B". Show B's Chats tab is empty. | "C's signed receipt came back the same way." |
+| 0:50 | B: Security tab, tick **Tamper while relaying**. A sends C another DM. | "B now flips one bit in everything it forwards." |
+| 1:05 | Show C's Security tab: `BAD_SIGNATURE` line. Untick Tamper on B. | "C rejects it. B's link is blamed, not A. A is not banned." |
+| 1:20 | Cut C off: turn Bluetooth off on C (below). A posts "C, are you there?". | "C is out of range." |
+| 1:35 | Turn Bluetooth back on on C. Wait up to 20 s. The post appears on C. | "When C comes back, the phones compare lists and fill the gap." |
+| 2:00 | A: Security tab, press **Flood**. | "A tries 4 posts in one 10-second window. The limit is 3." |
+| 2:10 | Show B's Security tab: `RATE_EQUIVOCATION ... banned 10 min`. Show C's feed: only the first three. | "Two signed posts for one slot is proof. B bans A's key and stops relaying it." |
+| 2:25 | *Optional, cut if short on time.* B: Chats, **New group**, tick every contact, send "group test". Show B: "Delivered to N−1 of N−1" (2 of 2 with three phones). | "A group message is one encrypted DM to each member. More phones just join the mesh: up to 5 direct links each, more hops beyond that." |
+| 2:45 | One sentence on limits. | "We don't stop one person making many identities, relays see who talks to whom, and there is no forward secrecy. It's all in THREATS.md." |
 
-Flood comes last on purpose: it bans A on B for 10 minutes, so nothing from A crosses B after it.
+If you cut the group step, say the limits line at 2:25. Either way the script ends before 3:00.
+
+Flood comes last on purpose: it bans A on B for 10 minutes, so nothing from A crosses B after it. That is why B, not A, creates the group: B has a direct link to A and to C.
 
 Bluetooth off and on for C without touching the phone:
 ```
@@ -94,4 +98,5 @@ Use `127.0.0.1`, not `localhost` (on this laptop `localhost` can reach another s
 | How do you stop malicious people joining or spoofing? | Anyone can join; it is an open emergency network. Nobody can impersonate an existing identity: the ID is a hash of the public key and every message is signed. People confirm contacts by comparing fingerprints in person. We do not stop one attacker creating many identities. |
 | How do you stop a message reaching a million people? | DMs follow one path, not a flood. Broadcasts are forwarded once per link, never back to a neighbour that has them, and stop after 6 hops. In our simulator one post on 40 links cost 41 transmissions. Cost grows with nearby links, not network size. |
 | How do you keep privacy and integrity across relays you do not trust? | DMs are encrypted end to end with AES-256-GCM using a key only the two endpoints can derive. Every message is signed, and its ID is a hash of its content, so any change is caught at the next honest node. |
+| Does it work with more than three phones? | Yes. Each phone keeps up to 5 direct links and more phones form more hops. We ran 5 desktop nodes end to end, and the simulator runs 25 and 50. A group message costs one DM per other member, so groups are capped at 16. |
 | Did you test it on real phones? | Say what is true on the day. As of writing: three desktop nodes and three Android emulators over emulated Bluetooth pass all six checks; real phones not yet. |

@@ -36,3 +36,4 @@
 [core] [16:03] done: 13.2 full group table evicts oldest unverified-owner group; verified owners always admitted; GroupTest t18b; core 60 tests green
 [core] [16:09] done: group eviction spares groups I posted in (flag rebuilt on replay); verified invites hard-capped at 64 (13.2); 63 core tests green
 [ui] [16:10] done: 13.1/13.2 UI side: group/group-members/gmsg commands, group chats in index.html (27 KB), NODES=N in run-3-desktop.sh, e2e items 7+8; e2e 3 nodes PASS 1-7, 5 nodes PASS 1-8
+[qa] [16:13] done: docs for section 13 (THREATS group rows + limits, DEMO optional group step, NUMBERS 5-node e2e + group cost + TODO 4-emulator row, DEVPOST groups/any phones/UI)
