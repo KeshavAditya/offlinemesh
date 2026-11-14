@@ -59,3 +59,6 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 - Stretch plan: 1 guest (uiserver done; app toggle+hotspot IP+QR pending -> android), 2 photo DM (ui), 3 notif inline reply (android), 4 ban-proof gossip (core), 5 QR identity verify (ui; QR also used by guest). Launching core-ban-gossip + ui-photo now.
 - P5 leftovers: persistence restart check on emulators; plaintext-in-B-log check on phones.
 - 18:25 ui-3 final: Gate 2 confirmed (2 runs). NOTE desktop run-3 uses 8081-8083 = same as emulator adb forwards; stop forwards (adb forward --remove-all) before desktop e2e. Desktop e2e rerun on latest core still TODO (do at end).
+- 18:40 stretch 4 DONE 942406e: BAN_PROOF frame 0x14 (two POSTs), verify-before-ban, relay once; guide 5.2/5.6 edited; 46 core tests. Queue: stretch 5 QR (ui, after photo helper frees index.html); stretch 1 app side + stretch 3 notif (android, after android-3).
+- 18:55 stretch 2 DONE 52e5bb5 (sendDmImage, Msg.img, guide s6 edited). App needs WebChromeClient.onShowFileChooser. ui-qr launched (stretch 5 + guest QR in Network tab). Next android-4: guest toggle+hotspot IP+guestInfo feed+file chooser; android-5: notifications w/ inline reply.
+- 19:10 stretch 5 DONE e6567c6: zxing /api/qr, /api/guest; UiServer(node, port, guest: () -> GuestServer? = {null}). Launching qa-docs (THREATS, DEMO, NUMBERS, DEVPOST).
