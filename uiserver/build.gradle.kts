@@ -9,6 +9,7 @@ dependencies {
     implementation(libs.ktor.server.cio)
     implementation(libs.ktor.server.websockets)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.zxing.core)
     testImplementation(kotlin("test"))
 }
 tasks.test {

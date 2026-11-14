@@ -46,6 +46,10 @@ img { display: block; max-width: 100%; }
 <section id="network">
   <p>My name: <input type="text" id="myName"> <button onclick="send({t:'name',name:val('myName')})">Save name</button></p>
   <p>My fingerprint: <span id="fp"></span></p>
+  <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
+  <img id="myQr" width="200" height="200" alt="QR code of my fingerprint">
+  <p class="grey">To verify a contact: scan their QR (or read their screen), check it matches their ID below, then tick Verified.</p>
+  <div id="guest"></div>
   <h3>Contacts</h3>
   <table><thead><tr><th>Name</th><th>ID</th><th>Hops</th><th>Via</th><th>Linked</th><th>Verified</th><th>Muted</th></tr></thead><tbody id="contacts"></tbody></table>
   <h3>Links</h3>
@@ -152,6 +156,8 @@ function render() {
   $('me').textContent = S.self.name + ' (' + fp(S.self.id) + ')';
   $('nlinks').textContent = S.links.length;
   $('fp').textContent = fp(S.self.id);
+  const qr = '/api/qr?text=' + encodeURIComponent('omesh:' + S.self.id);
+  if ($('myQr').getAttribute('src') !== qr) $('myQr').src = qr;
   if (document.activeElement !== $('myName')) $('myName').value = S.self.name;
 
   const posts = $('posts'); posts.replaceChildren();
@@ -205,6 +211,26 @@ function render() {
   $('tamper').checked = S.debug.tamper;
   $('drop').checked = S.debug.drop;
 }
+
+// 5.13: while guest mode is on, show each join URL as a QR plus the PIN. Polled, so a rotated PIN shows up within 3 s.
+let guestKey = '';
+function guest() {
+  fetch('/api/guest').then(r => r.json()).then(g => {
+    const key = JSON.stringify(g);
+    if (key === guestKey) return;
+    guestKey = key;
+    const d = $('guest'); d.replaceChildren();
+    if (!g) return;
+    d.appendChild(el('h3', 'Guest access'));
+    d.appendChild(el('p', 'PIN: ' + g.pin));
+    for (const u of g.urls) {
+      const im = el('img'); im.width = im.height = 200; im.alt = 'QR code of ' + u;
+      im.src = '/api/qr?text=' + encodeURIComponent(u);
+      d.appendChild(im); d.appendChild(el('p', u));
+    }
+  }).catch(() => {});
+}
+setInterval(guest, 3000); guest();
 
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');

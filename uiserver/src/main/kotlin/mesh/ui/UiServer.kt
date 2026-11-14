@@ -1,5 +1,8 @@
 package mesh.ui
 
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -46,9 +49,12 @@ fun MeshNode.asUiNode(): UiNode = object : UiNode {
     override fun exec(c: Cmd) = this@asUiNode.exec(c)
 }
 
-/** Serves the page, /ws, /api/snapshot and /api/cmd on 127.0.0.1 only (section 6). */
-class UiServer(private val node: UiNode, private val port: Int) {
-    constructor(node: MeshNode, port: Int) : this(node.asUiNode(), port)
+/**
+ * Serves the page, /ws, /api/snapshot and /api/cmd on 127.0.0.1 only (section 6), plus /api/qr and /api/guest for the
+ * Network tab. [guest] returns the running guest server (5.13) or null when guest mode is off.
+ */
+class UiServer(private val node: UiNode, private val port: Int, private val guest: () -> GuestServer? = { null }) {
+    constructor(node: MeshNode, port: Int, guest: () -> GuestServer? = { null }) : this(node.asUiNode(), port, guest)
 
     private val json = Json { encodeDefaults = true }
     private val subs = CopyOnWriteArraySet<Channel<String>>()
@@ -79,6 +85,17 @@ class UiServer(private val node: UiNode, private val port: Int) {
                     }
                     node.exec(cmd)
                     call.respondText("""{"ok":true}""", ContentType.Application.Json)
+                }
+                get("/api/qr") {
+                    val text = call.request.queryParameters["text"].orEmpty()
+                    if (text.isEmpty() || text.length > MAX_QR_TEXT)
+                        return@get call.respondText("text: 1 to $MAX_QR_TEXT characters", status = HttpStatusCode.BadRequest)
+                    call.respondText(qrSvg(text), ContentType.Image.SVG)
+                }
+                get("/api/guest") {
+                    val g = guest()  // {"pin","urls"} while guest mode is on, else null; the page polls it to catch PIN rotation
+                    val body = if (g == null) "null" else buildJsonObject { put("pin", g.pin); put("urls", json.encodeToJsonElement(g.urls())) }.toString()
+                    call.respondText(body, ContentType.Application.Json)
                 }
                 webSocket("/ws") {
                     val q = Channel<String>(1000)
@@ -115,6 +132,17 @@ class UiServer(private val node: UiNode, private val port: Int) {
         }
         is MeshEvent.SecurityLogged -> buildJsonObject { put("t", "sec"); put("event", json.encodeToJsonElement(e.event)) }
     }.toString()
+}
+
+private const val MAX_QR_TEXT = 200
+
+/** QR code of [text] as a black-on-white SVG, with the 4-module quiet zone scanners need. */
+internal fun qrSvg(text: String): String {
+    val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.MARGIN to 4))
+    val d = StringBuilder()
+    for (y in 0 until m.height) for (x in 0 until m.width) if (m[x, y]) d.append("M$x ${y}h1v1h-1z")
+    return """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${m.width} ${m.height}" shape-rendering="crispEdges">""" +
+        """<rect width="100%" height="100%" fill="#fff"/><path d="$d"/></svg>"""
 }
 
 private val LOCAL = setOf("127.0.0.1", "localhost")

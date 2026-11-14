@@ -868,7 +868,7 @@ Browser to server (WebSocket message, or HTTP `POST /api/cmd` with the same JSON
 {"t":"attack","kind":"flood"}
 ```
 
-Also `GET /api/snapshot` returns the snapshot object. The HTTP forms exist so shell scripts can drive a node with `curl`.
+Also `GET /api/snapshot` returns the snapshot object, `GET /api/qr?text=` (1 to 200 characters) returns that text as a QR code in SVG (stretch 5: the Network tab shows `omesh:<nodeId>`; guest join URLs), and `GET /api/guest` returns `{"pin","urls"}` while guest mode (5.13) is on, else `null`. The HTTP forms exist so shell scripts can drive a node with `curl`.
 
 The server binds **127.0.0.1 only**. Anything that reaches this port can send messages as this node.
 

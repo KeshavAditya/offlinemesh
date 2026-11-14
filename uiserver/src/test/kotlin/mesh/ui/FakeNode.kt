@@ -78,10 +78,12 @@ class FakeNode : UiNode {
     }
 }
 
-/** Run with `./gradlew :uiserver:runFake` (port 8081, or pass --args=<port>). */
+/** Run with `./gradlew :uiserver:runFake` (port 8081, or pass --args="<port> [guest port]"; a guest port starts guest mode). */
 fun main(args: Array<String>) {
     val port = args.firstOrNull()?.toInt() ?: 8081
-    UiServer(FakeNode(), port).start()
+    val node = FakeNode()
+    val guest = args.getOrNull(1)?.toInt()?.let { GuestServer(node, it).apply { start() } }
+    UiServer(node, port) { guest }.start()
     println("fake node UI on http://127.0.0.1:$port")
     Thread.currentThread().join()
 }
