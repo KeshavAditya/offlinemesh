@@ -26,3 +26,4 @@
 [core] [15:09] done: sender-side link pacing; 50-node honest mesh clean
 [android] [15:10] done: readiness signal = own ui.start() returned (no TCP probe); bind failure shows error, no WebView load, no crash (tested: adb reverse squatting 8080 on emulator C). BLE: dedupe dials by prefix (address+prefix key churned 870 redials after RPA rotation), 30 s cooldown after short links. e2e 1-6 PASS on 3 emulators after fresh data. Note: e2e item 5 bans A for 10 min and phones keep it, so reruns need wiped app data (deploy-all.sh --fresh, not yet pushed)
 [android] [15:15] done: guest mode toggle + file chooser (emulators: Guest mode on B -> 8090 PIN 403/200, guest post '[guest judge] ...' reached C as B's post, Network tab shows PIN+QR; Photo opens system picker, pick returns Uri, photo DM queued on A. Note: A was banned by B (RATE_EQUIVOCATION from a flood run) so the photo did not relay)
+[lead] [15:18] done: desktop e2e on latest main (UI_BASE=8181): PASS 1-6
