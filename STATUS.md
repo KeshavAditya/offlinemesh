@@ -28,3 +28,5 @@
 [android] [15:15] done: guest mode toggle + file chooser (emulators: Guest mode on B -> 8090 PIN 403/200, guest post '[guest judge] ...' reached C as B's post, Network tab shows PIN+QR; Photo opens system picker, pick returns Uri, photo DM queued on A. Note: A was banned by B (RATE_EQUIVOCATION from a flood run) so the photo did not relay)
 [lead] [15:18] done: desktop e2e on latest main (UI_BASE=8181): PASS 1-6
 [android] [15:28] done: stretch 3 notifications + inline reply (emulators: A->C DM via B shows 'Messages' notification on C with sender name, photo DM shows '(photo)', shade Reply reached A at 2 hops and C shows DELIVERED, none while app resumed; photo DM 36.6 KB JPEG delivered A->C via B); final emulator e2e 1-6 PASS on latest main
+[orchestrator] [15:43] done: plan section 13 added (N phones, group chats, UI refresh); helpers next
+[core] [15:51] done: 13.2 group chats as fan-out DMs (kinds 2/3, createGroup/setGroupMembers/sendGroup, GroupChanged/GroupStatusChanged, Snapshot.groups/gdms, Msg.group/delivered/total); GroupTest 12-15 green, core 55 tests, ./gradlew build green

@@ -48,6 +48,9 @@ data class Msg(
     val hops: Int,
     val via: String?,
     val img: String? = null,                           // base64 JPEG for a photo DM (stretch 2), else null
+    val group: String? = null,                         // 13.2: groupId hex for a group message (then to is null and id is groupMsgId)
+    val delivered: Int? = null,                        // 13.2: own group messages only, fan-out DMs ACKed so far
+    val total: Int? = null,                            // 13.2: own group messages only, number of other members
 )
 
 @Serializable
@@ -74,6 +77,10 @@ data class SelfInfo(val id: String, val name: String)
 @Serializable
 data class DebugState(val tamper: Boolean, val drop: Boolean)
 
+/** 13.2: a group as this member knows it; [members] includes the owner. */
+@Serializable
+data class Group(val id: String, val name: String, val owner: String, val members: List<String>)
+
 @Serializable
 data class Snapshot(
     val self: SelfInfo,
@@ -83,6 +90,8 @@ data class Snapshot(
     val dms: Map<String, List<Msg>>,
     val security: List<Sec>,
     val debug: DebugState,
+    val groups: List<Group> = emptyList(),             // 13.2: live groups only
+    val gdms: Map<String, List<Msg>> = emptyMap(),     // 13.2: groupId -> messages, history kept after leaving
 )
 
 sealed interface MeshEvent {
@@ -90,5 +99,7 @@ sealed interface MeshEvent {
     data class StatusChanged(val id: String, val status: MsgStatus, val hops: Int, val via: String?) : MeshEvent
     data class NetworkChanged(val contacts: List<Contact>, val links: List<LinkInfo>) : MeshEvent
     data class SecurityLogged(val event: Sec) : MeshEvent
+    data class GroupChanged(val group: Group) : MeshEvent                                   // 13.2; members without self = left
+    data class GroupStatusChanged(val groupMsgId: String, val delivered: Int, val total: Int) : MeshEvent
 }
 // MeshNode (section 6) lives in MeshNode.kt.

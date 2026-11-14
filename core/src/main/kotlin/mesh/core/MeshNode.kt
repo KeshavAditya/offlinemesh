@@ -1,6 +1,9 @@
 package mesh.core
 
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.BufferUnderflowException
+import java.nio.ByteBuffer
 import java.util.Base64
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
@@ -21,7 +24,10 @@ class MeshNode(
     private val scheduler: Scheduler,
     private val transports: List<Transport>,
 ) {
-    private class Peer(val name: String, val pub: ByteArray, val lastSeen: Long, val lamport: Long, val presence: Envelope)
+    private class Peer(val name: String, val pub: ByteArray, val lastSeen: Long, val lamport: Long, val presence: Envelope?)   // null: learned from a group invite
+    private class Grp(val id: String, val name: String, val owner: String, val members: LinkedHashMap<String, ByteArray>) {   // members: id -> public key
+        fun info() = Group(id, name, owner, members.keys.toList())
+    }
 
     private val listeners = CopyOnWriteArrayList<(MeshEvent) -> Unit>()
     private val lock = Any()
@@ -41,6 +47,9 @@ class MeshNode(
     private val muted = HashSet<String>()
     private val verified = HashSet<String>()
     private val msgs = LinkedHashMap<String, Msg>()
+    private val groups = LinkedHashMap<String, Grp>()
+    private val fanout = HashMap<String, String>()          // own fan-out DM msgId -> groupMsgId, until its ACK
+    private val logPubs = HashMap<String, ByteArray>()      // start-up only: keys seen in messages.log, to reopen own DMs
     private val seen = Seen()
     private val routes = Routes()
     private val guard = Guard()
@@ -61,7 +70,9 @@ class MeshNode(
         me = id.idHex
         name = fitName(File(dataDir, "name.txt").takeIf { it.exists() }?.readText()?.trim() ?: "node-${me.take(4)}")
         store = Store(File(dataDir, "messages.log"))
+        store.replay { e, _ -> logPubs[hex(e.srcId)] = e.srcPub }
         store.replay { e, at -> if (!seen.containsKey(hex(e.msgId))) accept(e, null, at, replay = true) }
+        logPubs.clear()
         running = true
         startEpoch = epochNow()
         for (t in transports) t.start(listenerFor(t))
@@ -93,11 +104,122 @@ class MeshNode(
     }
 
     private fun sealDm(to: String, plain: ByteArray, text: String, img: String?) = loop {
-        val peer = contacts[to] ?: return@loop
-        if (plain.size > C.MAX_DM_PLAINTEXT) return@loop
+        dmTo(to, contacts[to]?.pub ?: return@loop, plain, text, img, null)
+    }
+
+    /** [gm] null: a normal DM shown on its own; "": a group invite (not shown); else the groupMsgId it fans out. */
+    private fun dmTo(to: String, pub: ByteArray, plain: ByteArray, text: String, img: String?, gm: String?) {
+        if (plain.size > C.MAX_DM_PLAINTEXT) return
         val dst = Crypto.unhex(to)
-        val body = Crypto.seal(Crypto.dmKey(id.private, peer.pub), id.nodeId + dst, plain)
-        mine(EnvType.DM, dst, ++lamport, epochNow(), 0, C.TTL_DM, body, text, img)
+        val body = Crypto.seal(Crypto.dmKey(id.private, pub), id.nodeId + dst, plain)
+        mine(EnvType.DM, dst, ++lamport, epochNow(), 0, C.TTL_DM, body, text, img, gm)
+    }
+
+    // ---- 13.2 groups: fan-out DMs, plaintext kinds 2 (GROUP_INVITE) and 3 (GROUP_TEXT) ----
+
+    fun createGroup(name: String, members: List<String>): String {
+        val gid = hex(Crypto.randomBytes(8))
+        loop {
+            val g = Grp(gid, fitName(name, "group"), me, memberKeys(members))
+            groups[gid] = g
+            emit(MeshEvent.GroupChanged(g.info()))
+            invite(g, g.members)
+        }
+        return gid
+    }
+
+    /** Owner only: sends the new list to every old and new member; a member left out drops the group. */
+    fun setGroupMembers(groupId: String, members: List<String>) = loop {
+        val old = groups[groupId]?.takeIf { it.owner == me } ?: return@loop
+        val g = Grp(groupId, old.name, me, memberKeys(members))
+        groups[groupId] = g
+        emit(MeshEvent.GroupChanged(g.info()))
+        invite(g, old.members + g.members)
+    }
+
+    fun sendGroup(groupId: String, text: String) = loop {
+        val g = groups[groupId] ?: return@loop
+        val body = text.toByteArray(Charsets.UTF_8)
+        if (body.isEmpty() || body.size > C.MAX_POST_BODY) return@loop
+        val gm = Crypto.randomBytes(8)
+        val others = g.members.filterKeys { it != me }
+        addMsg(Msg(hex(gm), me, null, text, ++lamport, now(), true, if (others.isEmpty()) MsgStatus.SENT else MsgStatus.QUEUED, 0, null,
+            group = groupId, delivered = 0, total = others.size), emit = true)
+        val plain = byteArrayOf(3) + Crypto.unhex(groupId) + gm + body
+        others.forEach { (m, pub) -> dmTo(m, pub, plain, text, null, hex(gm)) }
+    }
+
+    /** Self first, then the known ids (unknown keys are skipped), 16 at most. */
+    private fun memberKeys(ids: List<String>): LinkedHashMap<String, ByteArray> {
+        val m = linkedMapOf(me to id.publicDer)
+        for (i in ids) if (m.size < MAX_GROUP && i !in m) pubOf(i)?.let { m[i] = it }
+        return m
+    }
+
+    private fun pubOf(nodeId: String): ByteArray? =
+        contacts[nodeId]?.pub ?: groups.values.firstNotNullOfOrNull { it.members[nodeId] } ?: logPubs[nodeId]
+
+    private fun invite(g: Grp, to: Map<String, ByteArray>) {
+        val o = ByteArrayOutputStream()
+        o.write(2); o.write(Crypto.unhex(g.id))
+        g.name.toByteArray(Charsets.UTF_8).let { o.write(it.size); o.write(it) }
+        o.write(g.members.size)
+        g.members.values.forEach { o.write(it.size); o.write(it) }
+        val plain = o.toByteArray()
+        to.forEach { (m, pub) -> if (m != me) dmTo(m, pub, plain, "", null, "") }
+    }
+
+    /** GROUP_INVITE from [src] (also own ones on replay). False if malformed. */
+    private fun onInvite(src: String, p: ByteArray, now: Long, emit: Boolean): Boolean {
+        val b = ByteBuffer.wrap(p, 1, p.size - 1)
+        val members = LinkedHashMap<String, ByteArray>()
+        val gid: String
+        val name: String
+        try {
+            gid = hex(ByteArray(8).also { b.get(it) })
+            val nl = b.get().toInt() and 0xff
+            if (nl > C.MAX_NAME) return false
+            name = String(ByteArray(nl).also { b.get(it) }, Charsets.UTF_8)
+            val n = b.get().toInt() and 0xff
+            if (n !in 1..MAX_GROUP) return false
+            repeat(n) {
+                val pub = ByteArray(b.get().toInt() and 0xff).also { b.get(it) }
+                if (runCatching { Crypto.publicKey(pub) }.isFailure) return false
+                members[hex(Crypto.nodeId(pub))] = pub   // ids derive from keys, so a key cannot be swapped for another id
+            }
+            if (b.hasRemaining()) return false
+        } catch (e: BufferUnderflowException) { return false }
+        val old = groups[gid]
+        if (src !in members || (old != null && old.owner != src)) return true   // dropped silently, not malformed
+        val g = Grp(gid, name, src, members)
+        if (me in members) groups[gid] = g else if (old != null) groups.remove(gid) else return true
+        for ((m, pub) in members) if (m != me && m !in contacts && contacts.size < MAX_CONTACTS)
+            contacts[m] = Peer("node-${m.take(4)}", pub, now, 0, null)
+        if (emit) { emit(MeshEvent.GroupChanged(g.info())); emitNet() }
+        return true
+    }
+
+    /** GROUP_TEXT: shown once per groupMsgId if the group is known and [src] is a member; own ones only on replay. */
+    private fun onGroupText(e: Envelope, p: ByteArray, mid: String, src: String, now: Long, hops: Int, via: String?, emit: Boolean): Boolean {
+        if (p.size < 18 || p.size - 17 > C.MAX_POST_BODY) return false
+        val gid = hex(p.copyOfRange(1, 9))
+        val gm = hex(p.copyOfRange(9, 17))
+        val text = String(p, 17, p.size - 17, Charsets.UTF_8)
+        val g = groups[gid]
+        if (src == me) fanout[mid] = gm
+        if (g == null || src !in g.members || gm in msgs) return true
+        if (src == me) addMsg(Msg(gm, me, null, text, e.lamport, now, true, MsgStatus.QUEUED, 0, null,
+            group = gid, delivered = 0, total = g.members.size - 1), emit = false)
+        else addMsg(Msg(gm, src, null, text, e.lamport, now, false, MsgStatus.RECEIVED, hops, via, group = gid), emit)
+        return true
+    }
+
+    private fun groupAck(dmId: String, emit: Boolean) {
+        val gm = fanout.remove(dmId) ?: return
+        val m = msgs[gm] ?: return
+        val d = (m.delivered ?: 0) + 1
+        msgs[gm] = m.copy(delivered = d)
+        if (emit) emit(MeshEvent.GroupStatusChanged(gm, d, m.total ?: 0))
     }
 
     fun setName(name: String) = loop {
@@ -142,10 +264,12 @@ class MeshNode(
         val all = msgs.values.sortedWith(compareBy<Msg>({ it.lamport }, { it.id }))
         Snapshot(
             SelfInfo(me, name), contactList(), linkList(),
-            all.filter { it.to == null },
+            all.filter { it.to == null && it.group == null },
             all.filter { it.to != null }.groupBy { if (it.mine) it.to!! else it.from },
             secLog.toList(),
             DebugState(DebugFlag.TAMPER_RELAY in debug, DebugFlag.DROP_RELAY in debug),
+            groups.values.map { it.info() },
+            all.filter { it.group != null }.groupBy { it.group!! },
         )
     }
 
@@ -226,7 +350,7 @@ class MeshNode(
         l.peer = peer
         // 5.5 step 6
         myPresence?.let { give(l, it) }
-        contacts.values.sortedByDescending { it.lastSeen }.take(64).forEach { give(l, it.presence) }
+        contacts.values.sortedByDescending { it.lastSeen }.take(64).forEach { p -> p.presence?.let { give(l, it) } }
         offer(l)
         syncLoop(l)
         emitNet()
@@ -328,15 +452,16 @@ class MeshNode(
             }
             EnvType.DM -> when {
                 dst == me -> {
-                    val (text, img) = openDm(e) ?: return
+                    val p = openDm(e, e.srcPub) ?: return
+                    if (!onDm(e, p, mid, src, now, shownHops, l?.peer, replay)) return
                     store.put(e, now, relayOnly = false, log = !replay)
-                    addMsg(Msg(mid, src, me, text, e.lamport, now, false, MsgStatus.RECEIVED, shownHops, l?.peer, img), emit = !replay)
                     if (l != null) sendAck(e, l)
                 }
-                mine -> {   // replay of an own DM
+                mine -> {   // replay of an own DM, reopened with the peer key if the log or a group holds it
                     store.put(e, now, relayOnly = false, log = false)
-                    // shortcut: the peer key is not persisted, so an own DM's text is lost on restart; persist contacts if it matters.
-                    addMsg(Msg(mid, me, dst, "(sent before restart)", e.lamport, now, true, MsgStatus.QUEUED, 0, null), emit = false)
+                    val p = pubOf(dst!!)?.let { openDm(e, it) }
+                    if (p == null || !onDm(e, p, mid, src, now, 0, null, replay = true))
+                        addMsg(Msg(mid, me, dst, "(sent before restart)", e.lamport, now, true, MsgStatus.QUEUED, 0, null), emit = false)
                 }
                 else -> { store.put(e, now, relayOnly = true, log = !replay); if (!replay) forward(e) }
             }
@@ -346,6 +471,7 @@ class MeshNode(
                 if (!replay) store.append(e, now)
                 store.dropRelay(dmId)
                 if (dst == me) {
+                    groupAck(dmId, emit = !replay)
                     if (msgs[dmId]?.mine == true) setStatus(dmId, MsgStatus.DELIVERED, e.hops + 1, l?.peer, emit = !replay)
                 } else if (!replay) {
                     // Walk the DM's path backwards; if that link is gone the ACK is dropped (sender stays SENT).
@@ -370,14 +496,25 @@ class MeshNode(
         emitNet()
     }
 
-    private fun openDm(e: Envelope): Pair<String, String?>? {
-        val p = Crypto.open(Crypto.dmKey(id.private, e.srcPub), e.srcId + e.dst, e.body) ?: return null
-        if (p.isEmpty()) return null
-        return when (p[0].toInt()) {
-            0 -> String(p, 1, p.size - 1, Charsets.UTF_8) to null
-            1 -> p.copyOfRange(1, p.size).takeIf(::isJpeg)?.let { PHOTO to Base64.getEncoder().encodeToString(it) }
-            else -> null
+    private fun openDm(e: Envelope, peerPub: ByteArray): ByteArray? =
+        Crypto.open(Crypto.dmKey(id.private, peerPub), e.srcId + e.dst, e.body)?.takeIf { it.isNotEmpty() }
+
+    /** Handles one opened DM plaintext by kind (received, or own on replay). False if malformed: not stored, not ACKed. */
+    private fun onDm(e: Envelope, p: ByteArray, mid: String, src: String, now: Long, hops: Int, via: String?, replay: Boolean): Boolean {
+        val mine = src == me
+        val st = if (mine) MsgStatus.QUEUED else MsgStatus.RECEIVED
+        val to = hex(e.dst)
+        when (p[0].toInt()) {
+            0 -> addMsg(Msg(mid, src, to, String(p, 1, p.size - 1, Charsets.UTF_8), e.lamport, now, mine, st, hops, via), emit = !replay)
+            1 -> {
+                val jpeg = p.copyOfRange(1, p.size).takeIf(::isJpeg) ?: return false
+                addMsg(Msg(mid, src, to, PHOTO, e.lamport, now, mine, st, hops, via, Base64.getEncoder().encodeToString(jpeg)), emit = !replay)
+            }
+            2 -> return onInvite(src, p, now, emit = !replay)
+            3 -> return onGroupText(e, p, mid, src, now, hops, via, emit = !replay)
+            else -> return false
         }
+        return true
     }
 
     private fun sendAck(dm: Envelope, l: Link) {
@@ -432,7 +569,8 @@ class MeshNode(
 
     private fun send(l: Link, o: Out) {
         val ok = l.transport.send(l.id, Codec.encodeFrame(Frame.Env(o.wire)))
-        if (ok && o.own && msgs[o.mid]?.status == MsgStatus.QUEUED) setStatus(o.mid, MsgStatus.SENT, 0, null)
+        val shown = fanout[o.mid] ?: o.mid
+        if (ok && o.own && msgs[shown]?.status == MsgStatus.QUEUED) setStatus(shown, MsgStatus.SENT, 0, null)
     }
 
     private fun relayCopy(e: Envelope): Envelope? {
@@ -461,19 +599,20 @@ class MeshNode(
         }
     }
 
-    private fun mine(type: Int, dst: ByteArray, lam: Long, ep: Long, slot: Int, ttl: Int, body: ByteArray, text: String, img: String? = null) {
+    private fun mine(type: Int, dst: ByteArray, lam: Long, ep: Long, slot: Int, ttl: Int, body: ByteArray, text: String, img: String? = null, gm: String? = null) {
         val ident = id
-        offLoop { val e = Envelope.create(ident, type, dst, lam, ep, slot, ttl, body); loop { originate(e, text, img) } }
+        offLoop { val e = Envelope.create(ident, type, dst, lam, ep, slot, ttl, body); loop { originate(e, text, img, gm) } }
     }
 
-    private fun originate(e: Envelope, text: String, img: String?) {
+    private fun originate(e: Envelope, text: String, img: String?, gm: String?) {
         val mid = hex(e.msgId)
         val dst = if (e.isBroadcast) null else hex(e.dst)
         val s = SeenEntry(null, dst, e.type)
         seen[mid] = s
         guard.accepted[mid] = e.epoch
         store.put(e, now(), relayOnly = false, log = true)
-        addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
+        if (gm == null) addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
+        else if (gm.isNotEmpty()) fanout[mid] = gm
         targets(e, s).forEach { give(it, e) }
     }
 
@@ -553,13 +692,13 @@ class MeshNode(
 
     private fun linkList() = links.values.map { LinkInfo(it.id, it.peer, it.transport.name, it.authed) }
 
-    private fun fitName(s: String): String {
-        var n = s.ifBlank { "node-${me.take(4)}" }
+    private fun fitName(s: String, blank: String = "node-${me.take(4)}"): String {
+        var n = s.ifBlank { blank }
         while (n.toByteArray(Charsets.UTF_8).size > C.MAX_NAME) n = n.dropLast(1)
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256 }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16 }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */
