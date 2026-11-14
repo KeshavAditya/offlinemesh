@@ -63,8 +63,9 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
     private val adapter: BluetoothAdapter = (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
     private val running = AtomicBoolean(false)
     private val links = ConcurrentHashMap<LinkId, Link>()
-    private val dialing = ConcurrentHashMap.newKeySet<String>()   // hex prefixes of peers with a dialer alive
+    private val dialing = ConcurrentHashMap.newKeySet<String>()   // "address/prefix" of peers with a dialer alive
     private val ids = AtomicInteger()
+    private val pending = AtomicInteger()   // dialers not yet connected; a connected dialer is already in links
     private lateinit var listener: TransportListener
     @Volatile private var server: BluetoothServerSocket? = null
 
@@ -133,9 +134,14 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
             if (sd == null || sd.size != 6 || !running.get()) return
             val peer = sd.copyOf(4)
             if (adapter.bluetoothLeAdvertiser != null && !prefixLess(prefix, peer)) return   // tie-break; also skips ourselves
-            val key = hex(peer)
-            if (links.size >= C.MAX_LINKS || !dialing.add(key)) return
-            thread("ble-dial-$key") { try { dial(r.device, decodePsm(sd)) } finally { dialing.remove(key) } }
+            val key = "${r.device.address}/${hex(peer)}"   // prefix alone is attacker-chosen
+            if (links.size + pending.get() >= C.MAX_LINKS || !dialing.add(key)) return   // global cap: spoofed adverts cannot spawn unbounded dialers
+            pending.incrementAndGet()
+            thread("ble-dial-$key") {
+                val counted = AtomicBoolean(true)
+                val connected = { if (counted.getAndSet(false)) pending.decrementAndGet() }
+                try { dial(r.device, decodePsm(sd), connected) } finally { connected(); dialing.remove(key) }
+            }
         }
         override fun onScanFailed(code: Int) { Log.e(TAG, "ble scan failed code=$code") }
     }
@@ -149,7 +155,7 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
     }
 
     /** Uses the BluetoothDevice from the scan result (its random address type matters). Returns when the link ends or 5 attempts fail. */
-    private fun dial(dev: BluetoothDevice, psm: Int) {
+    private fun dial(dev: BluetoothDevice, psm: Int, connected: () -> Unit) {
         for (attempt in 0 until ATTEMPTS) {
             if (!running.get()) return
             val s = try { dev.createInsecureL2capChannel(psm) } catch (e: IOException) { Log.w(TAG, "ble channel create failed: $e"); return }
@@ -157,6 +163,7 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
             try {
                 s.connect(); watchdog.interrupt()
                 Log.i(TAG, "ble connected $dev psm=$psm attempt=$attempt")
+                connected()
                 open(s).done.await(); return
             } catch (e: IOException) {
                 watchdog.interrupt(); runCatching { s.close() }
