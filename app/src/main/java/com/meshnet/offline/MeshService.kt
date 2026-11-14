@@ -17,6 +17,7 @@ import mesh.core.MeshNode
 import mesh.core.Transport
 import mesh.core.TransportListener
 import mesh.lan.LanTransport
+import mesh.ui.GuestServer
 import mesh.ui.UiServer
 import kotlin.concurrent.thread
 
@@ -25,6 +26,7 @@ class MeshService : Service() {
     companion object {
         const val UI_PORT = 8080
         const val LAN_PORT = 9001
+        const val GUEST_PORT = 8090
         const val PREFS = "mesh"
         @Volatile var instance: MeshService? = null; private set
         /** Set only after our own ui.start() bound the port; the activity waits on this instead of a fixed delay. */
@@ -39,6 +41,7 @@ class MeshService : Service() {
     lateinit var ble: Switchable; private set
     lateinit var lan: Switchable; private set
     private var multicast: WifiManager.MulticastLock? = null
+    @Volatile private var guest: GuestServer? = null
 
     override fun onBind(intent: Intent?) = null
 
@@ -58,7 +61,7 @@ class MeshService : Service() {
         ble = Switchable("ble") { BleL2capTransport(this, prefix) }
         lan = Switchable("lan") { LanTransport(LAN_PORT, emptyList(), prefix) }
         node = MeshNode(filesDir, ExecutorScheduler(), listOf(ble, lan))
-        ui = UiServer(node, UI_PORT)
+        ui = UiServer(node, UI_PORT) { guest }
         thread(name = "mesh-start") {
             node.start()
             applyPrefs()
@@ -87,11 +90,24 @@ class MeshService : Service() {
             .createMulticastLock("OfflineMesh").apply { setReferenceCounted(false); acquire() }
         lan.set(lanOn)
         if (!lanOn) { multicast?.release(); multicast = null }
-        Log.i(TAG, "transports ble=${ble.on} lan=${lan.on}")
+        setGuest(p.getBoolean("guest", false))
+        Log.i(TAG, "transports ble=${ble.on} lan=${lan.on} guest=${guest != null}")
+    }
+
+    /** Guest mode (5.13): a separate 0.0.0.0:8090 server for hotspot browsers; each start gets a fresh PIN guard. */
+    private fun setGuest(want: Boolean) {
+        if (want && guest == null) {
+            val g = GuestServer(node, GUEST_PORT)
+            try { g.start(); guest = g; Log.i(TAG, "guest listening 0.0.0.0:$GUEST_PORT ${g.urls()}") }
+            catch (e: Exception) { Log.e(TAG, "guest server failed: $e"); runCatching { g.stop() } }
+        } else if (!want && guest != null) {
+            val g = guest; guest = null; runCatching { g?.stop() }
+        }
     }
 
     override fun onDestroy() {
         instance = null; listening = false
+        runCatching { guest?.stop() }
         runCatching { ui.stop() }
         runCatching { node.stop() }
         multicast?.release()
