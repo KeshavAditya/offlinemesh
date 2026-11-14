@@ -33,3 +33,4 @@
 [android] [15:53] done: group message notifications (13.2): titled with group name, sender per line, inline reply -> node.sendGroup; keyed g:<groupId>. Build green; no live check (uiserver has no group commands yet).
 [ui] [15:53] done: 13.3 UI refresh of index.html (23 KB, 78 CSS lines) and guest.html (5.6 KB): light/dark, bubbles with Queued •/Sent ✓/Delivered ✓✓, Chats list + open conversation (DMs; GROUPS slots marked), unread badges, pinned compose with byte counter, bottom tabs <600px; e2e 8181-8183 PASS 1-6
 [core] [15:58] done: 13.2 group hardening (owner-bound gid+salt, no contacts from invites, 32/4 group caps, dedup on sender+groupMsgId); GroupTest t16-t19; core 59 tests green
+[core] [16:03] done: 13.2 full group table evicts oldest unverified-owner group; verified owners always admitted; GroupTest t18b; core 60 tests green

@@ -199,8 +199,18 @@ class MeshNode(
         val old = groups[gid]
         // Dropped silently, not malformed: a gid not bound to src, a change not from the owner, or over the caps.
         if (gid != gidOf(src, salt) || src !in members || (old != null && old.owner != src)) return true
-        if (old == null && src != me && (groups.size >= MAX_GROUPS ||
-                src !in verified && groups.values.count { it.owner == src } >= MAX_GROUPS_PER_OWNER)) return true
+        if (old == null && src != me && me in members) {
+            if (src !in verified && groups.values.count { it.owner == src } >= MAX_GROUPS_PER_OWNER) return true
+            // Like a full contacts table (onPresence), cheap unverified owners yield: the oldest of their groups makes room,
+            // and verified owners always get in. The evicted group leaves like a removed member: live state gone, history kept.
+            if (groups.size >= MAX_GROUPS) {
+                val ev = groups.values.firstOrNull { it.owner != me && it.owner !in verified }
+                if (ev != null) {
+                    groups.remove(ev.id)
+                    if (emit) emit(MeshEvent.GroupChanged(ev.info().let { it.copy(members = it.members - me) }))
+                } else if (src !in verified) return true
+            }
+        }
         val g = Grp(gid, salt, name, src, members)   // member keys stay here, never in contacts
         if (me in members) groups[gid] = g else if (old != null) groups.remove(gid) else return true
         if (emit) emit(MeshEvent.GroupChanged(g.info()))

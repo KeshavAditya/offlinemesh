@@ -36,8 +36,8 @@ class GroupTest {
     }
 
     /** Signs a DM carrying [plain] from [from] to [to] and hands it to one of [from]'s neighbours. */
-    private fun forge(s: Setup, from: String, to: String, plain: ByteArray): String {
-        val f = s.n(from).node.id; val t = s.n(to).node.id
+    private fun forge(s: Setup, from: String, to: String, plain: ByteArray, f: Identity = s.n(from).node.id): String {
+        val t = s.n(to).node.id
         val body = Crypto.seal(Crypto.dmKey(f.private, t.publicDer), f.nodeId + t.nodeId, plain)
         val ep = Math.floorDiv(s.net.nowMs(), C.EPOCH_SECONDS * 1000L)
         val e = Envelope.create(f, EnvType.DM, t.nodeId, 1_000, ep, 0, C.TTL_DM, body)
@@ -197,6 +197,28 @@ class GroupTest {
         s.net.runFor(100)
         val sixth = offer("verified")
         assertTrue(d.node.snapshot().groups.any { it.id == sixth }, "a verified owner is not capped at 4")
+    }
+
+    @Test fun t18b_fullTableEvictsOldestUnverifiedGroupForNewInvites() {
+        val s = setup()
+        val d = s.n("D")
+        fun offer(owner: Identity): String {
+            val salt = Crypto.randomBytes(8)
+            val gid = Crypto.hex(Crypto.sha256(owner.nodeId, salt).copyOf(8))
+            forge(s, "B", "D", invite(gid, salt, "g", listOf(owner.publicDer, d.node.id.publicDer)), owner)
+            s.net.runFor(3_000)
+            return gid
+        }
+        fun have() = d.node.snapshot().groups.map { it.id }
+        val spam = List(8) { Identity.generate() }.flatMap { o -> List(4) { offer(o) } }
+        assertEquals(spam, have(), "8 unverified owners x 4 fill the table; crew, the oldest, made room for the last")
+        val j = s.n("J")
+        d.node.setVerified(j.id, true)
+        s.net.runFor(100)
+        val fromJ = offer(j.node.id)
+        assertEquals(spam.drop(1) + fromJ, have(), "a verified owner gets in by evicting the oldest unverified group")
+        val ninth = offer(Identity.generate())
+        assertEquals(spam.drop(2) + fromJ + ninth, have(), "a 9th unverified owner evicts the oldest unverified group, not the verified one")
     }
 
     @Test fun t19_twoMembersReusingOneGroupMsgIdAreBothDelivered() {
