@@ -36,7 +36,8 @@ cmd $PA '{"t":"name","name":"A"}'; cmd $PB '{"t":"name","name":"B"}'; cmd $PC '{
 cmd $PA "{\"t\":\"mute\",\"id\":\"$IC\",\"on\":true}"
 cmd $PC "{\"t\":\"mute\",\"id\":\"$IA\",\"on\":true}"
 
-banned_a() { q $1 --arg a "$IA" 'any(.security[]; .kind == "BANNED" and (.src == $a or (.detail | contains($a))))'; }
+# A ban is logged as BANNED or as RATE_EQUIVOCATION with "banned" in the detail (core's 5.6 pipeline).
+banned_a() { q $1 --arg a "$IA" 'any(.security[]; (.kind == "BANNED" or (.detail | test("banned"; "i"))) and (.src == $a or (.detail | contains($a))))'; }
 
 # 1. A -> C direct message arrives through B; A shows DELIVERED, 2 hops via B.
 T1="e2e dm $N"

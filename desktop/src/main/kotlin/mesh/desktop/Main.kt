@@ -2,12 +2,10 @@ package mesh.desktop
 
 import mesh.core.Identity
 import mesh.core.MeshNode
-import mesh.core.Scheduler
+import mesh.core.ExecutorScheduler
 import mesh.lan.LanTransport
 import mesh.ui.UiServer
 import java.io.File
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 const val USAGE = "usage: desktop --data <dir> --ui-port <n> --listen <n> [--peer host:port]... [--no-discovery]"
@@ -39,16 +37,6 @@ fun parseArgs(a: Array<String>): Args {
         listen ?: throw IllegalArgumentException("--listen is required"),
         peers, discovery,
     )
-}
-
-/** Real scheduler (section 6): one thread runs every mesh task in order. */
-class ExecutorScheduler : Scheduler {
-    private val ex = Executors.newSingleThreadScheduledExecutor { Thread(it, "mesh-loop") }
-    override fun nowMs() = System.currentTimeMillis()
-    override fun post(task: () -> Unit) { ex.execute(guard(task)) }
-    override fun schedule(delayMs: Long, task: () -> Unit) { ex.schedule(guard(task), delayMs, TimeUnit.MILLISECONDS) }
-    // One failing task must not kill the loop thread.
-    private fun guard(task: () -> Unit) = Runnable { try { task() } catch (e: Throwable) { e.printStackTrace() } }
 }
 
 fun main(argv: Array<String>) {
