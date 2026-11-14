@@ -40,13 +40,15 @@ interface UiNode {
     fun exec(c: Cmd)
 }
 
+fun MeshNode.asUiNode(): UiNode = object : UiNode {
+    override fun snapshot() = this@asUiNode.snapshot()
+    override fun addListener(l: (MeshEvent) -> Unit) = this@asUiNode.addListener(l)
+    override fun exec(c: Cmd) = this@asUiNode.exec(c)
+}
+
 /** Serves the page, /ws, /api/snapshot and /api/cmd on 127.0.0.1 only (section 6). */
 class UiServer(private val node: UiNode, private val port: Int) {
-    constructor(node: MeshNode, port: Int) : this(object : UiNode {
-        override fun snapshot() = node.snapshot()
-        override fun addListener(l: (MeshEvent) -> Unit) = node.addListener(l)
-        override fun exec(c: Cmd) = node.exec(c)
-    }, port)
+    constructor(node: MeshNode, port: Int) : this(node.asUiNode(), port)
 
     private val json = Json { encodeDefaults = true }
     private val subs = CopyOnWriteArraySet<Channel<String>>()

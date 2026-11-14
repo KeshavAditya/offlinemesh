@@ -133,7 +133,8 @@ function render() {
 
   const posts = $('posts'); posts.replaceChildren();
   for (const m of [...S.feed].sort(byOrder)) {
-    const li = el('li', name(m.from) + ': ' + m.text);
+    const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);  // 5.13: guest posts are signed by their host
+    const li = el('li', g ? g[1] + ' (guest of ' + name(m.from) + '): ' + g[2] : name(m.from) + ': ' + m.text);
     if (!m.mine) { li.appendChild(el('br')); li.appendChild(el('small', route(m))); }
     posts.appendChild(li);
   }
