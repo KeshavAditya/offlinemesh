@@ -58,7 +58,8 @@ class GroupTest {
             assertEquals(s.gid, got.single().group); assertEquals("hello crew", got.single().text)
             got.single().id
         }
-        assertEquals(1, ids.toSet().size, "groupMsgId differs between members")
+        assertEquals(1, ids.toSet().size, "group message id differs between members")
+        assertTrue(ids[0].length == 32 && ids[0].startsWith(a.id), ids[0])
         listOf("B", "C", "E", "F", "H", "I").forEach { assertTrue(s.n(it).added().isEmpty(), "$it emitted MessageAdded") }
         val own = a.added().single()
         assertEquals(ids[0], own.id)
@@ -66,7 +67,7 @@ class GroupTest {
         assertEquals(3, shown.delivered); assertEquals(3, shown.total)
         assertTrue(a.node.snapshot().feed.isEmpty() && a.node.snapshot().dms.isEmpty(), "group message leaked into feed or dms")
         val st = a.events.filterIsInstance<MeshEvent.GroupStatusChanged>()
-        assertEquals(listOf(1, 2, 3), st.map { it.delivered }); assertTrue(st.all { it.total == 3 && it.groupMsgId == own.id })
+        assertEquals(listOf(1, 2, 3), st.map { it.delivered }); assertTrue(st.all { it.total == 3 && it.id == own.id })
     }
 
     @Test fun t13_nonOwnerMemberSends() {
@@ -78,11 +79,20 @@ class GroupTest {
         assertEquals(3, shown.delivered); assertEquals(3, shown.total)
     }
 
-    private fun invite(gid: String, name: String, members: List<SimNode>): ByteArray {
+    private fun invite(gid: String, salt: ByteArray, name: String, pubs: List<ByteArray>): ByteArray {
         val o = ByteArrayOutputStream()
-        o.write(2); o.write(Crypto.unhex(gid)); o.write(name.length); o.write(name.toByteArray())
-        o.write(members.size); members.forEach { val p = it.node.id.publicDer; o.write(p.size); o.write(p) }
+        o.write(2); o.write(Crypto.unhex(gid)); o.write(salt); o.write(name.length); o.write(name.toByteArray())
+        o.write(pubs.size); pubs.forEach { o.write(it.size); o.write(it) }
         return o.toByteArray()
+    }
+    private fun pubs(vararg n: SimNode) = n.map { it.node.id.publicDer }
+    private fun gidOf(owner: SimNode, salt: ByteArray) = Crypto.hex(Crypto.sha256(owner.node.id.nodeId, salt).copyOf(8))
+
+    /** The salt [n] holds for [gid], read by reflection: the test plays a member who saw the real invite. */
+    private fun saltOf(n: SimNode, gid: String): ByteArray {
+        val f = MeshNode::class.java.getDeclaredField("groups").apply { isAccessible = true }
+        val g = (f.get(n.node) as Map<*, *>)[gid]!!
+        return g.javaClass.getDeclaredField("salt").apply { isAccessible = true }.get(g) as ByteArray
     }
 
     @Test fun t14_nonMemberAndNonOwnerAreIgnoredAndRemovedMemberGetsNothing() {
@@ -91,7 +101,7 @@ class GroupTest {
         // GROUP_TEXT from B, who is not a member.
         val f1 = forge(s, "B", "D", byteArrayOf(3) + Crypto.unhex(s.gid) + Crypto.randomBytes(8) + "forged".toByteArray())
         // GROUP_INVITE change from G, a member but not the owner, dropping A and J.
-        val f2 = forge(s, "G", "D", invite(s.gid, "hijack", listOf(g, d)))
+        val f2 = forge(s, "G", "D", invite(s.gid, saltOf(d, s.gid), "hijack", pubs(g, d)))
         s.net.runFor(20_000)
         for (f in listOf(f1, f2)) assertTrue(s.net.sent.any { it.to == "D" && it.env?.let { e -> Crypto.hex(e.msgId) == f } == true }, "forged DM never reached D")
         assertTrue(d.added().none { it.text == "forged" }, "non-member text shown")
@@ -135,5 +145,69 @@ class GroupTest {
             val own = msgs.single { it.mine }
             assertEquals(3, own.delivered, "$m delivered after restart"); assertEquals(3, own.total)
         }
+    }
+
+    @Test fun t16_inviteWithGidNotBoundToSenderIsIgnoredAndAddsNoContacts() {
+        val s = setup()
+        val (b, d) = listOf("B", "D").map { s.n(it) }
+        val stranger = Identity.generate()   // a key nobody on the mesh has seen
+        val salt = Crypto.randomBytes(8)
+        val forgedGid = gidOf(s.n("A"), salt)   // bound to A, but sent by B
+        forge(s, "B", "D", invite(forgedGid, salt, "forged", pubs(b, d) + stranger.publicDer))
+        s.net.runFor(5_000)
+        assertTrue(d.node.snapshot().groups.none { it.id == forgedGid }, "invite with a gid not bound to its sender accepted")
+        // Control: the same invite with a gid bound to B is accepted, yet its unknown member never becomes a contact.
+        val goodGid = gidOf(b, salt)
+        forge(s, "B", "D", invite(goodGid, salt, "real", pubs(b, d) + stranger.publicDer))
+        s.net.runFor(5_000)
+        assertEquals(listOf(b.id, d.id, stranger.idHex), d.node.snapshot().groups.single { it.id == goodGid }.members)
+        assertTrue(d.node.snapshot().contacts.none { it.id == stranger.idHex }, "invite member added to contacts")
+    }
+
+    @Test fun t17_memberPreClaimingAnExistingGidCannotTakeOver() {
+        val s = setup()
+        val (a, d, g, j) = listOf("A", "D", "G", "J").map { s.n(it) }
+        a.node.setGroupMembers(s.gid, listOf(d.id, g.id))
+        s.net.runFor(20_000)
+        assertTrue(j.node.snapshot().groups.isEmpty())
+        // G knows the real gid and salt and claims the group at J, which no longer knows it, before A re-adds J.
+        forge(s, "G", "J", invite(s.gid, saltOf(g, s.gid), "hijack", pubs(g, j)))
+        s.net.runFor(5_000)
+        assertTrue(j.node.snapshot().groups.isEmpty(), "J accepted G's claim on A's gid")
+        a.node.setGroupMembers(s.gid, listOf(d.id, g.id, j.id))
+        s.net.runFor(20_000)
+        val jg = j.node.snapshot().groups.single()
+        assertEquals("crew", jg.name); assertEquals(a.id, jg.owner); assertEquals(4, jg.members.size)
+    }
+
+    @Test fun t18_fifthGroupFromOneUnverifiedOwnerIsDropped() {
+        val s = setup()
+        val (b, d) = listOf("B", "D").map { s.n(it) }
+        fun offer(name: String): String {
+            val salt = Crypto.randomBytes(8)
+            val gid = gidOf(b, salt)
+            forge(s, "B", "D", invite(gid, salt, name, pubs(b, d)))
+            s.net.runFor(3_000)
+            return gid
+        }
+        val gids = (1..5).map { offer("spam$it") }
+        val have = d.node.snapshot().groups.map { it.id }.toSet()
+        assertEquals(gids.take(4).toSet() + s.gid, have, "D should keep crew and B's first 4 groups only")
+        d.node.setVerified(b.id, true)
+        s.net.runFor(100)
+        val sixth = offer("verified")
+        assertTrue(d.node.snapshot().groups.any { it.id == sixth }, "a verified owner is not capped at 4")
+    }
+
+    @Test fun t19_twoMembersReusingOneGroupMsgIdAreBothDelivered() {
+        val s = setup()
+        val gm = Crypto.randomBytes(8)
+        for (m in listOf("D", "G")) {
+            forge(s, m, "J", byteArrayOf(3) + Crypto.unhex(s.gid) + gm + "same id from $m".toByteArray())
+            s.net.runFor(5_000)
+        }
+        val got = s.groupMsgs("J")
+        assertEquals(setOf("same id from D", "same id from G"), got.map { it.text }.toSet())
+        assertEquals(setOf(s.n("D").id + Crypto.hex(gm), s.n("G").id + Crypto.hex(gm)), got.map { it.id }.toSet())
     }
 }

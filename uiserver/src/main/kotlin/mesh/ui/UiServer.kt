@@ -133,7 +133,7 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
         is MeshEvent.SecurityLogged -> buildJsonObject { put("t", "sec"); put("event", json.encodeToJsonElement(e.event)) }
         is MeshEvent.GroupChanged -> buildJsonObject { put("t", "group"); put("group", json.encodeToJsonElement(e.group)) }
         is MeshEvent.GroupStatusChanged -> buildJsonObject {
-            put("t", "gstatus"); put("id", e.groupMsgId); put("delivered", e.delivered); put("total", e.total)
+            put("t", "gstatus"); put("id", e.id); put("delivered", e.delivered); put("total", e.total)
         }
     }.toString()
 }

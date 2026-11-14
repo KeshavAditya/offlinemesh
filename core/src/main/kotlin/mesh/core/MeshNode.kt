@@ -24,8 +24,8 @@ class MeshNode(
     private val scheduler: Scheduler,
     private val transports: List<Transport>,
 ) {
-    private class Peer(val name: String, val pub: ByteArray, val lastSeen: Long, val lamport: Long, val presence: Envelope?)   // null: learned from a group invite
-    private class Grp(val id: String, val name: String, val owner: String, val members: LinkedHashMap<String, ByteArray>) {   // members: id -> public key
+    private class Peer(val name: String, val pub: ByteArray, val lastSeen: Long, val lamport: Long, val presence: Envelope)
+    private class Grp(val id: String, val salt: ByteArray, val name: String, val owner: String, val members: LinkedHashMap<String, ByteArray>) {   // members: id -> public key
         fun info() = Group(id, name, owner, members.keys.toList())
     }
 
@@ -48,7 +48,7 @@ class MeshNode(
     private val verified = HashSet<String>()
     private val msgs = LinkedHashMap<String, Msg>()
     private val groups = LinkedHashMap<String, Grp>()
-    private val fanout = HashMap<String, String>()          // own fan-out DM msgId -> groupMsgId, until its ACK
+    private val fanout = HashMap<String, String>()          // own fan-out DM msgId -> group message id, until its ACK
     private val logPubs = HashMap<String, ByteArray>()      // start-up only: keys seen in messages.log, to reopen own DMs
     private val seen = Seen()
     private val routes = Routes()
@@ -107,7 +107,7 @@ class MeshNode(
         dmTo(to, contacts[to]?.pub ?: return@loop, plain, text, img, null)
     }
 
-    /** [gm] null: a normal DM shown on its own; "": a group invite (not shown); else the groupMsgId it fans out. */
+    /** [gm] null: a normal DM shown on its own; "": a group invite (not shown); else the group message id it fans out. */
     private fun dmTo(to: String, pub: ByteArray, plain: ByteArray, text: String, img: String?, gm: String?) {
         if (plain.size > C.MAX_DM_PLAINTEXT) return
         val dst = Crypto.unhex(to)
@@ -118,9 +118,10 @@ class MeshNode(
     // ---- 13.2 groups: fan-out DMs, plaintext kinds 2 (GROUP_INVITE) and 3 (GROUP_TEXT) ----
 
     fun createGroup(name: String, members: List<String>): String {
-        val gid = hex(Crypto.randomBytes(8))
+        val salt = Crypto.randomBytes(8)
+        val gid = gidOf(me, salt)
         loop {
-            val g = Grp(gid, fitName(name, "group"), me, memberKeys(members))
+            val g = Grp(gid, salt, fitName(name, "group"), me, memberKeys(members))
             groups[gid] = g
             emit(MeshEvent.GroupChanged(g.info()))
             invite(g, g.members)
@@ -131,7 +132,7 @@ class MeshNode(
     /** Owner only: sends the new list to every old and new member; a member left out drops the group. */
     fun setGroupMembers(groupId: String, members: List<String>) = loop {
         val old = groups[groupId]?.takeIf { it.owner == me } ?: return@loop
-        val g = Grp(groupId, old.name, me, memberKeys(members))
+        val g = Grp(groupId, old.salt, old.name, me, memberKeys(members))
         groups[groupId] = g
         emit(MeshEvent.GroupChanged(g.info()))
         invite(g, old.members + g.members)
@@ -142,11 +143,12 @@ class MeshNode(
         val body = text.toByteArray(Charsets.UTF_8)
         if (body.isEmpty() || body.size > C.MAX_POST_BODY) return@loop
         val gm = Crypto.randomBytes(8)
+        val uid = me + hex(gm)
         val others = g.members.filterKeys { it != me }
-        addMsg(Msg(hex(gm), me, null, text, ++lamport, now(), true, if (others.isEmpty()) MsgStatus.SENT else MsgStatus.QUEUED, 0, null,
+        addMsg(Msg(uid, me, null, text, ++lamport, now(), true, if (others.isEmpty()) MsgStatus.SENT else MsgStatus.QUEUED, 0, null,
             group = groupId, delivered = 0, total = others.size), emit = true)
         val plain = byteArrayOf(3) + Crypto.unhex(groupId) + gm + body
-        others.forEach { (m, pub) -> dmTo(m, pub, plain, text, null, hex(gm)) }
+        others.forEach { (m, pub) -> dmTo(m, pub, plain, text, null, uid) }
     }
 
     /** Self first, then the known ids (unknown keys are skipped), 16 at most. */
@@ -156,12 +158,15 @@ class MeshNode(
         return m
     }
 
+    /** The groupId is bound to its owner, so nobody else can claim it (13.2). */
+    private fun gidOf(owner: String, salt: ByteArray) = hex(Crypto.sha256(Crypto.unhex(owner), salt).copyOf(8))
+
     private fun pubOf(nodeId: String): ByteArray? =
         contacts[nodeId]?.pub ?: groups.values.firstNotNullOfOrNull { it.members[nodeId] } ?: logPubs[nodeId]
 
     private fun invite(g: Grp, to: Map<String, ByteArray>) {
         val o = ByteArrayOutputStream()
-        o.write(2); o.write(Crypto.unhex(g.id))
+        o.write(2); o.write(Crypto.unhex(g.id)); o.write(g.salt)
         g.name.toByteArray(Charsets.UTF_8).let { o.write(it.size); o.write(it) }
         o.write(g.members.size)
         g.members.values.forEach { o.write(it.size); o.write(it) }
@@ -170,13 +175,15 @@ class MeshNode(
     }
 
     /** GROUP_INVITE from [src] (also own ones on replay). False if malformed. */
-    private fun onInvite(src: String, p: ByteArray, now: Long, emit: Boolean): Boolean {
+    private fun onInvite(src: String, p: ByteArray, emit: Boolean): Boolean {
         val b = ByteBuffer.wrap(p, 1, p.size - 1)
         val members = LinkedHashMap<String, ByteArray>()
         val gid: String
+        val salt = ByteArray(8)
         val name: String
         try {
             gid = hex(ByteArray(8).also { b.get(it) })
+            b.get(salt)
             val nl = b.get().toInt() and 0xff
             if (nl > C.MAX_NAME) return false
             name = String(ByteArray(nl).also { b.get(it) }, Charsets.UTF_8)
@@ -190,27 +197,28 @@ class MeshNode(
             if (b.hasRemaining()) return false
         } catch (e: BufferUnderflowException) { return false }
         val old = groups[gid]
-        if (src !in members || (old != null && old.owner != src)) return true   // dropped silently, not malformed
-        val g = Grp(gid, name, src, members)
+        // Dropped silently, not malformed: a gid not bound to src, a change not from the owner, or over the caps.
+        if (gid != gidOf(src, salt) || src !in members || (old != null && old.owner != src)) return true
+        if (old == null && src != me && (groups.size >= MAX_GROUPS ||
+                src !in verified && groups.values.count { it.owner == src } >= MAX_GROUPS_PER_OWNER)) return true
+        val g = Grp(gid, salt, name, src, members)   // member keys stay here, never in contacts
         if (me in members) groups[gid] = g else if (old != null) groups.remove(gid) else return true
-        for ((m, pub) in members) if (m != me && m !in contacts && contacts.size < MAX_CONTACTS)
-            contacts[m] = Peer("node-${m.take(4)}", pub, now, 0, null)
-        if (emit) { emit(MeshEvent.GroupChanged(g.info())); emitNet() }
+        if (emit) emit(MeshEvent.GroupChanged(g.info()))
         return true
     }
 
-    /** GROUP_TEXT: shown once per groupMsgId if the group is known and [src] is a member; own ones only on replay. */
+    /** GROUP_TEXT: shown once per (sender, groupMsgId), the UI id, if the group is known and [src] is a member; own ones only on replay. */
     private fun onGroupText(e: Envelope, p: ByteArray, mid: String, src: String, now: Long, hops: Int, via: String?, emit: Boolean): Boolean {
         if (p.size < 18 || p.size - 17 > C.MAX_POST_BODY) return false
         val gid = hex(p.copyOfRange(1, 9))
-        val gm = hex(p.copyOfRange(9, 17))
+        val uid = src + hex(p.copyOfRange(9, 17))   // includes the sender, so one member cannot suppress another's message
         val text = String(p, 17, p.size - 17, Charsets.UTF_8)
         val g = groups[gid]
-        if (src == me) fanout[mid] = gm
-        if (g == null || src !in g.members || gm in msgs) return true
-        if (src == me) addMsg(Msg(gm, me, null, text, e.lamport, now, true, MsgStatus.QUEUED, 0, null,
+        if (src == me) fanout[mid] = uid
+        if (g == null || src !in g.members || uid in msgs) return true
+        if (src == me) addMsg(Msg(uid, me, null, text, e.lamport, now, true, MsgStatus.QUEUED, 0, null,
             group = gid, delivered = 0, total = g.members.size - 1), emit = false)
-        else addMsg(Msg(gm, src, null, text, e.lamport, now, false, MsgStatus.RECEIVED, hops, via, group = gid), emit)
+        else addMsg(Msg(uid, src, null, text, e.lamport, now, false, MsgStatus.RECEIVED, hops, via, group = gid), emit)
         return true
     }
 
@@ -350,7 +358,7 @@ class MeshNode(
         l.peer = peer
         // 5.5 step 6
         myPresence?.let { give(l, it) }
-        contacts.values.sortedByDescending { it.lastSeen }.take(64).forEach { p -> p.presence?.let { give(l, it) } }
+        contacts.values.sortedByDescending { it.lastSeen }.take(64).forEach { give(l, it.presence) }
         offer(l)
         syncLoop(l)
         emitNet()
@@ -510,7 +518,7 @@ class MeshNode(
                 val jpeg = p.copyOfRange(1, p.size).takeIf(::isJpeg) ?: return false
                 addMsg(Msg(mid, src, to, PHOTO, e.lamport, now, mine, st, hops, via, Base64.getEncoder().encodeToString(jpeg)), emit = !replay)
             }
-            2 -> return onInvite(src, p, now, emit = !replay)
+            2 -> return onInvite(src, p, emit = !replay)
             3 -> return onGroupText(e, p, mid, src, now, hops, via, emit = !replay)
             else -> return false
         }
@@ -698,7 +706,7 @@ class MeshNode(
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16 }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_PER_OWNER = 4 }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */

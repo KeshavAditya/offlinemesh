@@ -1118,19 +1118,19 @@ The protocol already works for any number of nodes (10.2 #9 runs 25 nodes; the r
 
 #### 13.2 Group chats (fan-out over DMs)
 
-A group is an 8-byte random `groupId` (shown as hex), a name (32 bytes or less), an owner (the creator's NodeId) and a member list of 16 NodeIds or fewer, including the owner. Groups exist only on member devices.
+A group is an 8-byte `groupId` (shown as hex) bound to its owner: `groupId` = first 8 bytes of SHA-256(`ownerNodeId` (8 bytes) ‖ `salt` (8 random bytes)). It also has a name (32 bytes or less), an owner (the creator's NodeId) and a member list of 16 NodeIds or fewer, including the owner. Groups exist only on member devices.
 
 **No new envelope type, frame, crypto or ingress rule.** Every group message is sent as one ordinary DM (5.3, 5.4) to each other member, so relays see only DMs and each copy is end-to-end encrypted and ACKed on its own. DM plaintext `kind` gains two values:
 
 | kind | Name | Data after the kind byte |
 |---|---|---|
-| 2 | GROUP_INVITE | `8B groupId` `u8 nameLen` `name` `u8 count` then `count` × (`u8 pubLen` `pub`) |
+| 2 | GROUP_INVITE | `8B groupId` `8B salt` `u8 nameLen` `name` `u8 count` then `count` × (`u8 pubLen` `pub`) |
 | 3 | GROUP_TEXT | `8B groupId` `8B groupMsgId` then UTF-8 text, 1,000 bytes or less |
 
-- **Create:** the owner sends GROUP_INVITE to every other member. The invite carries each member's public key, so every member can encrypt to every other member at once; member ids are derived from the keys (5.1), so a key cannot be swapped for another id. Members learned this way become unverified contacts if they were unknown.
-- **Membership changes:** only the owner can change the list, by sending a new GROUP_INVITE to every old and new member. A receiver accepts an invite for a new `groupId` from anyone (the sender must be in the list and be the owner), and for an existing group only from its owner. A member left out of the new list removes the group's live state, keeps its history, and gets no further messages because nobody sends to it.
+- **Create:** the owner sends GROUP_INVITE to every other member. The invite carries each member's public key, so every member can encrypt to every other member at once; member ids are derived from the keys (5.1), so a key cannot be swapped for another id. Member keys stay inside the group record (for fan-out encryption and reopening own DMs); they are never added to contacts.
+- **Membership changes:** only the owner can change the list, by sending a new GROUP_INVITE to every old and new member. A receiver drops an invite unless `groupId` = SHA-256(`srcId` ‖ `salt`)[0..8] and the sender is in the list, so only the owner can create or claim a `groupId`; a change to an existing group is accepted only from its recorded owner. Caps: at most 32 live groups, and at most 4 per owner unless that owner is verified; extra invites are dropped silently. A member left out of the new list removes the group's live state, keeps its history, and gets no further messages because nobody sends to it.
 - **Send:** pick a random `groupMsgId`, send GROUP_TEXT as a DM to each other member. The sender shows one message, not N−1. Its status is `Delivered to k of n`, counting ACKs of the fan-out DMs.
-- **Receive:** show GROUP_TEXT only if the group is known and the sender is a member; otherwise drop it silently. The UI id of a group message is `groupMsgId`, the same on every member.
+- **Receive:** show GROUP_TEXT only if the group is known and the sender is a member; otherwise drop it silently. De-duplicate on (`groupId`, `senderId`, `groupMsgId`), so one member reusing another's `groupMsgId` cannot suppress it. The UI id of a group message is `senderNodeIdHex` + `groupMsgIdHex` (32 hex chars), the same on every member and on the sender's own aggregated message.
 - **Persistence:** invites and group texts are DMs, so replaying `messages.log` (5.11) rebuilds groups and their history. Nothing new on disk.
 - **Limits:** a group message costs one DM (with its own PoW) per other member; 16 members keeps that small. Relays can see that one source sent DMs to several ids at the same moment. State both in `docs/THREATS.md`.
 
@@ -1141,19 +1141,23 @@ A group is an 8-byte random `groupId` (shown as hex), a name (32 bytes or less),
 fun createGroup(name: String, members: List<String /* nodeId hex */>): String   // returns groupId hex
 fun setGroupMembers(groupId: String, members: List<String>)                    // owner only, else ignored
 fun sendGroup(groupId: String, text: String)
-// MeshEvent: GroupChanged(group), GroupStatusChanged(groupMsgId, delivered, total)
+// MeshEvent: GroupChanged(group), GroupStatusChanged(id /* sender hex + groupMsgId hex */, delivered, total)
 ```
 
-UI protocol: snapshot gains `"groups":[{"id","name","owner","members":["<id>",...]}]` and `"gdms":{"<groupId>":[Msg]}`. `Msg` gains `"group"` (groupId, null otherwise) and, on own group messages, `"delivered"` and `"total"`. New server events `{"t":"group","group":{...}}` and `{"t":"gstatus","id":"<groupMsgId>","delivered":k,"total":n}`; group messages arrive as normal `{"t":"msg"}` events. New commands `{"t":"group","name":"...","members":["<id>",...]}`, `{"t":"group-members","id":"<gid>","members":[...]}`, `{"t":"gmsg","group":"<gid>","text":"..."}`.
+UI protocol: snapshot gains `"groups":[{"id","name","owner","members":["<id>",...]}]` and `"gdms":{"<groupId>":[Msg]}`. `Msg` gains `"group"` (groupId, null otherwise) and, on own group messages, `"delivered"` and `"total"`. New server events `{"t":"group","group":{...}}` and `{"t":"gstatus","id":"<senderId><groupMsgId>","delivered":k,"total":n}`; group messages arrive as normal `{"t":"msg"}` events. New commands `{"t":"group","name":"...","members":["<id>",...]}`, `{"t":"group-members","id":"<gid>","members":[...]}`, `{"t":"gmsg","group":"<gid>","text":"..."}`.
 
 **Tests (add to 10.2):**
 
 | # | Scenario | Must hold |
 |---|---|---|
-| 12 | Random connected graph, 10 nodes; A creates a group {A, D, G, J} and sends | D, G, J each emit one `MessageAdded` with that group and the same `groupMsgId`; no other node emits `MessageAdded`; A ends at delivered 3 of 3 |
+| 12 | Random connected graph, 10 nodes; A creates a group {A, D, G, J} and sends | D, G, J each emit one `MessageAdded` with that group and the same id (A's id + `groupMsgId`); no other node emits `MessageAdded`; A ends at delivered 3 of 3 |
 | 13 | D (a member, not the owner) sends to the group | A, G and J receive it once |
 | 14 | GROUP_TEXT from a non-member; GROUP_INVITE change from a non-owner; owner removes J then sends | first two ignored; J receives nothing after removal |
 | 15 | A member restarts | its groups and group history come back from `messages.log` |
+| 16 | B sends D an invite whose `groupId` is bound to A, then one bound to B listing an unknown key | first ignored; second accepted and the unknown key is not a contact |
+| 17 | Owner removes J; G sends J an invite with A's real `groupId` and salt; owner re-adds J | J ignores G's claim; J ends with A's group, owner A |
+| 18 | Unverified B sends D 5 valid invites, then a 6th after D verifies B | D keeps only the first 4 of B's; the 6th is accepted |
+| 19 | D and G send GROUP_TEXT to J with the same `groupMsgId` | J shows both, with ids `D+groupMsgId` and `G+groupMsgId` |
 
 **Android:** group messages raise the same notification as DMs, titled with the group name, and inline reply sends to the group.
 

@@ -32,3 +32,4 @@
 [core] [15:51] done: 13.2 group chats as fan-out DMs (kinds 2/3, createGroup/setGroupMembers/sendGroup, GroupChanged/GroupStatusChanged, Snapshot.groups/gdms, Msg.group/delivered/total); GroupTest 12-15 green, core 55 tests, ./gradlew build green
 [android] [15:53] done: group message notifications (13.2): titled with group name, sender per line, inline reply -> node.sendGroup; keyed g:<groupId>. Build green; no live check (uiserver has no group commands yet).
 [ui] [15:53] done: 13.3 UI refresh of index.html (23 KB, 78 CSS lines) and guest.html (5.6 KB): light/dark, bubbles with Queued •/Sent ✓/Delivered ✓✓, Chats list + open conversation (DMs; GROUPS slots marked), unread badges, pinned compose with byte counter, bottom tabs <600px; e2e 8181-8183 PASS 1-6
+[core] [15:58] done: 13.2 group hardening (owner-bound gid+salt, no contacts from invites, 32/4 group caps, dedup on sender+groupMsgId); GroupTest t16-t19; core 59 tests green
