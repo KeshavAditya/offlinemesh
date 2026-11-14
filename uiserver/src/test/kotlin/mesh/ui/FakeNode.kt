@@ -4,6 +4,7 @@ import mesh.core.Attack
 import mesh.core.Contact
 import mesh.core.DebugFlag
 import mesh.core.DebugState
+import mesh.core.Group
 import mesh.core.LinkInfo
 import mesh.core.MeshEvent
 import mesh.core.Msg
@@ -31,6 +32,8 @@ class FakeNode : UiNode {
     private val dms = mutableMapOf<String, MutableList<Msg>>()
     private val security = mutableListOf<Sec>()
     private var debug = DebugState(false, false)
+    private val groups = mutableMapOf("00aa11bb22cc33dd" to Group("00aa11bb22cc33dd", "Team", b, listOf(b, self.id, c)))
+    private val gdms = mutableMapOf<String, MutableList<Msg>>()
     private var lamport = 0L
     private var n = 0
 
@@ -39,6 +42,8 @@ class FakeNode : UiNode {
             n++
             emit(MeshEvent.MessageAdded(msg(c, null, "sample post $n", mine = false, MsgStatus.RECEIVED, 2, b).also { feed += it }))
             if (n % 2 == 0) emit(MeshEvent.SecurityLogged(sec(SecKind.BAD_SIGNATURE, "sample bad signature $n")))
+            if (n % 4 == 0) emit(MeshEvent.MessageAdded(msg(b, null, "sample group msg $n", mine = false, MsgStatus.RECEIVED, 1, null)
+                .copy(group = "00aa11bb22cc33dd").also { gdms.getOrPut(it.group!!) { mutableListOf() } += it }))
             if (n % 3 == 0) emit(MeshEvent.MessageAdded(msg(c, self.id, "sample dm $n", mine = false, MsgStatus.RECEIVED, 2, b).also { dms.getOrPut(c) { mutableListOf() } += it }))
         }, 1, 5, TimeUnit.SECONDS)
     }
@@ -51,7 +56,8 @@ class FakeNode : UiNode {
     private fun emit(e: MeshEvent) = listeners.forEach { it(e) }
 
     override fun snapshot(): Snapshot = ex.submit<Snapshot> {
-        Snapshot(self, contacts, links, feed.toList(), dms.mapValues { it.value.toList() }, security.toList(), debug)
+        Snapshot(self, contacts, links, feed.toList(), dms.mapValues { it.value.toList() }, security.toList(), debug,
+            groups.values.toList(), gdms.mapValues { it.value.toList() })
     }.get()
 
     override fun addListener(l: (MeshEvent) -> Unit) { ex.execute { listeners += l } }
@@ -74,6 +80,17 @@ class FakeNode : UiNode {
             is Cmd.Verify -> { contacts = contacts.map { if (it.id == cmd.id) it.copy(verified = cmd.on) else it }; emit(MeshEvent.NetworkChanged(contacts, links)) }
             is Cmd.Debug -> debug = if (cmd.flag == DebugFlag.TAMPER_RELAY) debug.copy(tamper = cmd.on) else debug.copy(drop = cmd.on)
             is Cmd.Attack -> emit(MeshEvent.SecurityLogged(sec(if (cmd.kind == Attack.FLOOD) SecKind.RATE_EQUIVOCATION else SecKind.BAD_SIGNATURE, "own attack ${cmd.kind}")))
+            is Cmd.Group -> Group("%016x".format(System.nanoTime()), cmd.name, self.id, (listOf(self.id) + cmd.members).distinct())
+                .also { groups[it.id] = it; emit(MeshEvent.GroupChanged(it)) }
+            is Cmd.GroupMembers -> groups[cmd.id]?.takeIf { it.owner == self.id }
+                ?.copy(members = (listOf(self.id) + cmd.members).distinct())?.also { groups[it.id] = it; emit(MeshEvent.GroupChanged(it)) }
+            is Cmd.GroupMsg -> groups[cmd.group]?.let { g ->
+                val n = g.members.size - 1
+                val m = msg(self.id, null, cmd.text, true, MsgStatus.QUEUED, 0, null).copy(group = g.id, delivered = 0, total = n)
+                gdms.getOrPut(g.id) { mutableListOf() } += m
+                emit(MeshEvent.MessageAdded(m))
+                ex.schedule({ gdms[g.id]?.replaceAll { if (it.id == m.id) it.copy(delivered = n) else it }; emit(MeshEvent.GroupStatusChanged(m.id, n, n)) }, 2, TimeUnit.SECONDS)
+            }
         }
     }
 }

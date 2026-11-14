@@ -1,6 +1,7 @@
 package mesh.ui
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -20,6 +21,9 @@ sealed interface Cmd {
     data class Verify(val id: String, val on: Boolean) : Cmd
     data class Debug(val flag: DebugFlag, val on: Boolean) : Cmd
     data class Attack(val kind: mesh.core.Attack) : Cmd
+    data class Group(val name: String, val members: List<String>) : Cmd                    // 13.2
+    data class GroupMembers(val id: String, val members: List<String>) : Cmd
+    data class GroupMsg(val group: String, val text: String) : Cmd
 }
 
 private val NODE_ID = Regex("[0-9a-f]{16}")
@@ -44,6 +48,11 @@ fun parseCmd(body: String): Cmd {
         require(it.isNotBlank()) { "'$k' is empty" }
         require(it.toByteArray().size <= maxBytes) { "'$k' longer than $maxBytes bytes" }
     }
+    // 13.2: at most 16 members including the owner
+    fun members() = ((o["members"] as? JsonArray) ?: throw IllegalArgumentException("missing array field 'members'"))
+        .map { e -> (e as? JsonPrimitive)?.takeIf { it.isString && NODE_ID.matches(it.content) }?.content
+            ?: throw IllegalArgumentException("'members' must be 16-hex node ids") }
+        .distinct().also { require(it.size <= 16) { "at most 16 members" } }
     return when (val t = str("t")) {
         "post" -> Cmd.Post(text("text", 1_000))           // MAX_POST_BODY
         // MAX_DM_PLAINTEXT 40,000 includes the 1-byte kind (5.3), so 39,999 for the text or JPEG
@@ -58,6 +67,9 @@ fun parseCmd(body: String): Cmd {
         "attack" -> Cmd.Attack(
             when (str("kind")) { "flood" -> Attack.FLOOD; "spoof" -> Attack.SPOOF; "replay" -> Attack.REPLAY; else -> throw IllegalArgumentException("unknown attack") },
         )
+        "group" -> Cmd.Group(text("name", 32), members())
+        "group-members" -> Cmd.GroupMembers(id("id"), members())
+        "gmsg" -> Cmd.GroupMsg(id("group"), text("text", 1_000))
         else -> throw IllegalArgumentException("unknown t '$t'")
     }
 }
@@ -71,4 +83,7 @@ fun MeshNode.exec(c: Cmd) = when (c) {
     is Cmd.Verify -> setVerified(c.id, c.on)
     is Cmd.Debug -> setDebug(c.flag, c.on)
     is Cmd.Attack -> attack(c.kind)
+    is Cmd.Group -> { createGroup(c.name, c.members); Unit }
+    is Cmd.GroupMembers -> setGroupMembers(c.id, c.members)
+    is Cmd.GroupMsg -> sendGroup(c.group, c.text)
 }

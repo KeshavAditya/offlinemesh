@@ -19,6 +19,9 @@ class CmdTest {
         assertEquals(Cmd.Verify(id, false), parseCmd("""{"t":"verify","id":"$id","on":false}"""))
         assertEquals(Cmd.Debug(DebugFlag.DROP_RELAY, true), parseCmd("""{"t":"debug","flag":"drop","on":true}"""))
         assertEquals(Cmd.Attack(Attack.REPLAY), parseCmd("""{"t":"attack","kind":"replay"}"""))
+        assertEquals(Cmd.Group("G", listOf(id)), parseCmd("""{"t":"group","name":"G","members":["$id","$id"]}"""))
+        assertEquals(Cmd.GroupMembers(id, listOf()), parseCmd("""{"t":"group-members","id":"$id","members":[]}"""))
+        assertEquals(Cmd.GroupMsg(id, "hi"), parseCmd("""{"t":"gmsg","group":"$id","text":"hi"}"""))
     }
 
     @Test fun rejectsBadInput() {
@@ -29,6 +32,9 @@ class CmdTest {
             """{"t":"dm","to":"zz","text":"hi"}""", """{"t":"dm","to":"${id.uppercase()}","text":"hi"}""",
             """{"t":"name","name":"${"n".repeat(33)}"}""",
             """{"t":"mute","id":"$id","on":"true"}""", """{"t":"mute","id":"$id"}""",
+            """{"t":"group","name":"G"}""", """{"t":"group","name":"G","members":["zz"]}""", """{"t":"group","name":"G","members":"$id"}""",
+            """{"t":"group","name":"G","members":[${(0..16).joinToString(",") { "\"%016x\"".format(it) }}]}""",
+            """{"t":"group-members","id":"x","members":[]}""", """{"t":"gmsg","group":"$id","text":"${"x".repeat(1001)}"}""",
             """{"t":"debug","flag":"evil","on":true}""", """{"t":"attack","kind":"nuke"}""",
         )
         for (b in bad) assertFailsWith<IllegalArgumentException>(b) { parseCmd(b) }

@@ -44,7 +44,9 @@ ul { list-style: none; padding: 0; margin: 0; }
 .mut, small { color: var(--mut); font-size: 13px; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
 .card { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 8px 0; background: var(--bg); }
-.card .who { font-weight: 600; font-size: 14px; }
+.card .who, .msgs .who { font-weight: 600; font-size: 14px; }
+.pick label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.pick input { width: 20px; height: 20px; }
 .tag { font-size: 12px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--mut); margin-left: 4px; font-weight: 400; }
 .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
 .compose { position: fixed; bottom: var(--nb); left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; z-index: 1; background: var(--bg); padding: 8px 16px; box-shadow: 0 -2px 6px rgba(0,0,0,.06); }
@@ -82,6 +84,8 @@ label.sw { display: inline-flex; align-items: center; gap: 6px; min-height: 44px
 fieldset { border: 2px solid var(--red); border-radius: 12px; padding: 8px 12px 12px; margin: 16px 0; }
 legend { font-weight: 600; padding: 0 6px; color: var(--red); }
 fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+summary { padding: 12px 0; cursor: pointer; }
+.btn[hidden] { display: none; }
 .empty { color: var(--mut); padding: 16px 0; text-align: center; }
 </style>
 </head>
@@ -114,10 +118,13 @@ fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 <section id="chats">
   <div id="chatList">
     <div class="chead"><h2 style="flex:1;margin:8px 0">Chats</h2>
-      <!-- GROUPS: the "New group" button goes here (13.3); groupSlot is reserved for it. -->
-      <span id="groupSlot"></span>
+      <span id="groupSlot"><button id="newGroupBtn" onclick="$('newGroup').hidden = !$('newGroup').hidden; render()">New group</button></span>
     </div>
-    <!-- GROUPS: the New group form (name + checkbox list of known contacts) goes here. -->
+    <div id="newGroup" class="card" hidden>
+      <input type="text" id="gName" placeholder="Group name" maxlength="32" aria-label="Group name">
+      <div id="gPick" class="pick"></div>
+      <div class="row"><button id="gCreate" class="pri" onclick="newGroup()">Create</button><button onclick="$('newGroup').hidden = true">Cancel</button></div>
+    </div>
     <ul id="convos"></ul>
   </div>
   <div id="convoView" hidden>
@@ -125,11 +132,12 @@ fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
       <button onclick="closeChat()" aria-label="Back to chats">‹ Chats</button>
       <div><b id="chatName"></b><br><small id="chatRoute"></small></div>
     </div>
-    <!-- GROUPS: the group view (members, owner add/remove) goes here. -->
+    <details id="gView" hidden><summary>Members</summary><div id="gMem" class="pick"></div>
+      <button id="gSave" class="pri" onclick="saveMembers()">Save members</button></details>
     <ul id="convo" class="msgs"></ul>
     <div class="compose">
       <div class="row">
-        <label class="btn" title="Send a photo" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.lastChild.click()}">Photo<input type="file" accept="image/*" hidden onchange="photo(this)"></label>
+        <label id="photoBtn" class="btn" title="Send a photo" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.lastChild.click()}">Photo<input type="file" accept="image/*" hidden onchange="photo(this)"></label>
         <input type="text" id="dmText" placeholder="Write a message" data-max="39999" data-btn="dmBtn" data-count="dmCount">
         <button id="dmBtn" class="pri" disabled onclick="sendDm()">Send</button>
       </div>
@@ -172,7 +180,7 @@ fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 
 <script>
 // All mesh data is untrusted: only ever put it into the page with textContent, never innerHTML.
-let S = null, cur = 'feed', open = null;           // open: contact id of the open conversation, or null for the list
+let S = null, cur = 'feed', open = null;           // open: {kind: 'dm'|'group', id} of the open conversation, or null for the list
 const unread = { feed: 0, security: 0 }, dmUnread = {};
 const MAX = 200;                                   // render at most the last 200 items of any list (A52s WebView)
 const BAD = ['BAD_SIGNATURE', 'BANNED', 'RATE_EQUIVOCATION'];
@@ -187,10 +195,14 @@ function name(id) {
   const c = S && S.contacts.find(c => c.id === id);
   return c && c.name ? c.name : id.slice(0, 8);
 }
+const grp = id => S.groups.find(g => g.id === id);
+const uk = (kind, id) => kind + ':' + id;            // unread key: a group id may equal a contact id
+const isOpen = (kind, id) => cur === 'chats' && open && open.kind === kind && open.id === id;
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 function add(p, ...kids) { for (const k of kids) p.appendChild(typeof k === 'string' ? document.createTextNode(k) : k); return p; }
 function route(m) { return m.hops == null ? 'no route yet' : m.hops + (m.hops === 1 ? ' hop' : ' hops') + (m.via && m.hops > 1 ? ' via ' + name(m.via) : ''); }
 function status(m) {
+  if (m.group) return m.total ? 'Delivered to ' + m.delivered + ' of ' + m.total : 'Sent ✓';
   if (m.status === 'DELIVERED') return 'Delivered ✓✓ · ' + route(m);
   return { QUEUED: 'Queued •', SENT: 'Sent ✓' }[m.status] || '';
 }
@@ -203,10 +215,10 @@ function show(id) {
   for (const s of document.querySelectorAll('section')) s.className = s.id === id ? 'on' : '';
   for (const b of document.querySelectorAll('nav button')) b.toggleAttribute('aria-current', b.dataset.s === id);
   if (id in unread) unread[id] = 0;
-  if (id === 'chats' && open) dmUnread[open] = 0;
+  if (id === 'chats' && open) dmUnread[uk(open.kind, open.id)] = 0;
   render(); if (id === 'feed' || (id === 'chats' && open)) toBottom(); else scrollTo(0, 0);
 }
-function openChat(id) { open = id; dmUnread[id] = 0; $('dmErr').textContent = ''; render(); toBottom(); $('dmText').focus(); }
+function openChat(kind, id) { open = { kind, id }; dmUnread[uk(kind, id)] = 0; $('dmErr').textContent = ''; render(); toBottom(); $('dmText').focus(); }
 function closeChat() { open = null; render(); scrollTo(0, 0); }
 
 // Compose bars: Enter sends, button disabled while empty or too long, byte counter from 80% of the limit.
@@ -220,13 +232,27 @@ for (const inp of document.querySelectorAll('[data-max]')) {
   inp.onkeydown = e => { if (e.key === 'Enter' && !e.isComposing && !$(inp.dataset.btn).disabled) $(inp.dataset.btn).click(); };
 }
 const sendPost = () => send({ t: 'post', text: val('postText') }, 'postText', 'postErr');
-const sendDm = () => open && send({ t: 'dm', to: open, text: val('dmText') }, 'dmText', 'dmErr');
+const sendDm = () => open && send(open.kind === 'group' ? { t: 'gmsg', group: open.id, text: val('dmText') } : { t: 'dm', to: open.id, text: val('dmText') }, 'dmText', 'dmErr');
+// Checkbox list of known contacts (13.3), ids in `on` ticked.
+function picker(div, on) {
+  $(div).replaceChildren(...S.contacts.filter(c => c.id !== S.self.id).map(c => {
+    const b = el('input'); b.type = 'checkbox'; b.value = c.id; b.checked = on.includes(c.id);
+    return add(el('label'), b, name(c.id));
+  }));
+}
+const picked = div => [...$(div).querySelectorAll('input:checked')].map(b => b.value);
+function newGroup() {
+  if (!val('gName')) return $('gName').focus();
+  send({ t: 'group', name: val('gName'), members: picked('gPick') }, 'gName');
+  $('newGroup').hidden = true;
+}
+const saveMembers = () => open && open.kind === 'group' && send({ t: 'group-members', id: open.id, members: picked('gMem') });
 
 // Stretch 2: downscale and re-encode until the JPEG fits one DM (39,999 bytes + 1 kind byte = MAX_DM_PLAINTEXT).
 async function photo(input) {
   const f = input.files[0]; input.value = '';
-  if (!f || !open) return;
-  const to = open, bmp = await createImageBitmap(f);
+  if (!f || !open || open.kind !== 'dm') return;
+  const to = open.id, bmp = await createImageBitmap(f);
   const c = document.createElement('canvas');   // never shown, only used to re-encode
   let side = 640, q = 0.8, blob;
   for (;;) {
@@ -265,18 +291,25 @@ function upsert(list, m) {
 }
 
 function apply(ev) {
-  if (ev.t === 'snapshot') { S = ev; return; }
+  if (ev.t === 'snapshot') { S = ev; S.groups = S.groups || []; S.gdms = S.gdms || {}; return; }
   if (!S) return;
   if (ev.t === 'msg') {
     const m = ev.msg;
-    if (m.to === null) { if (upsert(S.feed, m) && !m.mine && cur !== 'feed') unread.feed++; }
+    if (m.group) {
+      if (upsert(S.gdms[m.group] = S.gdms[m.group] || [], m) && !m.mine && !isOpen('group', m.group)) dmUnread[uk('group', m.group)] = (dmUnread[uk('group', m.group)] || 0) + 1;
+    } else if (m.to === null) { if (upsert(S.feed, m) && !m.mine && cur !== 'feed') unread.feed++; }
     else {
       const p = m.mine ? m.to : m.from;
-      if (upsert(S.dms[p] = S.dms[p] || [], m) && !m.mine && !(cur === 'chats' && open === p)) dmUnread[p] = (dmUnread[p] || 0) + 1;
+      if (upsert(S.dms[p] = S.dms[p] || [], m) && !m.mine && !isOpen('dm', p)) dmUnread[uk('dm', p)] = (dmUnread[uk('dm', p)] || 0) + 1;
     }
   } else if (ev.t === 'status') {
     for (const list of [S.feed, ...Object.values(S.dms)])
       for (const m of list) if (m.id === ev.id) { m.status = ev.status; m.hops = ev.hops; m.via = ev.via; }
+  } else if (ev.t === 'gstatus') {
+    for (const list of Object.values(S.gdms)) for (const m of list) if (m.id === ev.id) { m.delivered = ev.delivered; m.total = ev.total; }
+  } else if (ev.t === 'group') {
+    S.groups = S.groups.filter(g => g.id !== ev.group.id);
+    if (ev.group.members.includes(S.self.id)) S.groups.push(ev.group);   // left out of the list: live state goes, history stays
   } else if (ev.t === 'net') { S.contacts = ev.contacts; S.links = ev.links; }
   else if (ev.t === 'sec') { S.security.push(ev.event); if (cur !== 'security') unread.security++; }
 }
@@ -313,36 +346,44 @@ function renderFeed() {
 function renderChats() {
   $('chatList').hidden = !!open; $('convoView').hidden = !open;
   if (open) return renderConvo();
-  // GROUPS: merge group conversations into this list once the protocol has them.
-  const ids = [...new Set([...S.contacts.map(c => c.id), ...Object.keys(S.dms)])];
-  const rows = ids.map(id => { const ms = S.dms[id] || []; return { id, last: ms.reduce((a, m) => !a || byOrder(a, m) < 0 ? m : a, null) }; })
+  if (!$('newGroup').hidden && !$('gPick').contains(document.activeElement)) picker('gPick', picked('gPick'));
+  const row = (kind, id) => ({ kind, id, last: ((kind === 'group' ? S.gdms : S.dms)[id] || []).reduce((a, m) => !a || byOrder(a, m) < 0 ? m : a, null) });
+  const rows = [...[...new Set([...S.contacts.map(c => c.id), ...Object.keys(S.dms)])].map(id => row('dm', id)),
+                ...[...new Set([...S.groups.map(g => g.id), ...Object.keys(S.gdms)])].map(id => row('group', id))]
     .sort((a, b) => (b.last ? b.last.tsMs : -1) - (a.last ? a.last.tsMs : -1) || name(a.id).localeCompare(name(b.id)));
   const ul = $('convos'); ul.replaceChildren();
   if (!rows.length) ul.appendChild(el('li', 'No contacts yet. They appear when another phone is in range.', 'empty'));
   for (const r of rows.slice(0, MAX)) {
-    const c = S.contacts.find(c => c.id === r.id) || {}, b = el('button', null, 'chat');
-    b.onclick = () => openChat(r.id);
-    const prev = r.last ? (r.last.mine ? 'You: ' : '') + (r.last.img ? 'Photo' : r.last.text) : 'No messages yet';
-    const n = el('span', dmUnread[r.id] ? String(dmUnread[r.id]) : '', 'n');
+    const gq = r.kind === 'group', c = S.contacts.find(c => c.id === r.id) || {}, b = el('button', null, 'chat'), g = gq && grp(r.id);
+    b.onclick = () => openChat(r.kind, r.id);
+    const who = !r.last ? '' : r.last.mine ? 'You: ' : gq ? name(r.last.from) + ': ' : '';
+    const prev = r.last ? who + (r.last.img ? 'Photo' : r.last.text) : 'No messages yet';
+    const k = uk(r.kind, r.id), n = el('span', dmUnread[k] ? String(dmUnread[k]) : '', 'n');
     add(b, add(el('div', null, 'main'),
-      add(el('div', null, 'line'), el('b', name(r.id)), el('small', r.last ? hhmm(r.last.tsMs) : '')),
+      add(el('div', null, 'line'), el('b', gq ? gname(r.id) : name(r.id)), el('small', r.last ? hhmm(r.last.tsMs) : '')),
       add(el('div', null, 'line'), el('span', prev, 'prev'), n),
-      el('small', route(c))));
+      el('small', !gq ? route(c) : g ? g.members.length + ' members' : 'you left this group')));
     ul.appendChild(add(el('li'), b));
   }
 }
 
+const gname = id => (grp(id) || {}).name || 'Group';   // a left group keeps only its history
 function renderConvo() {
-  const c = S.contacts.find(c => c.id === open) || {};
-  $('chatName').textContent = name(open);
-  $('chatRoute').textContent = route(c) + (c.verified ? ' · verified' : '');
+  const id = open.id, gq = open.kind === 'group', c = S.contacts.find(c => c.id === id) || {}, g = gq && grp(id), own = g && g.owner === S.self.id;
+  $('chatName').textContent = gq ? gname(id) : name(id);
+  $('chatRoute').textContent = gq ? (g ? g.members.map(name).join(', ') : 'you left this group') : route(c) + (c.verified ? ' · verified' : '');
+  $('photoBtn').hidden = gq; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes, no photos (13.2)
+  $('gView').hidden = !own; document.querySelector('#convoView .compose').hidden = gq && !g;
+  if (own && !$('gView').open) picker('gMem', g.members);   // rebuilt only while closed, so events do not undo ticks
   const ul = $('convo'); ul.replaceChildren();
-  for (const m of [...(S.dms[open] || [])].sort(byOrder).slice(-MAX)) {
+  for (const m of [...((gq ? S.gdms : S.dms)[id] || [])].sort(byOrder).slice(-MAX)) {
     const bub = el('div', null, 'bub');
     // "/9j/" is base64 for FF D8 FF: show only real JPEGs, and only via a data: URL (no innerHTML)
     if (m.img && m.img.startsWith('/9j/')) { const im = el('img'); im.src = 'data:image/jpeg;base64,' + m.img; im.alt = 'photo'; bub.appendChild(im); }
     else bub.appendChild(el('span', m.text, 'txt'));
-    ul.appendChild(add(el('li', null, m.mine ? 'mine' : ''), bub,
+    const li = el('li', null, m.mine ? 'mine' : '');
+    if (gq && !m.mine) li.appendChild(el('div', name(m.from), 'who'));
+    ul.appendChild(add(li, bub,
       el('span', hhmm(m.tsMs) + ' · ' + (m.mine ? status(m) : route(m)), 'meta')));
   }
 }
