@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OfflineMesh</title>
+<style>
+body { font-family: system-ui, sans-serif; font-size: 16px; color: #000; background: #fff; margin: 8px; }
+header { margin-bottom: 8px; }
+section { display: none; }
+section.on { display: block; }
+input[type=text], select { width: 100%; box-sizing: border-box; font-size: 16px; margin: 4px 0; }
+button { font-size: 16px; margin: 4px 4px 4px 0; }
+ul { list-style: none; padding: 0; }
+li { border-bottom: 1px solid #ccc; padding: 6px 0; }
+small, .grey { color: #666; font-size: 13px; }
+table { border-collapse: collapse; width: 100%; }
+td, th { border: 1px solid #ccc; padding: 4px; text-align: left; }
+fieldset { border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<header>OfflineMesh &nbsp; <span id="me"></span> &nbsp; links: <span id="nlinks">0</span> <span id="conn" class="grey"></span></header>
+<nav>
+  <button onclick="show('feed')">Feed</button>
+  <button onclick="show('messages')">Messages</button>
+  <button onclick="show('network')">Network</button>
+  <button onclick="show('security')">Security</button>
+</nav>
+
+<section id="feed" class="on">
+  <ul id="posts"></ul>
+  <input type="text" id="postText" placeholder="Write a post">
+  <button onclick="send({t:'post',text:val('postText')},'postText')">Post</button>
+</section>
+
+<section id="messages">
+  <select id="peer" onchange="render()"></select>
+  <ul id="convo"></ul>
+  <input type="text" id="dmText" placeholder="Write a message">
+  <button onclick="peer.value && send({t:'dm',to:peer.value,text:val('dmText')},'dmText')">Send</button>
+</section>
+
+<section id="network">
+  <p>My name: <input type="text" id="myName"> <button onclick="send({t:'name',name:val('myName')})">Save name</button></p>
+  <p>My fingerprint: <span id="fp"></span></p>
+  <h3>Contacts</h3>
+  <table><thead><tr><th>Name</th><th>ID</th><th>Hops</th><th>Via</th><th>Linked</th><th>Verified</th><th>Muted</th></tr></thead><tbody id="contacts"></tbody></table>
+  <h3>Links</h3>
+  <table><thead><tr><th>Transport</th><th>Peer</th><th>State</th></tr></thead><tbody id="links"></tbody></table>
+</section>
+
+<section id="security">
+  <ul id="sec"></ul>
+  <fieldset>
+    <legend>Demo attacks</legend>
+    <label><input type="checkbox" id="tamper" onchange="send({t:'debug',flag:'tamper',on:this.checked})"> Tamper while relaying</label><br>
+    <label><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})"> Drop while relaying</label><br>
+    <button onclick="send({t:'attack',kind:'flood'})">Flood</button>
+    <button onclick="send({t:'attack',kind:'spoof'})">Spoof</button>
+    <button onclick="send({t:'attack',kind:'replay'})">Replay</button>
+  </fieldset>
+</section>
+
+<script>
+// All mesh data is untrusted: only ever put it into the page with textContent, never innerHTML.
+let S = null;
+const $ = id => document.getElementById(id);
+const peer = $('peer');
+const val = id => $(id).value.trim();
+const fp = id => (id.match(/.{1,4}/g) || []).join(' ');
+function name(id) {
+  if (!id) return '';
+  if (S && id === S.self.id) return S.self.name;
+  const c = S && S.contacts.find(c => c.id === id);
+  return c && c.name ? c.name : id.slice(0, 8);
+}
+function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+function route(m) { return m.hops + (m.hops === 1 ? ' hop' : ' hops') + (m.via ? ' via ' + name(m.via) : ''); }
+function status(m) {
+  if (m.status === 'DELIVERED') return 'Delivered, ' + route(m);
+  return { QUEUED: 'Queued', SENT: 'Sent' }[m.status] || '';
+}
+const byOrder = (a, b) => a.lamport - b.lamport || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+function show(id) {
+  for (const s of document.querySelectorAll('section')) s.className = s.id === id ? 'on' : '';
+}
+
+function send(cmd, clearId) {
+  fetch('/api/cmd', { method: 'POST', body: JSON.stringify(cmd) })
+    .then(r => {
+      if (!r.ok) return r.text().then(t => alert('Not sent: ' + t));
+      if (clearId) $(clearId).value = '';
+      // No event reports these back, so keep the local copy in step.
+      if (cmd.t === 'name') S.self.name = cmd.name;
+      if (cmd.t === 'debug') S.debug[cmd.flag] = cmd.on;
+      render();
+    })
+    .catch(e => alert('Not sent: ' + e));
+}
+
+function upsert(list, m) {
+  const i = list.findIndex(x => x.id === m.id);
+  if (i >= 0) list[i] = m; else list.push(m);
+}
+
+function apply(ev) {
+  if (ev.t === 'snapshot') { S = ev; return; }
+  if (!S) return;
+  if (ev.t === 'msg') {
+    const m = ev.msg;
+    if (m.to === null) upsert(S.feed, m);
+    else { const p = m.mine ? m.to : m.from; upsert(S.dms[p] = S.dms[p] || [], m); }
+  } else if (ev.t === 'status') {
+    for (const list of [S.feed, ...Object.values(S.dms)])
+      for (const m of list) if (m.id === ev.id) { m.status = ev.status; m.hops = ev.hops; m.via = ev.via; }
+  } else if (ev.t === 'net') { S.contacts = ev.contacts; S.links = ev.links; }
+  else if (ev.t === 'sec') S.security.push(ev.event);
+}
+
+function checkbox(checked, onchange) {
+  const td = el('td'), c = el('input'); c.type = 'checkbox'; c.checked = checked; c.onchange = () => onchange(c.checked);
+  td.appendChild(c); return td;
+}
+
+function render() {
+  if (!S) return;
+  $('me').textContent = S.self.name + ' (' + fp(S.self.id) + ')';
+  $('nlinks').textContent = S.links.length;
+  $('fp').textContent = fp(S.self.id);
+  if (document.activeElement !== $('myName')) $('myName').value = S.self.name;
+
+  const posts = $('posts'); posts.replaceChildren();
+  for (const m of [...S.feed].sort(byOrder)) {
+    const li = el('li', name(m.from) + ': ' + m.text);
+    if (!m.mine) { li.appendChild(el('br')); li.appendChild(el('small', route(m))); }
+    posts.appendChild(li);
+  }
+
+  const sel = peer.value;
+  peer.replaceChildren();
+  for (const c of S.contacts) { const o = el('option', c.name || c.id.slice(0, 8)); o.value = c.id; peer.appendChild(o); }
+  if (sel && S.contacts.some(c => c.id === sel)) peer.value = sel;
+  const convo = $('convo'); convo.replaceChildren();
+  for (const m of [...(S.dms[peer.value] || [])].sort(byOrder)) {
+    const li = el('li', (m.mine ? 'me' : name(m.from)) + ': ' + m.text);
+    li.appendChild(el('br'));
+    li.appendChild(el('small', m.mine ? status(m) : route(m)));
+    convo.appendChild(li);
+  }
+
+  const ct = $('contacts'); ct.replaceChildren();
+  for (const c of S.contacts) {
+    const tr = el('tr');
+    tr.appendChild(el('td', c.name));
+    tr.appendChild(el('td', fp(c.id)));
+    tr.appendChild(el('td', c.hops == null ? '-' : c.hops));
+    tr.appendChild(el('td', c.via ? name(c.via) : '-'));
+    tr.appendChild(el('td', c.linked ? 'yes' : 'no'));
+    tr.appendChild(checkbox(c.verified, on => send({ t: 'verify', id: c.id, on })));
+    tr.appendChild(checkbox(c.muted, on => send({ t: 'mute', id: c.id, on })));
+    ct.appendChild(tr);
+  }
+  const lt = $('links'); lt.replaceChildren();
+  for (const l of S.links) {
+    const tr = el('tr');
+    tr.appendChild(el('td', l.transport));
+    tr.appendChild(el('td', l.peer ? name(l.peer) + ' (' + fp(l.peer) + ')' : l.link));
+    tr.appendChild(el('td', l.authed ? 'authenticated' : 'connecting'));
+    lt.appendChild(tr);
+  }
+
+  const sec = $('sec'); sec.replaceChildren();
+  for (const e of [...S.security].sort((a, b) => b.tsMs - a.tsMs)) {
+    sec.appendChild(el('li', new Date(e.tsMs).toLocaleTimeString() + ' ' + e.kind + ' ' + e.detail +
+      (e.src ? ' src=' + name(e.src) : '') + (e.link ? ' link=' + e.link : '')));
+  }
+  $('tamper').checked = S.debug.tamper;
+  $('drop').checked = S.debug.drop;
+}
+
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => $('conn').textContent = '';
+  ws.onmessage = e => { apply(JSON.parse(e.data)); render(); };
+  ws.onclose = () => { $('conn').textContent = '(reconnecting)'; setTimeout(connect, 2000); };
+}
+connect();
+</script>
+</body>
+</html>
