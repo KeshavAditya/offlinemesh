@@ -400,16 +400,39 @@ class MeshNode(
 
     // ---- 5.7 routing ----
 
-    /** Hands a stored envelope to one link: own ones as created, others as a relay copy (ttl - 1, hops + 1). */
-    private fun give(l: Link, e: Envelope): Boolean {
-        if (!live(l)) return false
+    /**
+     * Hands a stored envelope to one link: own ones as created, others as a relay copy (ttl - 1, hops + 1).
+     * [paced] sends spend the link's outBucket (25 per 10 s, under the peer's 30) so honest bursts never trip its
+     * LINK_FLOOD; without a token a relayed PRESENCE is dropped (refreshed every 30 s), anything else waits in outQ.
+     * SYNC_WANT answers are unpaced: the peer asked for them, so its bucket exempts them.
+     */
+    private fun give(l: Link, e: Envelope, paced: Boolean = true) {
+        if (!live(l)) return
         val own = isOwn(e)
-        val wire = if (own) e else relayCopy(e) ?: return false
-        val mid = hex(e.msgId)
-        seen[mid]?.have?.add(l.id)
-        val ok = l.transport.send(l.id, Codec.encodeFrame(Frame.Env(wire)))
-        if (ok && own && msgs[mid]?.status == MsgStatus.QUEUED) setStatus(mid, MsgStatus.SENT, 0, null)
-        return ok
+        val o = Out(if (own) e else relayCopy(e) ?: return, hex(e.msgId), own)
+        val token = !paced || (l.outQ.isEmpty() && l.outBucket.take(now()))
+        if (!token && !own && e.type == EnvType.PRESENCE) return
+        seen[o.mid]?.have?.add(l.id)
+        if (token) return send(l, o)
+        if (l.outQ.size >= C.SEND_QUEUE_CAP) {
+            // Full: drop the oldest PRESENCE, else the oldest relay; own POSTs/DMs also stay in the store for sync.
+            val q = l.outQ
+            val gone = q.removeAt(q.indexOfFirst { it.wire.type == EnvType.PRESENCE }.takeIf { it >= 0 } ?: q.indexOfFirst { !it.own }.coerceAtLeast(0))
+            seen[gone.mid]?.have?.remove(l.id)   // so a later SYNC_WANT can still serve it
+        }
+        if (l.outQ.isEmpty()) later(DRAIN_MS) { drain(l) }
+        l.outQ.addLast(o)
+    }
+
+    private fun drain(l: Link) {
+        if (!live(l)) return l.outQ.clear()
+        while (l.outQ.isNotEmpty() && l.outBucket.take(now())) send(l, l.outQ.removeFirst())
+        if (l.outQ.isNotEmpty()) later(DRAIN_MS) { drain(l) }
+    }
+
+    private fun send(l: Link, o: Out) {
+        val ok = l.transport.send(l.id, Codec.encodeFrame(Frame.Env(o.wire)))
+        if (ok && o.own && msgs[o.mid]?.status == MsgStatus.QUEUED) setStatus(o.mid, MsgStatus.SENT, 0, null)
     }
 
     private fun relayCopy(e: Envelope): Envelope? {
@@ -515,7 +538,7 @@ class MeshNode(
             val e = store.envs[mid]?.env?.takeIf { offerable(it, ep) } ?: continue
             // shortcut: served set is cleared at 4,096 ids (one resend each per link), fine for demo-sized meshes.
             if (l.wantServed.size >= C.SEEN_CAP) l.wantServed.clear()
-            if (l.wantServed.add(mid)) give(l, e)
+            if (l.wantServed.add(mid)) give(l, e, paced = false)
         }
     }
 
@@ -536,7 +559,7 @@ class MeshNode(
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val MAX_CONTACTS = 256 }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256 }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */

@@ -30,6 +30,9 @@ object C {
 
     const val BUCKET_SIZE = 30
     const val BUCKET_WINDOW_MS = 10_000L
+    // Sender-side pacing (not in section 4): 5 below the receiver's bucket so honest relays never trip LINK_FLOOD.
+    const val SEND_BUCKET_SIZE = 25
+    const val SEND_QUEUE_CAP = 256   // shortcut: arbitrary bound on deferred sends per link; raise if busy meshes drop relays
 
     const val SCORE_START = 100
     const val SCORE_MALFORMED = -20

@@ -4,7 +4,6 @@ import mesh.core.C
 import mesh.core.Crypto
 import mesh.core.SimNetwork
 import kotlin.random.Random
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -52,10 +51,9 @@ class BroadcastCostTest {
         }
     }
 
-    // Bug -> mesh-core: with 30+ nodes the start-up PRESENCE flood and the link-up PRESENCE replay (up to 64, 5.5 step 6) go
-    // through the 30-per-10 s link token bucket, so honest links log LINK_FLOOD, lose score and close (50 nodes: 27 LINK_FLOOD,
-    // 2 LINK_CLOSED, 46/49 received). Un-ignore when PRESENCE replay is paced or exempt from the bucket.
-    @Ignore @Test fun fiftyHonestNodesTripNoLinkFlood() {
+    // Was a bug: start-up PRESENCE floods and the link-up replay (up to 64) tripped the receivers' 30-per-10 s bucket.
+    // Fixed by sender-side pacing in MeshNode.give().
+    @Test fun fiftyHonestNodesTripNoLinkFlood() {
         val r = measure(50, 90, 7)
         assertEquals(0, r.honestSecurityEvents)
         assertEquals(r.within6, r.received)

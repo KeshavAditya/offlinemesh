@@ -10,13 +10,25 @@ internal class Link(val id: LinkId, val transport: Transport, val desc: String, 
     var lastRxMs = nowMs                     // any frame, for the silent-link check
     val wanted = HashSet<String>()           // msgIds we asked for with SYNC_WANT: exempt from the bucket once
     val wantServed = HashSet<String>()       // msgIds we already answered on this link (independent of the seen LRU)
-    private var tokens = C.BUCKET_SIZE.toDouble()
-    private var bucketAt = nowMs
+    private val inBucket = Bucket(C.BUCKET_SIZE, nowMs)
+    val outBucket = Bucket(C.SEND_BUCKET_SIZE, nowMs)   // sender-side pacing, below the peer's inBucket
+    val outQ = ArrayDeque<Out>()                         // paced sends waiting for an outBucket token, in order
 
     /** 30 envelopes per 10 s, refilled continuously. */
-    fun takeToken(now: Long): Boolean {
-        tokens = minOf(C.BUCKET_SIZE.toDouble(), tokens + (now - bucketAt) * C.BUCKET_SIZE.toDouble() / C.BUCKET_WINDOW_MS)
-        bucketAt = now
+    fun takeToken(now: Long) = inBucket.take(now)
+}
+
+/** An envelope as it goes on the wire, its msgId hex, and whether this node created it. */
+internal class Out(val wire: Envelope, val mid: String, val own: Boolean)
+
+/** [size] tokens per BUCKET_WINDOW_MS, refilled continuously. */
+internal class Bucket(private val size: Int, nowMs: Long) {
+    private var tokens = size.toDouble()
+    private var at = nowMs
+
+    fun take(now: Long): Boolean {
+        tokens = minOf(size.toDouble(), tokens + (now - at) * size.toDouble() / C.BUCKET_WINDOW_MS)
+        at = now
         if (tokens < 1) return false
         tokens -= 1
         return true
