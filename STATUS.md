@@ -30,3 +30,4 @@
 [android] [15:28] done: stretch 3 notifications + inline reply (emulators: A->C DM via B shows 'Messages' notification on C with sender name, photo DM shows '(photo)', shade Reply reached A at 2 hops and C shows DELIVERED, none while app resumed; photo DM 36.6 KB JPEG delivered A->C via B); final emulator e2e 1-6 PASS on latest main
 [orchestrator] [15:43] done: plan section 13 added (N phones, group chats, UI refresh); helpers next
 [core] [15:51] done: 13.2 group chats as fan-out DMs (kinds 2/3, createGroup/setGroupMembers/sendGroup, GroupChanged/GroupStatusChanged, Snapshot.groups/gdms, Msg.group/delivered/total); GroupTest 12-15 green, core 55 tests, ./gradlew build green
+[android] [15:53] done: group message notifications (13.2): titled with group name, sender per line, inline reply -> node.sendGroup; keyed g:<groupId>. Build green; no live check (uiserver has no group commands yet).
