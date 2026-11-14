@@ -27,7 +27,7 @@ In a blackout, a flood or a packed stadium, the network is the first thing to go
 - **UI:** one plain HTML file with inline CSS and JavaScript, about 27 KB, no frameworks, no build step, no web fonts. Light and dark themes follow the phone, and it stays quick on a mid-range phone's WebView.
 - **Desktop node** over TCP, used as the fallback demo and for testing.
 - **Simulator:** an in-memory network with virtual time runs the real core code. Tests cover the acceptance checks plus red-team cases: forged receipts, presence spam, slot reuse across restarts, oversized and truncated frames, sync amplification.
-- One acceptance script (`scripts/e2e.sh`) drives three nodes over HTTP and checks all six goals: two-hop DM, relay cannot read it, post arrives once, tampering rejected, flood banned, catch-up after reconnect.
+- One acceptance script (`scripts/e2e.sh`) drives three or more nodes over HTTP and checks eight goals: two-hop DM, relay cannot read it, post arrives once, tampering rejected, flood banned, catch-up after reconnect, group message delivered to every member, post reaches every node.
 
 ## Challenges we ran into
 
@@ -38,7 +38,7 @@ In a blackout, a flood or a packed stadium, the network is the first thing to go
 
 ## Accomplishments we're proud of
 
-- All six acceptance checks pass on three desktop nodes and on three Android emulators talking over emulated Bluetooth.
+- All eight acceptance checks pass on desktop nodes (3, 4 and 5) and on four Android emulators talking over emulated Bluetooth.
 - Five desktop nodes pass all eight checks, including a group of all five delivered to 4 of 4 in about a second.
 - One public post on a 25-phone simulated mesh with 40 links took 41 transmissions, about one per link.
 - An honest list of what we do not defend against (`docs/THREATS.md`).

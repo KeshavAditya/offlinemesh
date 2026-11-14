@@ -6,12 +6,12 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 
 | What | Result |
 |---|---|
-| `./gradlew :core:test` | 51 tests, all pass, none ignored |
+| `./gradlew :core:test` | 63 tests, all pass, none ignored (lan 2, uiserver 10) |
 | of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 19, all pass |
 | `scripts/e2e.sh` on 3 desktop nodes (TCP, one laptop) | items 1-6 PASS (run twice) |
 | `scripts/e2e.sh` on 3 Android emulators (API 36, emulated Bluetooth) | items 1-6 PASS |
 | `scripts/e2e.sh` on 5 desktop nodes (`NODES=5`, TCP, one laptop, in a line) | items 1-8 PASS; item 7 (group of all 5) showed `Delivered to 4 of 4` in about 1 s |
-| `scripts/e2e.sh` on 4 Android emulators | **TODO: results being collected now, fill in here** |
+| `scripts/e2e.sh` on 4 Android emulators | items 1-8 PASS (fresh deploy, no manual mutes; group notification shown on C) |
 | `scripts/e2e.sh` on the 3 real phones | **not run yet** |
 
 ## Broadcast cost (simulator, real core code, virtual time)
@@ -72,5 +72,5 @@ A group message is sent as one ordinary DM to each other member, so it costs **(
 ## Still to measure
 
 - PoW time on each real phone.
-- `e2e.sh` on 4 emulators (TODO above).
+- `e2e.sh` on 4 emulators: items 1-8 PASS.
 - `e2e.sh` on the three real phones, and real Bluetooth range and timing.
