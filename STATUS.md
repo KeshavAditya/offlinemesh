@@ -23,3 +23,4 @@
 [ui] [14:54] done: stretch 5 QR identity + guest QR (zxing core 3.5.3, GET /api/qr SVG + GET /api/guest, guide section 6 line added; app: UiServer(node, port) { guestServerOrNull }; :uiserver:test + :app:assembleDebug green)
 [qa] [15:05] blocked->mesh-core: 50 honest sim nodes log 27 LINK_FLOOD + 2 LINK_CLOSED, 46/49 get a post (start-up PRESENCE flood and link-up replay of up to 64 presences go through the 30/10 s link bucket); @Ignore'd test redteam/BroadcastCostTest.fiftyHonestNodesTripNoLinkFlood. Also 10.2 #9 count is 41 or 42 run to run (jitter not seeded)
 [qa] [15:05] done: THREATS/DEMO/NUMBERS/DEVPOST in docs/ (+ redteam PowTimingTest, BroadcastCostTest; core 51 tests, 1 ignored)
+[core] [15:09] done: sender-side link pacing; 50-node honest mesh clean
