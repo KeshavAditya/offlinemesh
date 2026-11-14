@@ -1,0 +1,8 @@
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+*.iml
+shots/
+.claude/settings.local.json
