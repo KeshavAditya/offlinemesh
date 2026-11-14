@@ -25,9 +25,13 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 
 ## Progress
 - [x] Setup (Parts 1-3)
-- [ ] P1  - [ ] P2/Gate1  - [ ] P3/Gate2  - [ ] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
+- [x] P1  - [ ] P2/Gate1  - [ ] P3/Gate2  - [ ] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
 
 ## Rules in force
 - Owner's global CLAUDE.md token rules: small helper goals, helper handoff at ~200k, quiet builds (output to file, read failures only).
 - Project CLAUDE.md + Part 5 of the guide win on what to build. Append to STATUS.md after each task.
 - When everything is done: tell the owner it's complete, with results and the real-phone checklist.
+
+## Log
+- 2026-11-14 ~14:00 lead started. P1 helper (mesh-core) launched on main directly (sole helper). Next: P2 = core helpers in sequence (codec/crypto/pow/identity -> security/router/sync/store/node -> sim tests), in parallel android spike (worktree) + UI on fake node (worktree).
+- 14:20 P1 done (cf539b5..7d9d596): AGP 8.11.0, Kotlin 2.0.21, Ktor 3.0.3, kx-ser 1.7.3. Stubs core/src/main/kotlin/mesh/core/Api.kt. Launching P2: core-1 (constants/identity/codec/crypto/pow), android spike, UI fake node — all worktrees.

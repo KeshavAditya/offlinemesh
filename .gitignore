@@ -6,3 +6,5 @@ local.properties
 *.iml
 shots/
 .claude/settings.local.json
+build.log
+*.log
