@@ -9,7 +9,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 // Section 10.2, all eleven scenarios, plus the replay-after-LRU-eviction check.
-class SimTest {
+open class SimTest {
+    protected open val mode = BroadcastMode.FLOOD
     private fun line(net: SimNetwork, bcUp: Boolean = true) {
         net.node("A"); net.node("B"); net.node("C")
         net.link("A", "B"); net.link("B", "C", up = bcUp)
@@ -17,7 +18,7 @@ class SimTest {
     }
 
     @Test fun t1_linePostReachesCOnceWithTwoHops() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         net.nodes.getValue("A").node.post("hello mesh")
         net.runFor(15_000)
@@ -29,7 +30,7 @@ class SimTest {
     }
 
     @Test fun t2_lineDmDeliveredTwoHopsAndRelayCannotRead() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         val (a, b, c) = listOf("A", "B", "C").map { net.nodes.getValue(it) }
         a.node.sendDm(c.id, "secret")
@@ -47,7 +48,7 @@ class SimTest {
     }
 
     @Test fun t3_diamondDmIsUnicast() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         for (n in listOf("A", "B", "C", "D", "E")) net.node(n)
         net.link("A", "B"); net.link("B", "D"); net.link("A", "C"); net.link("C", "D"); net.link("B", "E")
         net.runFor(3_000)
@@ -63,7 +64,7 @@ class SimTest {
     }
 
     @Test fun t4_linkUpSyncDeliversMissedPost() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net, bcUp = false)
         net.nodes.getValue("A").node.post("while you were away")
         net.runFor(15_000)
@@ -75,7 +76,7 @@ class SimTest {
     }
 
     @Test fun t8_replayIsDroppedSilently() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         val (b, c) = listOf("B", "C").map { net.nodes.getValue(it) }
         net.nodes.getValue("A").node.post("once")
@@ -95,7 +96,7 @@ class SimTest {
     }
 
     @Test fun t5_tamperingRelayIsBlamedNotTheSource() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         val (a, b, c) = listOf("A", "B", "C").map { net.nodes.getValue(it) }
         b.node.setDebug(DebugFlag.TAMPER_RELAY, true)
@@ -116,7 +117,7 @@ class SimTest {
     }
 
     @Test fun t6_floodAttackBansAtFirstHop() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         val (a, b, c) = listOf("A", "B", "C").map { net.nodes.getValue(it) }
         a.node.attack(Attack.FLOOD)
@@ -133,7 +134,7 @@ class SimTest {
     }
 
     @Test fun t7_spoofedKeyPenalisesTheLinkNotTheVictim() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         for (n in listOf("A", "M", "B")) net.node(n)
         net.link("A", "M"); net.link("M", "B")
         net.runFor(3_000)
@@ -154,7 +155,7 @@ class SimTest {
     }
 
     @Test fun t8b_replayAttackHookIsDroppedSilently() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         val (a, b, c) = listOf("A", "B", "C").map { net.nodes.getValue(it) }
         a.node.post("replay me")
@@ -169,7 +170,7 @@ class SimTest {
     }
 
     @Test fun t9_randomGraphBroadcastCost() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         val rnd = Random(42)
         val names = (0 until 25).map { "N$it" }
         names.forEach { net.node(it) }
@@ -194,7 +195,7 @@ class SimTest {
     }
 
     @Test fun t10_envelopeFloodClosesLink() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         net.node("M"); net.node("B")
         net.link("M", "B")
         net.runFor(3_000)
@@ -211,7 +212,7 @@ class SimTest {
     }
 
     @Test fun t11_restartMidEpochWaitsForNextEpoch() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         val (a, b) = listOf("A", "B").map { net.nodes.getValue(it) }
         repeat(3) { a.node.post("before $it") }
@@ -232,7 +233,7 @@ class SimTest {
 
     /** 5.5 step 4: a link that never completes HELLO is closed after HELLO_TIMEOUT, so it cannot hold a link slot. */
     @Test fun silentPeerIsClosedAfterHelloTimeout() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         net.node("S"); net.node("B")
         net.nodes.getValue("S").node.stop()   // S's transport has no listener: it never answers HELLO
         net.link("S", "B")
@@ -245,7 +246,7 @@ class SimTest {
 
     /** A peer that vanishes without onLinkDown is closed after 3 x SYNC_INTERVAL of silence; a quiet but live link is not. */
     @Test fun silentLinkIsClosed() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         line(net)
         net.runFor(3 * C.SYNC_INTERVAL_MS + 30_000)   // idle but alive: PRESENCE keeps it open
         assertTrue(net.linkOf("A", "B").isUp && net.linkOf("B", "C").isUp, "live link closed as silent")
@@ -258,7 +259,7 @@ class SimTest {
 
     /** Lead's extra: a replay after its msgId fell out of the SEEN_CAP LRU must still be dropped (POST and DM). */
     @Test fun replayAfterSeenEvictionIsStillDropped() {
-        val net = SimNetwork()
+        val net = SimNetwork(mode = mode)
         net.node("M"); net.node("B")
         net.link("M", "B")
         net.runFor(3_000)

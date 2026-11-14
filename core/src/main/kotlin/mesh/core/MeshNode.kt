@@ -61,6 +61,16 @@ class MeshNode(
     internal var naiveFlood = false
     /** U10 DM failover; the bench turns it off for its without-U10 baseline. */
     internal var failover = true
+    /** U9 BROADCAST_MODE, per node so tests and the bench can run TREE while shipped builds stay FLOOD. */
+    internal var broadcastMode = C.BROADCAST_MODE
+    private val missing = HashMap<String, ArrayDeque<LinkId>>()   // U9: unseen msgId -> links that announced it, oldest first
+    private var fullSends = 0; private var ihaveIds = 0; private var grafts = 0; private var prunes = 0
+
+    /** U9 counters and per-link tree state, for the U1 statistics page. */
+    internal data class TreeStats(val mode: BroadcastMode, val fullSends: Int, val ihaveIds: Int, val grafts: Int, val prunes: Int, val links: Map<LinkId, String>)
+    internal fun treeStats() = synchronized(lock) {
+        TreeStats(broadcastMode, fullSends, ihaveIds, grafts, prunes, links.values.filter { it.authed }.associate { it.id to if (it.eager) "eager" else "lazy" })
+    }
 
     /** Runs PoW mining off the loop. Simulator tests swap in an inline runner to stay in virtual time. */
     internal var offLoop: (() -> Unit) -> Unit = { worker.execute(it) }
@@ -351,6 +361,10 @@ class MeshNode(
             is Frame.SyncOffer -> onOffer(l, f.ids)
             is Frame.SyncWant -> onWant(l, f.ids)
             is Frame.BanProof -> onBanProof(l, f.a, f.b)
+            // U9 rule 8: a FLOOD node answers IHAVE like SYNC_OFFER, GRAFT like SYNC_WANT, and ignores PRUNE.
+            is Frame.IHave -> if (treeToken(l)) { if (tree()) onIHave(l, f.ids) else onOffer(l, f.ids) }
+            is Frame.Graft -> if (treeToken(l)) { if (tree()) l.eager = true; onWant(l, f.ids) }
+            Frame.Prune -> if (treeToken(l) && tree()) l.eager = false
             null -> penalize(l, C.SCORE_MALFORMED, SecKind.MALFORMED, "unparseable frame", null)
             else -> {}
         }
@@ -406,7 +420,12 @@ class MeshNode(
         val mid = hex(e.msgId)
         val asked = l.wanted.remove(mid)   // before any early return, so dropped envelopes cannot fill the 512 cap for good
         // U10: duplicates teach backup routes (same msgId means same signed core, so src is genuine).
-        seen[mid]?.let { it.have += l.id; routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false); return }
+        seen[mid]?.let {
+            it.have += l.id; routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false)
+            if (!asked && treeOn(e)) prune(l)   // U9 rule 3
+            if (asked && treeOn(e) && e.ttl > it.ttl) betterCopy(e, it)
+            return
+        }
         if (guard.accepted.containsKey(mid)) return   // replay of a POST/DM already evicted from the seen LRU
         val src = hex(e.srcId)
         val now = now()
@@ -415,8 +434,14 @@ class MeshNode(
         if ((e.type == EnvType.POST || e.type == EnvType.DM) && !Pow.verify(e)) return penalize(l, C.SCORE_BAD_POW, SecKind.BAD_POW, "msg $mid", src)
         if (!Crypto.verify(e.srcPub, e.core, e.sig)) return penalize(l, C.SCORE_BAD_SIG, SecKind.BAD_SIGNATURE, "msg $mid", src)
         if (!guard.fresh(e.epoch, epochNow())) return sec(SecKind.STALE, "epoch ${e.epoch}", l, src)
-        if (!typeRules(l, e, src, mid, now)) return
+        if (!typeRules(l, e, src, mid, now)) {
+            // U9: a signed PRESENCE refused by the 10 s rate rule counts as seen, or every IHAVE for it would GRAFT it again.
+            if (treeOn(e) && e.type == EnvType.PRESENCE) seen[mid] = SeenEntry(l.id, null, e.type, e.ttl).also { it.have += l.id }
+            return
+        }
         if (!asked && !l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
+        if (!asked && treeOn(e)) l.eager = true   // Plumtree: the link that pushed the first copy is in the tree
+        missing.remove(mid)
         accept(e, l, now, replay = false)
     }
 
@@ -461,7 +486,7 @@ class MeshNode(
         val src = hex(e.srcId)
         val dst = if (e.isBroadcast) null else hex(e.dst)
         val mine = src == me
-        seen[mid] = SeenEntry(l?.id, dst, e.type).also { s -> l?.let { s.have += it.id } }
+        seen[mid] = SeenEntry(l?.id, dst, e.type, e.ttl).also { s -> l?.let { s.have += it.id } }
         if (e.type == EnvType.POST || e.type == EnvType.DM) guard.accepted[mid] = e.epoch
         lamport = maxOf(lamport, e.lamport)
         if (l != null) routes.learn(src, l.id, e.hops, now)
@@ -594,6 +619,7 @@ class MeshNode(
 
     private fun send(l: Link, o: Out) {
         val ok = l.transport.send(l.id, Codec.encodeFrame(Frame.Env(o.wire)))
+        if (ok && (o.wire.type == EnvType.POST || o.wire.type == EnvType.PRESENCE)) fullSends++
         val shown = fanout[o.mid] ?: o.mid
         if (ok && o.own && msgs[shown]?.status == MsgStatus.QUEUED) setStatus(shown, MsgStatus.SENT, 0, null)
     }
@@ -621,8 +647,101 @@ class MeshNode(
         val mid = hex(e.msgId)
         later(Random.nextLong(C.JITTER_MIN_MS, C.JITTER_MAX_MS + 1)) {
             val s = seen[mid] ?: return@later
-            targets(e, s).forEach { give(it, e) }
+            broadcast(e, targets(e, s))
         }
+    }
+
+    // ---- U9 tree broadcast (Plumtree) for POST and PRESENCE ----
+
+    private fun tree() = broadcastMode == BroadcastMode.TREE && !naiveFlood
+    private fun treeOn(e: Envelope) = tree() && (e.type == EnvType.POST || e.type == EnvType.PRESENCE)
+
+    /** Rule 7: received IHAVE/GRAFT/PRUNE spend the link's bucket like envelopes. */
+    private fun treeToken(l: Link) = l.takeToken(now()).also { if (!it) penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 frames per 10 s", l.peer) }
+
+    /** Rule 2: full copies to EAGER links, the msgId queued for an IHAVE on LAZY ones; [t] already excludes links that have it. */
+    private fun broadcast(e: Envelope, t: List<Link>) {
+        if (!treeOn(e)) return t.forEach { give(it, e) }
+        val mid = hex(e.msgId)
+        for (l in t) if (l.eager) give(l, e) else if (live(l)) {
+            if (l.ihaveQ.isEmpty()) later(C.IHAVE_FLUSH_MS) { flushIHave(l) }
+            l.ihaveQ += mid
+        }
+    }
+
+    /** One IHAVE of up to 64 ids per link per IHAVE_FLUSH_MS, paced by the outBucket like envelopes (the peer's bucket counts it). */
+    private fun flushIHave(l: Link) {
+        if (!live(l)) return l.ihaveQ.clear()
+        l.ihaveQ.removeAll { seen[it]?.have?.contains(l.id) == true }
+        if (l.ihaveQ.isEmpty()) return
+        if (l.outQ.isEmpty() && l.outBucket.take(now())) {
+            val batch = l.ihaveQ.take(C.MAX_TREE_IDS)
+            l.ihaveQ.removeAll(batch.toSet())
+            frame(l, Frame.IHave(batch.map { Crypto.unhex(it) }))
+            ihaveIds += batch.size
+        }
+        if (l.ihaveQ.isNotEmpty()) later(C.IHAVE_FLUSH_MS) { flushIHave(l) }
+    }
+
+    /** Rule 3: a duplicate full copy makes the link LAZY. shortcut: the PRUNE is skipped when the outBucket is empty; the next duplicate retries. */
+    private fun prune(l: Link) {
+        l.eager = false
+        if (live(l) && l.outBucket.take(now())) { frame(l, Frame.Prune); prunes++ }
+    }
+
+    /** Rule 5: unseen ids wait GRAFT_TIMEOUT_MS for the tree to deliver them, then are grafted from the first live announcer. */
+    private fun onIHave(l: Link, ids: List<ByteArray>) {
+        val fresh = ArrayList<String>()
+        for (mid in ids.map { hex(it) }.distinct()) {
+            val s = seen[mid]
+            if (s != null) {
+                s.have += l.id
+                // A post that came along a long tree path and dies here while a tree (eager) neighbour lacks it: ask once for a fresher copy
+                // (not PRESENCE: it repeats every 30 s, and regrafting it churns the tree).
+                if (s.type == EnvType.POST && s.ttl < 2 && !s.regraft && links.values.any { live(it) && it.eager && it.id !in s.have }) { s.regraft = true; graft(l, listOf(mid)) }
+                continue
+            }
+            if (guard.accepted.containsKey(mid)) continue
+            val q = missing[mid]
+            if (q != null) { if (l.id !in q) q.addLast(l.id); continue }
+            if (missing.size >= MAX_MISSING) continue   // bounds what fake IHAVEs can make this node remember
+            missing[mid] = ArrayDeque(listOf(l.id))
+            fresh += mid
+        }
+        if (fresh.isNotEmpty()) graftLater(fresh)
+    }
+
+    private fun graftLater(ids: List<String>): Unit = later(C.GRAFT_TIMEOUT_MS) {
+        val by = LinkedHashMap<Link, MutableList<String>>()
+        val retry = ArrayList<String>()
+        for (mid in ids) {
+            val q = missing[mid] ?: continue
+            if (seen.containsKey(mid) || guard.accepted.containsKey(mid)) { missing.remove(mid); continue }
+            var l: Link? = null
+            while (l == null && q.isNotEmpty()) l = links[q.removeFirst()]?.takeIf { live(it) }
+            if (l == null) { missing.remove(mid); continue }
+            by.getOrPut(l) { ArrayList() } += mid
+            if (q.isEmpty()) missing.remove(mid) else retry += mid   // no answer in time: the next announcer is grafted
+        }
+        for ((l, m) in by) graft(l, m)
+        if (retry.isNotEmpty()) graftLater(retry)
+    }
+
+    /** [mids] come from one IHAVE, so at most 64. */
+    private fun graft(l: Link, mids: List<String>) {
+        l.eager = true
+        mids.forEach { if (l.wanted.size < 512) l.wanted.add(it) }   // the answers skip our bucket, as for SYNC_WANT (rule 6)
+        // shortcut: sent even without an outBucket token; grafts are rare and the peer's bucket has 5 tokens of headroom.
+        l.outBucket.take(now())
+        frame(l, Frame.Graft(mids.map { Crypto.unhex(it) }))
+        grafts++
+    }
+
+    /** A grafted duplicate with more ttl left: relay our own verified copy (the duplicate's signature was never checked) with its ttl and hops. */
+    private fun betterCopy(e: Envelope, s: SeenEntry) {
+        val c = held(hex(e.msgId))?.takeIf { e.ttl <= it.initTtl } ?: return
+        s.ttl = e.ttl
+        forward(c.copy(ttl = e.ttl, hops = e.hops))
     }
 
     private fun mine(type: Int, dst: ByteArray, lam: Long, ep: Long, slot: Int, ttl: Int, body: ByteArray, text: String, img: String? = null, gm: String? = null) {
@@ -640,7 +759,7 @@ class MeshNode(
         if (gm == null) addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
         else if (gm.isNotEmpty()) fanout[mid] = gm
         val t = targets(e, s)
-        t.forEach { give(it, e) }
+        broadcast(e, t)
         if (e.type == EnvType.DM && failover) watchAck(e, routeUsed(dst!!, t), 0)
     }
 
@@ -671,7 +790,7 @@ class MeshNode(
         val p = Envelope.create(id, EnvType.PRESENCE, Envelope.BROADCAST, ++lamport, epochNow(), 0, C.TTL_PRESENCE, body)
         seen[hex(p.msgId)] = SeenEntry(null, null, EnvType.PRESENCE)
         myPresence = p
-        links.values.toList().forEach { give(it, p) }
+        broadcast(p, links.values.toList())
     }
 
     private fun presenceLoop() {
@@ -724,12 +843,16 @@ class MeshNode(
         // Dedupe and skip what this link already has (give() records it), so a WANT can't amplify bandwidth.
         for (mid in ids.take(512).map { hex(it) }.distinct()) {
             if (seen[mid]?.have?.contains(l.id) == true) continue
-            val e = store.envs[mid]?.env?.takeIf { offerable(it, ep) } ?: continue
+            val e = held(mid)?.takeIf { offerable(it, ep) } ?: continue
             // shortcut: served set is cleared at 4,096 ids (one resend each per link), fine for demo-sized meshes.
             if (l.wantServed.size >= C.SEEN_CAP) l.wantServed.clear()
             if (l.wantServed.add(mid)) give(l, e, paced = false)
         }
     }
+
+    /** A stored POST/DM, or for a GRAFT a PRESENCE still current (own or a contact's). */
+    private fun held(mid: String): Envelope? = store.envs[mid]?.env
+        ?: (sequenceOf(myPresence) + contacts.values.asSequence().map { it.presence }).firstOrNull { it != null && hex(it.msgId) == mid }
 
     private fun contactList(): List<Contact> {
         val now = now()
@@ -748,7 +871,7 @@ class MeshNode(
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4 }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4; const val MAX_MISSING = 512 }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */

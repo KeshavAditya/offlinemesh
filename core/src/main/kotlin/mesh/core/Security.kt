@@ -13,6 +13,8 @@ internal class Link(val id: LinkId, val transport: Transport, val desc: String, 
     private val inBucket = Bucket(C.BUCKET_SIZE, nowMs)
     val outBucket = Bucket(C.SEND_BUCKET_SIZE, nowMs)   // sender-side pacing, below the peer's inBucket
     val outQ = ArrayDeque<Out>()                         // paced sends waiting for an outBucket token, in order
+    var eager = true                                     // U9: full POST/PRESENCE copies (EAGER) or IHAVE notices only (LAZY)
+    val ihaveQ = LinkedHashSet<String>()                 // U9: msgIds waiting for the next IHAVE flush on this link
 
     /** 30 envelopes per 10 s, refilled continuously. */
     fun takeToken(now: Long) = inBucket.take(now)

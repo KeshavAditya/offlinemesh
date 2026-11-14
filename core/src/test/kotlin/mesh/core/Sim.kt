@@ -4,7 +4,8 @@ import java.nio.file.Files
 import java.util.PriorityQueue
 
 /** Virtual-time scheduler shared by every node in one simulation; also the network the SimTransports talk over. */
-class SimNetwork(startMs: Long = 1_700_000_003_000L) : Scheduler {
+/** [mode]: U9 BROADCAST_MODE for every node made here (restarts keep it). */
+class SimNetwork(startMs: Long = 1_700_000_003_000L, val mode: BroadcastMode = C.BROADCAST_MODE) : Scheduler {
     private class Task(val at: Long, val seq: Long, val run: () -> Unit)
     private val queue = PriorityQueue<Task>(compareBy<Task>({ it.at }, { it.seq }))
     private var now = startMs
@@ -90,7 +91,7 @@ class SimNode(private val net: SimNetwork, val name: String) {
     var node = newNode(); private set
     val id get() = node.id.idHex
 
-    private fun newNode() = MeshNode(dir, net, listOf(transport)).also { it.offLoop = { r -> r() }; it.addListener { e -> events += e } }
+    private fun newNode() = MeshNode(dir, net, listOf(transport)).also { it.broadcastMode = net.mode; it.offLoop = { r -> r() }; it.addListener { e -> events += e } }
 
     init {
         node.start()
