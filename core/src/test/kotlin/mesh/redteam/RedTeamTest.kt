@@ -5,7 +5,6 @@ import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.io.IOException
 import kotlin.random.Random
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -293,7 +292,6 @@ class RedTeamTest {
         assertTrue(b.security().isEmpty(), "B: ${b.security()}")
     }
 
-    @Ignore("BUG: onWant answers every id in SYNC_WANT, duplicates included: one 4 KB frame naming one id 512 times makes B send 512 copies")
     @Test fun syncWantWithDuplicateIdsSendsOneCopy() {
         val net = SimNetwork()
         pair(net, "M", "B")
@@ -308,7 +306,6 @@ class RedTeamTest {
         assertTrue(copies <= 1, "one SYNC_WANT made B send $copies copies")
     }
 
-    @Ignore("BUG: SYNC_WANT is not rate limited and ignores what the link already has: 50 tiny frames make B resend an envelope M already holds 50 times")
     @Test fun repeatedSyncWantForHeldEnvelopeIsNotResent() {
         val net = SimNetwork()
         pair(net, "M", "B")

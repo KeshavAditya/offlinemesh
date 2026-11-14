@@ -477,7 +477,11 @@ class MeshNode(
 
     private fun onWant(l: Link, ids: List<ByteArray>) {
         val ep = epochNow()
-        for (b in ids.take(512)) store.envs[hex(b)]?.env?.takeIf { offerable(it, ep) }?.let { give(l, it) }
+        // Dedupe and skip what this link already has (give() records it), so a WANT can't amplify bandwidth.
+        for (mid in ids.take(512).map { hex(it) }.distinct()) {
+            if (seen[mid]?.have?.contains(l.id) == true) continue
+            store.envs[mid]?.env?.takeIf { offerable(it, ep) }?.let { give(l, it) }
+        }
     }
 
     private fun contactList(): List<Contact> {
