@@ -104,23 +104,34 @@ private const val MAX_BODY = 4096
  * [global] wrong PINs from anyone the PIN rotates (old QR codes stop working; the host must show the new one).
  * Each attempt is counted before the compare, so parallel requests cannot all slip past the limit.
  */
-class PinGuard(private val perIp: Int = 5, private val global: Int = 20, var onRotate: (String) -> Unit = {}) {
+/** 4-digit PIN (5.13) guarded by per-IP attempt windows that expire, rotation after [global] failures, and a
+ *  shutdown after [maxRotations] rotations until the host toggles guest mode (which makes a new guard). */
+class PinGuard(
+    private val perIp: Int = 5, private val global: Int = 20, private val maxRotations: Int = 3,
+    private val lockMs: Long = 60_000, private val clock: () -> Long = System::currentTimeMillis,
+    var onRotate: (String) -> Unit = {},
+) {
     @Volatile var pin: String = newPin(); private set
-    private val fails = ConcurrentHashMap<String, Int>()
+    @Volatile var rotations = 0; private set
+    private val fails = ConcurrentHashMap<String, LongArray>() // ip -> [attempts in window, window start]
     private val globalFails = AtomicInteger()
 
     fun check(ip: String, given: String): Boolean {
-        val n = fails.compute(ip) { _, v -> (v ?: 0) + 1 }!!
-        if (n > perIp) return false
-        if (MessageDigest.isEqual(given.toByteArray(), pin.toByteArray())) { fails.compute(ip) { _, v -> (v ?: 1) - 1 }; return true }
+        if (rotations >= maxRotations) return false
+        val now = clock()
+        // Reserve the attempt before comparing so concurrent guesses can't slip past the per-IP limit.
+        val w = fails.compute(ip) { _, v -> if (v == null || now - v[1] > lockMs) longArrayOf(1, now) else longArrayOf(v[0] + 1, v[1]) }!!
+        if (w[0] > perIp) return false
+        if (MessageDigest.isEqual(given.toByteArray(), pin.toByteArray())) { fails.computeIfPresent(ip) { _, v -> longArrayOf(v[0] - 1, v[1]) }; return true }
         if (globalFails.incrementAndGet() >= global) rotate()
         return false
     }
 
     @Synchronized private fun rotate() {
         if (globalFails.get() < global) return
-        pin = newPin(); fails.clear(); globalFails.set(0)
-        System.err.println("guest: $global wrong PINs, PIN rotated")
+        pin = newPin(); globalFails.set(0); rotations++ // per-IP windows survive rotation
+        System.err.println(if (rotations >= maxRotations) "guest: too many wrong PINs, guest access off until guest mode is toggled"
+                           else "guest: $global wrong PINs, PIN rotated")
         onRotate(pin)
     }
 

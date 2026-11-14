@@ -58,7 +58,8 @@ class GuestServerTest {
 
     @Test fun pinGuard() {
         var rotated: String? = null
-        val g = PinGuard(perIp = 3, global = 5) { rotated = it }
+        var t = 0L
+        val g = PinGuard(perIp = 3, global = 5, maxRotations = 2, lockMs = 60_000, clock = { t }) { rotated = it }
         val p0 = g.pin
         assertTrue(g.check("ip1", p0))
         repeat(3) { assertFalse(g.check("ip1", "bad")) }
@@ -67,7 +68,12 @@ class GuestServerTest {
         assertFalse(g.check("ip2", "bad")); assertNull(rotated)
         assertFalse(g.check("ip3", "bad"))                 // 5th global failure rotates
         assertEquals(g.pin, rotated)
-        assertTrue(g.check("ip1", g.pin))                  // rotation clears lockouts
+        assertFalse(g.check("ip1", g.pin))                 // rotation does NOT clear lockouts
+        t = 61_000
+        assertTrue(g.check("ip1", g.pin))                  // lockout window expired
+        repeat(5) { g.check("ip${it + 10}", "bad") }       // second rotation hits maxRotations
+        assertEquals(2, g.rotations)
+        assertFalse(g.check("ip99", g.pin))                // guest access off until a new guard
     }
 
     @Test fun bodyValidation() {
