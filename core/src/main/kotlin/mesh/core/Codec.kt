@@ -39,6 +39,10 @@ sealed interface Frame {
     class SyncWant(val ids: List<ByteArray>) : Frame
     /** Stretch 4: two POSTs by one key for one (epoch, slot) with different msgIds. */
     class BanProof(val a: Envelope, val b: Envelope) : Frame
+    /** U9 tree broadcast: 1 to 64 msgIds each. */
+    class IHave(val ids: List<ByteArray>) : Frame
+    class Graft(val ids: List<ByteArray>) : Frame
+    object Prune : Frame
 }
 
 // Sections 5.2 and 5.3. Decoders are strict: wrong lengths, unknown types or trailing bytes give null.
@@ -64,6 +68,9 @@ object Codec {
             is Frame.SyncOffer -> { u8(FrameType.SYNC_OFFER); ids(f.ids) }
             is Frame.SyncWant -> { u8(FrameType.SYNC_WANT); ids(f.ids) }
             is Frame.BanProof -> { u8(FrameType.BAN_PROOF); listOf(f.a, f.b).forEach { val x = encodeEnvelope(it); writeShort(x.size); write(x) } }
+            is Frame.IHave -> { require(f.ids.size in 1..C.MAX_TREE_IDS); u8(FrameType.IHAVE); ids(f.ids) }
+            is Frame.Graft -> { require(f.ids.size in 1..C.MAX_TREE_IDS); u8(FrameType.GRAFT); ids(f.ids) }
+            Frame.Prune -> u8(FrameType.PRUNE)
         }
     }.also { require(it.size <= C.MAX_FRAME) { "frame too large: ${it.size}" } }
 
@@ -77,6 +84,9 @@ object Codec {
                 FrameType.SYNC_OFFER -> Frame.SyncOffer(List(u16()) { bytes(8) })
                 FrameType.SYNC_WANT -> Frame.SyncWant(List(u16()) { bytes(8) })
                 FrameType.BAN_PROOF -> Frame.BanProof(proofPost(), proofPost())
+                FrameType.IHAVE -> Frame.IHave(treeIds())
+                FrameType.GRAFT -> Frame.Graft(treeIds())
+                FrameType.PRUNE -> Frame.Prune
                 else -> null
             }
         }
@@ -114,6 +124,8 @@ object Codec {
     }
 
     private fun Reader.proofPost(): Envelope = decodeEnvelope(bytes(u16()))?.takeIf { it.type == EnvType.POST } ?: throw Bad()
+
+    private fun Reader.treeIds(): List<ByteArray> = u16().also { need(it in 1..C.MAX_TREE_IDS) }.let { n -> List(n) { bytes(8) } }
 
     private class Bad : Exception()
     private class Reader(b: ByteArray) {

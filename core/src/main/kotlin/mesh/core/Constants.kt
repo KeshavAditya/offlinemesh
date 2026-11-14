@@ -31,6 +31,12 @@ object C {
     const val ACK_PER_HOP_MS = 1_000L
     const val MAX_DM_RESENDS = 2
 
+    // U9 tree broadcast (Plumtree) for POST and PRESENCE. FLOOD ships until the real-phone checks pass in TREE.
+    val BROADCAST_MODE = BroadcastMode.FLOOD
+    const val IHAVE_FLUSH_MS = 300L
+    const val GRAFT_TIMEOUT_MS = 1_500L
+    const val MAX_TREE_IDS = 64
+
     const val BUCKET_SIZE = 30
     const val BUCKET_WINDOW_MS = 10_000L
     // Sender-side pacing (not in section 4): 5 below the receiver's bucket so honest relays never trip LINK_FLOOD.
@@ -54,4 +60,6 @@ object C {
 
 object EnvType { const val PRESENCE = 1; const val POST = 2; const val DM = 3; const val ACK = 4 }
 
-object FrameType { const val ENVELOPE = 0x01; const val HELLO = 0x10; const val HELLO_AUTH = 0x11; const val SYNC_OFFER = 0x12; const val SYNC_WANT = 0x13; const val BAN_PROOF = 0x14 }
+object FrameType { const val ENVELOPE = 0x01; const val HELLO = 0x10; const val HELLO_AUTH = 0x11; const val SYNC_OFFER = 0x12; const val SYNC_WANT = 0x13; const val BAN_PROOF = 0x14; const val IHAVE = 0x15; const val GRAFT = 0x16; const val PRUNE = 0x17 }
+
+enum class BroadcastMode { TREE, FLOOD }
