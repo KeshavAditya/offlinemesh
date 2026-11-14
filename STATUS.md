@@ -3,3 +3,4 @@
 [core] [14:01] done: identity/codec/crypto/pow + 10.1 tests (11 green)
 [ui] [14:03] done: UiServer + index.html on fake node (./gradlew :uiserver:runFake --args=8091)
 [ui] [14:05] done: LanTransport + loopback test
+[android] [14:06] blocked: BLE spike on emulators: spike builds (SpikeActivity); meshA/meshB booted but adb 'unauthorized' (playstore image shows Allow USB debugging dialog); human must tick 'Always allow' + Allow in each emulator window, then rerun spike
