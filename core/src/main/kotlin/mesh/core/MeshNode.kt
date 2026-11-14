@@ -57,6 +57,8 @@ class MeshNode(
     private lateinit var store: Store
     private val secLog = ArrayDeque<Sec>()
     internal val debug = HashSet<DebugFlag>()   // 5.12 hook point
+    /** U11 bench only (internal, never set by shipped code): NAIVE forwards every envelope to every link but the one it came on. */
+    internal var naiveFlood = false
 
     /** Runs PoW mining off the loop. Simulator tests swap in an inline runner to stay in virtual time. */
     internal var offLoop: (() -> Unit) -> Unit = { worker.execute(it) }
@@ -606,6 +608,7 @@ class MeshNode(
 
     /** Unicast on a fresh route for DMs whose route link lacks it, otherwise every link that lacks it. */
     private fun targets(e: Envelope, s: SeenEntry): List<Link> {
+        if (naiveFlood) return links.values.filter { it.id != s.firstLink }
         val r = if (e.isBroadcast) null else routes.fresh(hex(e.dst), now())?.let { links[it.link] }?.takeIf { live(it) && it.id !in s.have }
         return r?.let { listOf(it) } ?: links.values.filter { it.id !in s.have }
     }
