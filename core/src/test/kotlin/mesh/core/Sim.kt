@@ -79,18 +79,22 @@ class SimTransport(private val net: SimNetwork, private val owner: SimNode) : Tr
 }
 
 /** A real MeshNode on a SimTransport, mining inline so everything stays in virtual time. */
-class SimNode(net: SimNetwork, val name: String) {
+class SimNode(private val net: SimNetwork, val name: String) {
     val transport = SimTransport(net, this)
     val dir = Files.createTempDirectory("sim-$name").toFile().also { it.deleteOnExit() }
-    val node = MeshNode(dir, net, listOf(transport)).also { it.offLoop = { r -> r() } }
     val events = ArrayList<MeshEvent>()
+    var node = newNode(); private set
     val id get() = node.id.idHex
 
+    private fun newNode() = MeshNode(dir, net, listOf(transport)).also { it.offLoop = { r -> r() }; it.addListener { e -> events += e } }
+
     init {
-        node.addListener { events += it }
         node.start()
         node.setName(name)
     }
+
+    /** Stops this node and starts a fresh MeshNode on the same data directory (take its links down first). */
+    fun restart() { node.stop(); node = newNode(); node.start() }
 
     fun added() = events.filterIsInstance<MeshEvent.MessageAdded>().map { it.msg }
     fun security() = events.filterIsInstance<MeshEvent.SecurityLogged>().map { it.event }

@@ -16,6 +16,9 @@ class Identity(val private: PrivateKey, val publicDer: ByteArray) {
 
     fun save(file: File) {
         val tmp = File(file.path + ".tmp")
+        // Owner-only before the private key goes in (best effort: no-ops on file systems without POSIX bits).
+        tmp.delete(); tmp.createNewFile()
+        tmp.setReadable(false, false); tmp.setReadable(true, true); tmp.setWritable(false, false); tmp.setWritable(true, true)
         DataOutputStream(tmp.outputStream()).use { out ->
             val priv = private.encoded
             out.writeShort(priv.size); out.write(priv)

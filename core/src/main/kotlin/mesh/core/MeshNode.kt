@@ -107,8 +107,24 @@ class MeshNode(
 
     fun setDebug(flag: DebugFlag, on: Boolean) = loop { if (on) debug += flag else debug -= flag }
 
-    /** 5.12 attacks: hook point, not built yet. */
-    fun attack(kind: Attack) = loop { }
+    /** 5.12 attacks (debug only): each one must be caught by the receivers' 5.6 checks. */
+    fun attack(kind: Attack) = loop {
+        val live = links.values.filter { live(it) }
+        when (kind) {
+            // Bypass the own limit: 4 POSTs in this epoch, the fourth reusing slot 0.
+            Attack.FLOOD -> listOf(0, 1, 2, 0).forEachIndexed { i, slot ->
+                mine(EnvType.POST, Envelope.BROADCAST, ++lamport, epochNow(), slot, C.TTL_POST, "flood ${i + 1}".toByteArray(), "flood ${i + 1}")
+            }
+            // Another contact's key, valid PoW (so receivers reach the signature check), random signature.
+            Attack.SPOOF -> {
+                val victim = contacts.values.maxByOrNull { it.lastSeen } ?: return@loop
+                val e = Envelope(C.PROTOCOL_VERSION, EnvType.POST, victim.pub, Envelope.BROADCAST, ++lamport, epochNow(), 0,
+                    C.TTL_POST, "spoofed".toByteArray(), 0, Crypto.randomBytes(64), C.TTL_POST, 0)
+                offLoop { val w = e.copy(powNonce = Pow.mine(e.core, Pow.bits(e))); loop { live.forEach { frame(it, Frame.Env(w)) } } }
+            }
+            Attack.REPLAY -> store.envs.values.lastOrNull()?.env?.let { e -> live.forEach { frame(it, Frame.Env(e)) } }
+        }
+    }
 
     fun snapshot(): Snapshot = synchronized(lock) {
         if (!::id.isInitialized) return Snapshot(SelfInfo("", ""), emptyList(), emptyList(), emptyList(), emptyMap(), emptyList(), DebugState(false, false))
@@ -229,6 +245,7 @@ class MeshNode(
     private fun ingress(l: Link, e: Envelope) {
         val mid = hex(e.msgId)
         seen[mid]?.let { it.have += l.id; return }
+        if (guard.accepted.containsKey(mid)) return   // replay of a POST/DM already evicted from the seen LRU
         val src = hex(e.srcId)
         val now = now()
         if (guard.banned(src, now)) return
@@ -263,6 +280,7 @@ class MeshNode(
         val dst = if (e.isBroadcast) null else hex(e.dst)
         val mine = src == me
         seen[mid] = SeenEntry(l?.id, dst, e.type).also { s -> l?.let { s.have += it.id } }
+        if (e.type == EnvType.POST || e.type == EnvType.DM) guard.accepted[mid] = e.epoch
         lamport = maxOf(lamport, e.lamport)
         if (l != null) routes.learn(src, l.id, e.hops, now)
         val shownHops = if (mine) 0 else e.hops + 1
@@ -310,6 +328,8 @@ class MeshNode(
         if (old != null && e.lamport <= old.lamport) return
         val n = e.body[0].toInt() and 0xff
         contacts[src] = Peer(String(e.body, 1, n, Charsets.UTF_8), e.srcPub, now, e.lamport, e)
+        // PRESENCE costs nothing to make: cap the table, dropping the least recently seen unverified contact.
+        if (contacts.size > MAX_CONTACTS) contacts.entries.filter { it.key !in verified }.minByOrNull { it.value.lastSeen }?.let { contacts.remove(it.key) }
         emitNet()
     }
 
@@ -391,6 +411,7 @@ class MeshNode(
         val dst = if (e.isBroadcast) null else hex(e.dst)
         val s = SeenEntry(null, dst, e.type)
         seen[mid] = s
+        guard.accepted[mid] = e.epoch
         store.put(e, now(), relayOnly = false, log = true)
         addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null), emit = true)
         targets(e, s).forEach { give(it, e) }
@@ -461,7 +482,7 @@ class MeshNode(
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val MAX_CONTACTS = 256 }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */

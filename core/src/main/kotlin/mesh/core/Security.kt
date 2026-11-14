@@ -27,6 +27,7 @@ internal class Guard {
     val refused = HashMap<String, Long>()    // peer NodeId hex -> refused until (ms)
     private val ledger = HashMap<Triple<String, Long, Int>, String>()
     private val lastPresence = HashMap<String, Long>()
+    val accepted = HashMap<String, Long>()   // POST/DM msgId hex -> epoch, kept for the whole freshness window
 
     fun banned(src: String, now: Long) = (bans[src] ?: 0L) > now
     fun refusedPeer(peer: String, now: Long) = (refused[peer] ?: 0L) > now
@@ -51,6 +52,7 @@ internal class Guard {
 
     fun evict(now: Long, nowEpoch: Long) {
         ledger.keys.removeIf { it.second < nowEpoch - C.MAX_AGE_EPOCHS }
+        accepted.values.removeIf { it < nowEpoch - C.MAX_AGE_EPOCHS }
         bans.values.removeIf { it <= now }
         refused.values.removeIf { it <= now }
         lastPresence.values.removeIf { now - it >= 10_000 }
