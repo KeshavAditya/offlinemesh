@@ -25,7 +25,7 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 
 ## Progress
 - [x] Setup (Parts 1-3)
-- [x] P1  - [x] P2/Gate1  - [x] P3/Gate2  - [x] P4/Gate3(prov)  - [x] P5  - [x] Stretch 1-5  - [x] Docs  - [ ] Graphify  - [ ] Final report
+- [x] P1  - [x] P2/Gate1  - [x] P3/Gate2  - [x] P4/Gate3(prov)  - [x] P5  - [x] Stretch 1-5  - [x] Docs  - [x] Graphify  - [ ] Final report
 
 ## Rules in force
 - Owner's global CLAUDE.md token rules: small helper goals, helper handoff at ~200k, quiet builds (output to file, read failures only).
@@ -68,3 +68,4 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 - 20:40 android-4 DONE 2ebdcb2: guest toggle (B logs guest listening 0.0.0.0:8090; guest post reached C as [guest judge]) + file chooser (picker -> photo DM queued; C blocked by stale ban). Launching android-5: stretch 3 notifications+inline reply, + recheck photo DM A->C with --fresh.
 - 21:00 Desktop e2e on latest main (ports 8181-8183, UI_BASE env) PASS 1-6. android-5 running (notifications + final emulator e2e).
 - 21:30 android-5 DONE 0039fb5/35efab1: notifications+inline reply, photo DM A->C ok, final emulator e2e PASS 1-6. ./gradlew build green: core 51, lan 2, uiserver 10, APK built. Docs updated. Next: graphify, final report.
+- 21:45 Graphify: pip install ok; 'graphify install --platform claude' DENIED by permission classifier (not worked around); ran 'graphify update .' (no LLM) -> graphify-out/graph.html committed. Owner can run 'graphify install' + /graphify . for the semantic (LLM) graph. Next: final report.
