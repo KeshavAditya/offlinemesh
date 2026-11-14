@@ -27,7 +27,7 @@ try { $('name').value = localStorage.getItem('guestName') || ''; } catch (e) {}
 
 function line(m) {
   const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);
-  return g ? g[1] + ' (guest of ' + m.from.slice(0, 8) + '): ' + g[2] : m.from.slice(0, 8) + ': ' + m.text;
+  return g ? m.from.slice(0, 8) + ' [guest: ' + g[1] + ']: ' + g[2] : m.from.slice(0, 8) + ': ' + m.text;
 }
 
 async function poll() {

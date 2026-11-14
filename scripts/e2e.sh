@@ -101,6 +101,9 @@ result 4 "$r4"
 # 5. Flood (4 posts in one epoch) bans A on B; C holds exactly the first three.
 from_a() { val $PC --arg a "$IA" '[.feed[] | select(.from == $a)] | length'; }
 stable() { local x; x=$(from_a); sleep 4; [ "$x" = "$(from_a)" ]; }
+# Sync later brings C an untampered copy of item 4's post; let it land so it is not counted as a flood post.
+t4_on_c() { [ "$(feed_count $PC "$T4")" -ge 1 ]; }
+wait_until $T t4_on_c
 wait_until $T stable
 c0=$(from_a)
 # Start at the top of a fresh 10 s epoch so the four posts share one.

@@ -14,6 +14,8 @@ import java.net.http.HttpResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GuestServerTest {
@@ -36,21 +38,36 @@ class GuestServerTest {
 
     @Test fun pinFeedPostAndRateLimit() {
         val port = ServerSocket(0).use { it.localPort }
-        val s = GuestServer(node, port, pin = "1234").apply { start() }
+        val s = GuestServer(node, port, PinGuard().also { pin = it.pin }).apply { start() }
         try {
             assertEquals(200, req(port, "/").statusCode())
-            assertEquals(403, req(port, "/api/feed?pin=9999").statusCode())
-            Thread.sleep(1_100)  // wrong PIN locks this IP out for 1 s
-            val feed = req(port, "/api/feed?pin=1234")
+            assertEquals(403, req(port, "/api/feed?pin=x").statusCode())
+            val feed = req(port, "/api/feed?pin=$pin")
             assertEquals(200, feed.statusCode())
             assertTrue("hello" in feed.body() && "secret dm" !in feed.body(), feed.body())
-            assertEquals(403, req(port, "/api/guest-post?pin=0000", """{"name":"Zoe","text":"hi"}""").statusCode())
-            Thread.sleep(1_100)
-            assertEquals(400, req(port, "/api/guest-post?pin=1234", """{"name":"Z]","text":"hi"}""").statusCode())
-            assertEquals(200, req(port, "/api/guest-post?pin=1234", """{"name":"Zoe","text":"hi"}""").statusCode())
-            assertEquals(429, req(port, "/api/guest-post?pin=1234", """{"name":"Zoe","text":"again"}""").statusCode())
+            assertEquals(403, req(port, "/api/guest-post?pin=y", """{"name":"Zoe","text":"hi"}""").statusCode())
+            assertEquals(400, req(port, "/api/guest-post?pin=$pin", """{"name":"Z]","text":"hi"}""").statusCode())
+            assertEquals(200, req(port, "/api/guest-post?pin=$pin", """{"name":"Zoe","text":"hi"}""").statusCode())
+            assertEquals(429, req(port, "/api/guest-post?pin=$pin", """{"name":"Zoe","text":"again"}""").statusCode())
+            assertEquals(413, req(port, "/api/guest-post?pin=$pin", "x".repeat(5000)).statusCode())
             assertEquals(listOf("[guest Zoe] hi"), posts)
         } finally { s.stop() }
+    }
+
+    private var pin = ""
+
+    @Test fun pinGuard() {
+        var rotated: String? = null
+        val g = PinGuard(perIp = 3, global = 5) { rotated = it }
+        val p0 = g.pin
+        assertTrue(g.check("ip1", p0))
+        repeat(3) { assertFalse(g.check("ip1", "bad")) }
+        assertFalse(g.check("ip1", p0))                    // ip1 locked out, even with the right PIN
+        assertTrue(g.check("ip2", p0))
+        assertFalse(g.check("ip2", "bad")); assertNull(rotated)
+        assertFalse(g.check("ip3", "bad"))                 // 5th global failure rotates
+        assertEquals(g.pin, rotated)
+        assertTrue(g.check("ip1", g.pin))                  // rotation clears lockouts
     }
 
     @Test fun bodyValidation() {
