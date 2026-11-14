@@ -90,24 +90,4 @@ sealed interface MeshEvent {
     data class NetworkChanged(val contacts: List<Contact>, val links: List<LinkInfo>) : MeshEvent
     data class SecurityLogged(val event: Sec) : MeshEvent
 }
-
-class MeshNode(
-    private val dataDir: java.io.File,
-    private val scheduler: Scheduler,
-    private val transports: List<Transport>,
-) {
-    private val listeners = mutableListOf<(MeshEvent) -> Unit>()
-
-    // Stub bodies (phase 1): no-ops so other modules can run against the API before core is implemented.
-    fun start() {}
-    fun stop() {}
-    fun post(text: String) {}
-    fun sendDm(to: String /* nodeId hex */, text: String) {}
-    fun setName(name: String) {}
-    fun setMuted(nodeIdHex: String, muted: Boolean) {}
-    fun setVerified(nodeIdHex: String, verified: Boolean) {}
-    fun setDebug(flag: DebugFlag, on: Boolean) {}
-    fun attack(kind: Attack) {}
-    fun snapshot(): Snapshot = Snapshot(SelfInfo("", ""), emptyList(), emptyList(), emptyList(), emptyMap(), emptyList(), DebugState(false, false))
-    fun addListener(l: (MeshEvent) -> Unit) { listeners += l }
-}
+// MeshNode (section 6) lives in MeshNode.kt.
