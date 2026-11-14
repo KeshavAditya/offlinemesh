@@ -58,12 +58,14 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
         const val QUEUE = 64
         const val CONNECT_TIMEOUT_MS = 10_000L
         const val ATTEMPTS = 5
+        const val SHORT_LINK_MS = 10_000L
+        const val REDIAL_COOLDOWN_MS = 30_000L
     }
 
     private val adapter: BluetoothAdapter = (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
     private val running = AtomicBoolean(false)
     private val links = ConcurrentHashMap<LinkId, Link>()
-    private val dialing = ConcurrentHashMap.newKeySet<String>()   // "address/prefix" of peers with a dialer alive
+    private val dialing = ConcurrentHashMap.newKeySet<String>()   // hex prefixes of peers with a dialer (or its live link) alive
     private val ids = AtomicInteger()
     private val pending = AtomicInteger()   // dialers not yet connected; a connected dialer is already in links
     private lateinit var listener: TransportListener
@@ -134,13 +136,22 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
             if (sd == null || sd.size != 6 || !running.get()) return
             val peer = sd.copyOf(4)
             if (adapter.bluetoothLeAdvertiser != null && !prefixLess(prefix, peer)) return   // tie-break; also skips ourselves
-            val key = "${r.device.address}/${hex(peer)}"   // prefix alone is attacker-chosen
+            // One dialer per prefix, not per address: Android rotates private addresses (~15 min), and an address key
+            // re-dials an already-linked peer forever (seen on emulators: 870 duplicate links in 10 min). A spoofed prefix
+            // only holds the slot until core rejects its hello; the global cap below bounds spoofed dialers.
+            val key = hex(peer)
             if (links.size + pending.get() >= C.MAX_LINKS || !dialing.add(key)) return   // global cap: spoofed adverts cannot spawn unbounded dialers
             pending.incrementAndGet()
             thread("ble-dial-$key") {
                 val counted = AtomicBoolean(true)
                 val connected = { if (counted.getAndSet(false)) pending.decrementAndGet() }
-                try { dial(r.device, decodePsm(sd), connected) } finally { connected(); dialing.remove(key) }
+                val t0 = System.currentTimeMillis()
+                try {
+                    dial(r.device, decodePsm(sd), connected)
+                    // Core closes links it will not keep (banned peer, duplicate); without a pause the next scan result
+                    // redials at once, forever (seen: 342 dials to a banned peer). Hold the prefix slot for a while.
+                    if (!counted.get() && System.currentTimeMillis() - t0 < SHORT_LINK_MS) sleep(REDIAL_COOLDOWN_MS)
+                } finally { connected(); dialing.remove(key) }
             }
         }
         override fun onScanFailed(code: Int) { Log.e(TAG, "ble scan failed code=$code") }
