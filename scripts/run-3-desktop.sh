@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Three desktop nodes on this machine wired in a line A<->B<->C over TCP (discovery off), UIs on 8081..8083.
+# Three desktop nodes on this machine wired in a line A<->B<->C over TCP (discovery off), UIs on 8081..8083 (or UI_BASE..UI_BASE+2).
 #   scripts/run-3-desktop.sh          build, wipe .mesh-run/, start A, B, C (stops old ones first)
 #   scripts/run-3-desktop.sh stop     stop them
 # Logs: .mesh-run/{A,B,C}.log   Data: .mesh-run/{A,B,C}/   PIDs: .mesh-run/{A,B,C}.pid
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/.mesh-run"
+U=${UI_BASE:-8081}; PA=$U; PB=$((U+1)); PC=$((U+2))   # UI_BASE=8181 avoids adb forwards on 8081-8083
 BIN="$ROOT/desktop/build/install/desktop/bin/desktop"
 
 stop() {
@@ -15,7 +16,7 @@ stop() {
         rm -f "$f"
     done
     # Wait for the UI ports to close so a restart does not hit "address in use".
-    for p in 8081 8082 8083; do
+    for p in $PA $PB $PC; do
         for _ in $(seq 1 20); do curl -s --max-time 1 "http://127.0.0.1:$p/api/snapshot" >/dev/null || break; sleep 0.5; done
     done
 }
@@ -24,7 +25,7 @@ if [ "${1:-}" = "stop" ]; then stop; echo "stopped"; exit 0; fi
 
 stop
 # Another run (other checkout or agent) on these ports would answer our readiness checks and e2e would test it instead.
-for p in 8081 8082 8083; do
+for p in $PA $PB $PC; do
     curl -s --max-time 1 "http://127.0.0.1:$p/" >/dev/null && { echo "port $p is already in use by another process; stop it first"; exit 1; }
 done
 mkdir -p "$ROOT/build"
@@ -38,11 +39,11 @@ start() {  # name uiPort listenPort [args...]
     "$BIN" --data "$RUN/$n" --ui-port "$ui" --listen "$listen" --no-discovery "$@" > "$RUN/$n.log" 2>&1 &
     echo $! > "$RUN/$n.pid"
 }
-start A 8081 9001
-start B 8082 9002 --peer 127.0.0.1:9001
-start C 8083 9003 --peer 127.0.0.1:9002
+start A $PA 9001
+start B $PB 9002 --peer 127.0.0.1:9001
+start C $PC 9003 --peer 127.0.0.1:9002
 
-for p in 8081 8082 8083; do
+for p in $PA $PB $PC; do
     ok=
     for _ in $(seq 1 60); do
         curl -s --max-time 1 "http://127.0.0.1:$p/api/snapshot" >/dev/null && { ok=1; break; }
@@ -51,10 +52,10 @@ for p in 8081 8082 8083; do
     [ -n "$ok" ] || { echo "node on :$p did not come up; logs in $RUN"; stop; exit 1; }
 done
 # The node answering each port must be ours: its id is the one our process printed.
-for x in A:8081 B:8082 C:8083; do
+for x in A:$PA B:$PB C:$PC; do
     n=${x%:*} p=${x#*:}
     id=$(sed -n 's/^node \([0-9a-f]\{16\}\) .*/\1/p' "$RUN/$n.log" | head -1)
     curl -s --max-time 2 "http://127.0.0.1:$p/api/snapshot" | grep -q "\"id\":\"$id\"" && [ -n "$id" ] ||
         { echo "node $n is not the one answering :$p (bind failed?); see $RUN/$n.log"; stop; exit 1; }
 done
-echo "A http://127.0.0.1:8081  B http://127.0.0.1:8082  C http://127.0.0.1:8083  (stop: $0 stop)"
+echo "A http://127.0.0.1:$PA  B http://127.0.0.1:$PB  C http://127.0.0.1:$PC  (stop: $0 stop)"
