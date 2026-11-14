@@ -6,8 +6,8 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 
 | What | Result |
 |---|---|
-| `./gradlew :core:test` | 51 tests: 50 pass, 1 ignored (a known bug, see "Large meshes" below) |
-| of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 18 run, 1 ignored |
+| `./gradlew :core:test` | 51 tests, all pass, none ignored |
+| of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 19, all pass |
 | `scripts/e2e.sh` on 3 desktop nodes (TCP, one laptop) | items 1-6 PASS (run twice) |
 | `scripts/e2e.sh` on 3 Android emulators (API 36, emulated Bluetooth) | items 1-6 PASS |
 | `scripts/e2e.sh` on the 3 real phones | **not run yet** |
@@ -27,7 +27,7 @@ The plan's bound is 2 x links. Random connected graphs, at most 5 links per node
 About one transmission per link, whatever the node count. The count moves by 1 or 2 between runs because forward jitter is random.
 Source: `BroadcastCostTest` and `SimTest.t9_randomGraphBroadcastCost` (lines starting `BCAST` and `10.2 #9` in the test output).
 
-**Large meshes:** at 50 nodes the cost is still under one transmission per link (88 on 90 links), but honest nodes log 27 `LINK_FLOOD` events and close 2 links, so 3 of 49 nodes miss the post. The start-up and link-up PRESENCE bursts overrun the 30-per-10 s link bucket. Reported to mesh-core; see `THREATS.md`.
+**Large meshes:** at 50 nodes / 90 links one post costs 92 transmissions (bound 180); with sender-side pacing (25 per 10 s per link) there are no security events and all 49 other nodes get the post.
 
 ## Proof of work (laptop JVM, one core)
 
