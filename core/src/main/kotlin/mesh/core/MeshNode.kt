@@ -480,7 +480,10 @@ class MeshNode(
         // Dedupe and skip what this link already has (give() records it), so a WANT can't amplify bandwidth.
         for (mid in ids.take(512).map { hex(it) }.distinct()) {
             if (seen[mid]?.have?.contains(l.id) == true) continue
-            store.envs[mid]?.env?.takeIf { offerable(it, ep) }?.let { give(l, it) }
+            val e = store.envs[mid]?.env?.takeIf { offerable(it, ep) } ?: continue
+            // shortcut: served set is cleared at 4,096 ids (one resend each per link), fine for demo-sized meshes.
+            if (l.wantServed.size >= C.SEEN_CAP) l.wantServed.clear()
+            if (l.wantServed.add(mid)) give(l, e)
         }
     }
 

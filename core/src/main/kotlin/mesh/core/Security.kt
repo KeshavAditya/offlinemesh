@@ -9,6 +9,7 @@ internal class Link(val id: LinkId, val transport: Transport, val desc: String, 
     var score = C.SCORE_START
     var lastRxMs = nowMs                     // any frame, for the silent-link check
     val wanted = HashSet<String>()           // msgIds we asked for with SYNC_WANT: exempt from the bucket once
+    val wantServed = HashSet<String>()       // msgIds we already answered on this link (independent of the seen LRU)
     private var tokens = C.BUCKET_SIZE.toDouble()
     private var bucketAt = nowMs
 
