@@ -47,6 +47,7 @@ data class Msg(
     val status: MsgStatus,
     val hops: Int,
     val via: String?,
+    val img: String? = null,                           // base64 JPEG for a photo DM (stretch 2), else null
 )
 
 @Serializable

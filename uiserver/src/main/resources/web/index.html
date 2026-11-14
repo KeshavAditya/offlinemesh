@@ -17,6 +17,7 @@ small, .grey { color: #666; font-size: 13px; }
 table { border-collapse: collapse; width: 100%; }
 td, th { border: 1px solid #ccc; padding: 4px; text-align: left; }
 fieldset { border: 1px solid #ccc; }
+img { display: block; max-width: 100%; }
 </style>
 </head>
 <body>
@@ -39,6 +40,7 @@ fieldset { border: 1px solid #ccc; }
   <ul id="convo"></ul>
   <input type="text" id="dmText" placeholder="Write a message">
   <button onclick="peer.value && send({t:'dm',to:peer.value,text:val('dmText')},'dmText')">Send</button>
+  <label>Photo <input type="file" accept="image/*" onchange="photo(this)"></label>
 </section>
 
 <section id="network">
@@ -85,6 +87,27 @@ const byOrder = (a, b) => a.lamport - b.lamport || (a.id < b.id ? -1 : a.id > b.
 
 function show(id) {
   for (const s of document.querySelectorAll('section')) s.className = s.id === id ? 'on' : '';
+}
+
+// Stretch 2: downscale and re-encode until the JPEG fits one DM (39,999 bytes + 1 kind byte = MAX_DM_PLAINTEXT).
+async function photo(input) {
+  const f = input.files[0]; input.value = '';
+  if (!f || !peer.value) return;
+  const to = peer.value, bmp = await createImageBitmap(f);
+  const c = document.createElement('canvas');   // never shown, only used to re-encode
+  let side = 640, q = 0.8, blob;
+  for (;;) {
+    const k = Math.min(1, side / Math.max(bmp.width, bmp.height));
+    c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+    if (blob && blob.size <= 39999) break;
+    if (q > 0.45) q -= 0.15; else { side = Math.round(side * 0.75); q = 0.8; }
+    if (side < 32) return alert('Photo could not be made small enough');
+  }
+  let bin = '';
+  for (const x of new Uint8Array(await blob.arrayBuffer())) bin += String.fromCharCode(x);
+  send({t:'dm', to, img: btoa(bin)});
 }
 
 function send(cmd, clearId) {
@@ -146,7 +169,9 @@ function render() {
   const convo = $('convo'); convo.replaceChildren();
   for (const m of [...(S.dms[peer.value] || [])].sort(byOrder)) {
     const li = el('li', (m.mine ? 'me' : name(m.from)) + ': ' + m.text);
-    li.appendChild(el('br'));
+    // "/9j/" is base64 for FF D8 FF: show only real JPEGs, and only via a data: URL (no innerHTML)
+    if (m.img && m.img.startsWith('/9j/')) { const im = el('img'); im.src = 'data:image/jpeg;base64,' + m.img; im.alt = 'photo'; li.appendChild(im); }
+    else li.appendChild(el('br'));
     li.appendChild(el('small', m.mine ? status(m) : route(m)));
     convo.appendChild(li);
   }

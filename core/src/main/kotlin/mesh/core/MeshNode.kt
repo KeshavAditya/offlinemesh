@@ -1,10 +1,15 @@
 package mesh.core
 
 import java.io.File
+import java.util.Base64
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+
+/** JPEG starts with FF D8 FF; checked on send and again on receive before a photo DM is shown. */
+fun isJpeg(b: ByteArray) = b.size >= 3 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() && b[2] == 0xFF.toByte()
+private const val PHOTO = "(photo)"
 
 /**
  * Sections 5.5 to 5.11. Every state change runs as a task on [scheduler] (one thread), wrapped in [lock]
@@ -80,13 +85,19 @@ class MeshNode(
         later(maxOf(0L, ep * EPOCH_MS - now())) { mine(EnvType.POST, Envelope.BROADCAST, lam, ep, slot, C.TTL_POST, body, text) }
     }
 
-    fun sendDm(to: String, text: String) = loop {
+    fun sendDm(to: String, text: String) = sealDm(to, byteArrayOf(0) + text.toByteArray(Charsets.UTF_8), text, null)
+
+    /** Stretch 2: one JPEG in one DM (plaintext kind 1), no chunking. Dropped if not JPEG or over MAX_DM_PLAINTEXT. */
+    fun sendDmImage(to: String, jpeg: ByteArray) {
+        if (isJpeg(jpeg)) sealDm(to, byteArrayOf(1) + jpeg, PHOTO, Base64.getEncoder().encodeToString(jpeg))
+    }
+
+    private fun sealDm(to: String, plain: ByteArray, text: String, img: String?) = loop {
         val peer = contacts[to] ?: return@loop
-        val plain = byteArrayOf(0) + text.toByteArray(Charsets.UTF_8)
         if (plain.size > C.MAX_DM_PLAINTEXT) return@loop
         val dst = Crypto.unhex(to)
         val body = Crypto.seal(Crypto.dmKey(id.private, peer.pub), id.nodeId + dst, plain)
-        mine(EnvType.DM, dst, ++lamport, epochNow(), 0, C.TTL_DM, body, text)
+        mine(EnvType.DM, dst, ++lamport, epochNow(), 0, C.TTL_DM, body, text, img)
     }
 
     fun setName(name: String) = loop {
@@ -317,9 +328,9 @@ class MeshNode(
             }
             EnvType.DM -> when {
                 dst == me -> {
-                    val text = openDm(e) ?: return
+                    val (text, img) = openDm(e) ?: return
                     store.put(e, now, relayOnly = false, log = !replay)
-                    addMsg(Msg(mid, src, me, text, e.lamport, now, false, MsgStatus.RECEIVED, shownHops, l?.peer), emit = !replay)
+                    addMsg(Msg(mid, src, me, text, e.lamport, now, false, MsgStatus.RECEIVED, shownHops, l?.peer, img), emit = !replay)
                     if (l != null) sendAck(e, l)
                 }
                 mine -> {   // replay of an own DM
@@ -359,12 +370,12 @@ class MeshNode(
         emitNet()
     }
 
-    private fun openDm(e: Envelope): String? {
+    private fun openDm(e: Envelope): Pair<String, String?>? {
         val p = Crypto.open(Crypto.dmKey(id.private, e.srcPub), e.srcId + e.dst, e.body) ?: return null
         if (p.isEmpty()) return null
         return when (p[0].toInt()) {
-            0 -> String(p, 1, p.size - 1, Charsets.UTF_8)
-            1 -> "[image ${p.size - 1} bytes]"
+            0 -> String(p, 1, p.size - 1, Charsets.UTF_8) to null
+            1 -> p.copyOfRange(1, p.size).takeIf(::isJpeg)?.let { PHOTO to Base64.getEncoder().encodeToString(it) }
             else -> null
         }
     }
@@ -427,19 +438,19 @@ class MeshNode(
         }
     }
 
-    private fun mine(type: Int, dst: ByteArray, lam: Long, ep: Long, slot: Int, ttl: Int, body: ByteArray, text: String) {
+    private fun mine(type: Int, dst: ByteArray, lam: Long, ep: Long, slot: Int, ttl: Int, body: ByteArray, text: String, img: String? = null) {
         val ident = id
-        offLoop { val e = Envelope.create(ident, type, dst, lam, ep, slot, ttl, body); loop { originate(e, text) } }
+        offLoop { val e = Envelope.create(ident, type, dst, lam, ep, slot, ttl, body); loop { originate(e, text, img) } }
     }
 
-    private fun originate(e: Envelope, text: String) {
+    private fun originate(e: Envelope, text: String, img: String?) {
         val mid = hex(e.msgId)
         val dst = if (e.isBroadcast) null else hex(e.dst)
         val s = SeenEntry(null, dst, e.type)
         seen[mid] = s
         guard.accepted[mid] = e.epoch
         store.put(e, now(), relayOnly = false, log = true)
-        addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null), emit = true)
+        addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
         targets(e, s).forEach { give(it, e) }
     }
 

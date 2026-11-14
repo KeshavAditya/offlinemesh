@@ -823,6 +823,7 @@ class MeshNode(
     fun stop()
     fun post(text: String)
     fun sendDm(to: String /* nodeId hex */, text: String)
+    fun sendDmImage(to: String, jpeg: ByteArray)       // stretch 2: one kind-1 DM, JPEG (FF D8 FF) of 39,999 bytes at most
     fun setName(name: String)
     fun setMuted(nodeIdHex: String, muted: Boolean)
     fun setVerified(nodeIdHex: String, verified: Boolean)
@@ -851,7 +852,7 @@ Server to browser:
 {"t":"sec","event":Sec}
 ```
 
-`Msg = {"id","from","to" (null for posts),"text","lamport","tsMs","mine","status","hops","via"}`
+`Msg = {"id","from","to" (null for posts),"text","lamport","tsMs","mine","status","hops","via","img"}`; `img` is the base64 JPEG of a photo DM (its `text` is `(photo)`), otherwise null. The page shows it only if it starts with `/9j/` (FF D8 FF), via a `data:` URL.
 `Sec = {"tsMs","kind","detail","link","src"}` with `kind` one of `MALFORMED, BAD_POW, BAD_SIGNATURE, STALE, RATE_EQUIVOCATION, LINK_FLOOD, LINK_CLOSED, BANNED`.
 
 Browser to server (WebSocket message, or HTTP `POST /api/cmd` with the same JSON body):
@@ -859,6 +860,7 @@ Browser to server (WebSocket message, or HTTP `POST /api/cmd` with the same JSON
 ```json
 {"t":"post","text":"..."}
 {"t":"dm","to":"<id>","text":"..."}
+{"t":"dm","to":"<id>","img":"<base64 JPEG, 39,999 bytes at most so kind byte + JPEG fit MAX_DM_PLAINTEXT>"}
 {"t":"name","name":"..."}
 {"t":"mute","id":"<id>","on":true}
 {"t":"verify","id":"<id>","on":true}

@@ -34,6 +34,23 @@ class CmdTest {
         for (b in bad) assertFailsWith<IllegalArgumentException>(b) { parseCmd(b) }
     }
 
+    @Test fun photoDm() {
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) + ByteArray(39_996)
+        fun cmd(b: ByteArray) = """{"t":"dm","to":"$id","img":"${java.util.Base64.getEncoder().encodeToString(b)}"}"""
+        val c = parseCmd(cmd(jpeg)) as Cmd.DmImg
+        assertEquals(id, c.to); assertTrue(c.jpeg.contentEquals(jpeg))
+        val bad = listOf(
+            cmd(jpeg + 0),                                            // 40,000 bytes: no room for the kind byte
+            cmd(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)),        // PNG
+            cmd(byteArrayOf()),
+            """{"t":"dm","to":"$id","img":"not base64!"}""",
+            """{"t":"dm","to":"$id","img":5}""",
+            """{"t":"dm","to":"zz","img":"${java.util.Base64.getEncoder().encodeToString(jpeg)}"}""",
+            """{"t":"dm","to":"$id","text":"${"x".repeat(40_000)}"}""",
+        )
+        for (b in bad) assertFailsWith<IllegalArgumentException>(b.take(80)) { parseCmd(b) }
+    }
+
     @Test fun onlyLoopbackHostsAndOrigins() {
         assertTrue(localOnly("127.0.0.1:8081", null))
         assertTrue(localOnly("localhost:8081", "http://localhost:8081"))

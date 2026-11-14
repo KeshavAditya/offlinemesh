@@ -67,6 +67,8 @@ class FakeNode : UiNode {
                 ex.schedule({ emit(MeshEvent.StatusChanged(m.id, MsgStatus.SENT, 0, null)) }, 1, TimeUnit.SECONDS)
                 ex.schedule({ emit(MeshEvent.StatusChanged(m.id, MsgStatus.DELIVERED, 2, b)) }, 3, TimeUnit.SECONDS)
             }
+            is Cmd.DmImg -> emit(MeshEvent.MessageAdded(msg(self.id, cmd.to, "(photo)", true, MsgStatus.SENT, 0, null)
+                .copy(img = java.util.Base64.getEncoder().encodeToString(cmd.jpeg)).also { dms.getOrPut(cmd.to) { mutableListOf() } += it }))
             is Cmd.Name -> self = self.copy(name = cmd.name)
             is Cmd.Mute -> { contacts = contacts.map { if (it.id == cmd.id) it.copy(muted = cmd.on) else it }; emit(MeshEvent.NetworkChanged(contacts, links)) }
             is Cmd.Verify -> { contacts = contacts.map { if (it.id == cmd.id) it.copy(verified = cmd.on) else it }; emit(MeshEvent.NetworkChanged(contacts, links)) }
