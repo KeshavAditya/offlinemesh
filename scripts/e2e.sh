@@ -2,7 +2,7 @@
 # Acceptance checks 1-6 (plan section 1) against three running nodes, driven over their UI ports with curl + jq,
 # plus 7 (group of every node) and, with more than 3 ports, 8 (a post reaches every node) from 13.1.
 #   scripts/e2e.sh 8081 8082 8083 [more ports...]   (desktop nodes from run-3-desktop.sh, or phones through adb forward)
-# A and C are muted toward each other first (5.9) so every A<->C message must go through B.
+# A and C are muted toward each other first (5.9), and C from every node past the 3rd, so every A<->C message must go through B.
 # Prints PASS/FAIL per item; exits 1 if any item fails.
 set -u
 [ $# -ge 3 ] || { echo "usage: $0 <portA> <portB> <portC> [more ports...]"; exit 2; }
@@ -37,6 +37,14 @@ N=$RANDOM$$
 cmd $PA '{"t":"name","name":"A"}'; cmd $PB '{"t":"name","name":"B"}'; cmd $PC '{"t":"name","name":"C"}'
 cmd $PA "{\"t\":\"mute\",\"id\":\"$IC\",\"on\":true}"
 cmd $PC "{\"t\":\"mute\",\"id\":\"$IA\",\"on\":true}"
+# Nodes from the 4th port on are muted toward C too (emulators all hear each other), so C's only link is B.
+# Lifted for items 7 and 8: on desktop the 4th node hangs off C, and they must reach every node.
+mute_rest() { local i; for i in "${!PORTS[@]}"; do
+    [ $i -ge 3 ] || continue
+    cmd $PC "{\"t\":\"mute\",\"id\":\"${IDS[$i]}\",\"on\":$1}"
+    cmd ${PORTS[$i]} "{\"t\":\"mute\",\"id\":\"$IC\",\"on\":$1}"
+done; }
+mute_rest true
 
 # A ban is logged as BANNED or as RATE_EQUIVOCATION with "banned" in the detail (core's 5.6 pipeline).
 banned_a() { q $1 --arg a "$IA" 'any(.security[]; (.kind == "BANNED" or (.detail | test("banned"; "i"))) and (.src == $a or (.detail | contains($a))))'; }
@@ -69,6 +77,7 @@ if wait_until $T on_both; then
     if [ "$b" = 1 ] && [ "$c" = 1 ]; then result 3 ok; else result 3 "count B=$b C=$c"; fi
 else result 3 "post did not reach B and C (B=$(feed_count $PB "$T3") C=$(feed_count $PC "$T3"))"; fi
 
+mute_rest false
 # 7. (13.1, before 5 and 6 so no ban or mute is in the way) A makes a group of every node and sends to it;
 # every other node shows it once in that group with A's id for it; A shows delivered N-1 of N-1 within 30 s.
 T7="e2e group $N"; NM=$(($# - 1))
@@ -120,6 +129,7 @@ if [ $# -gt 3 ]; then
     result 8 "$r8"
 fi
 
+mute_rest true
 # 6. (run before 5, which bans A on B) A posts while C is cut off; after reconnecting C has it within 20 s.
 T6="e2e partition $N"
 cmd $PB "{\"t\":\"mute\",\"id\":\"$IC\",\"on\":true}"

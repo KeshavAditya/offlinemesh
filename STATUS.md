@@ -38,3 +38,4 @@
 [ui] [16:10] done: 13.1/13.2 UI side: group/group-members/gmsg commands, group chats in index.html (27 KB), NODES=N in run-3-desktop.sh, e2e items 7+8; e2e 3 nodes PASS 1-7, 5 nodes PASS 1-8
 [qa] [16:13] done: docs for section 13 (THREATS group rows + limits, DEMO optional group step, NUMBERS 5-node e2e + group cost + TODO 4-emulator row, DEVPOST groups/any phones/UI)
 [android] [16:38] done: section 13 on 4 emulators (meshA-D): e2e.sh 8081-8084 PASS 1-8 (C<->D pre-muted, see e2e note); C got 'Ridgeline' group notification from background (3 senders, Reply action); B WebView shows group chat; deploy-all.sh --fresh now wipes all devices before launching any (old feeds were re-synced into wiped nodes); meshD needs disk.dataPartition.size=4G (laptop disk ~11 GB free)
+[ui] [16:52] done: e2e.sh mutes C from every node past the 3rd (lifted for items 7-8), 4 emulators and 4 desktop nodes pass 1-8; page autofocuses the message box only on fine pointers
