@@ -5,76 +5,182 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OfflineMesh</title>
 <style>
-body { font-family: system-ui, sans-serif; font-size: 16px; color: #000; background: #fff; margin: 8px; }
-header { margin-bottom: 8px; }
-section { display: none; }
+:root { --bg: #fff; --fg: #15171a; --mut: #5f6670; --line: #dcdfe4; --card: #f3f4f6; --acc: #0b62c4; --accfg: #fff; --red: #c62828; --amb: #b86e00; --nb: 0px; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111316; --fg: #e9eaec; --mut: #9aa1aa; --line: #2d3137; --card: #1d2025; --acc: #5aa2ff; --accfg: #08121f; --red: #ef6461; --amb: #f0a640; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+.wrap { max-width: 680px; margin: 0 auto; padding: 0 16px; }
+header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+.top b { font-size: 17px; }
+#me { color: var(--mut); font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill { font-size: 13px; padding: 2px 10px; border-radius: 12px; border: 1px solid var(--line); color: var(--mut); white-space: nowrap; }
+.pill.on { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
+#conn { background: var(--amb); color: #000; font-size: 13px; text-align: center; padding: 2px; }
+nav { display: flex; }
+nav button { flex: 1; min-height: 44px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--mut); }
+nav button[aria-current] { color: var(--acc); border-bottom-color: var(--acc); font-weight: 600; }
+.n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px; background: var(--acc); color: var(--accfg); font-size: 12px; line-height: 20px; text-align: center; font-weight: 600; }
+.n:empty { display: none; }
+@media (max-width: 599px) {
+  :root { --nb: 56px; }
+  body { padding-bottom: var(--nb); }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; height: var(--nb); background: var(--bg); border-top: 1px solid var(--line); }
+  nav button { border-bottom: 0; border-top: 2px solid transparent; }
+  nav button[aria-current] { border-top-color: var(--acc); }
+}
+section { display: none; padding-top: 8px; }
 section.on { display: block; }
-input[type=text], select { width: 100%; box-sizing: border-box; font-size: 16px; margin: 4px 0; }
-button { font-size: 16px; margin: 4px 4px 4px 0; }
-ul { list-style: none; padding: 0; }
-li { border-bottom: 1px solid #ccc; padding: 6px 0; }
-small, .grey { color: #666; font-size: 13px; }
-table { border-collapse: collapse; width: 100%; }
-td, th { border: 1px solid #ccc; padding: 4px; text-align: left; }
-fieldset { border: 1px solid #ccc; }
-img { display: block; max-width: 100%; }
+h2 { font-size: 18px; margin: 16px 0 8px; }
+button, .btn { font: inherit; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); cursor: pointer; transition: background-color .15s, color .15s; display: inline-flex; align-items: center; justify-content: center; }
+button:active, .btn:active { background: var(--line); }
+button:disabled { opacity: .5; cursor: default; }
+button.pri { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
+input[type=text] { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+input[type=text]:focus, button:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+ul { list-style: none; padding: 0; margin: 0; }
+.mut, small { color: var(--mut); font-size: 13px; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 8px 0; background: var(--bg); }
+.card .who { font-weight: 600; font-size: 14px; }
+.tag { font-size: 12px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--mut); margin-left: 4px; font-weight: 400; }
+.txt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.compose { position: fixed; bottom: var(--nb); left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; z-index: 1; background: var(--bg); padding: 8px 16px; box-shadow: 0 -2px 6px rgba(0,0,0,.06); }
+#feed, #convoView { padding-bottom: 104px; }
+.row { display: flex; gap: 8px; }
+.compose .mut { min-height: 0; }
+.compose .mut:empty { display: none; }
+.err { color: var(--red); font-size: 13px; }
+.err:empty { display: none; }
+.chat { display: flex; width: 100%; text-align: left; gap: 8px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; min-height: 64px; }
+.chat .main { flex: 1; min-width: 0; }
+.chat .line { display: flex; justify-content: space-between; gap: 8px; }
+.chat .prev { color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chead { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; border-bottom: 1px solid var(--line); }
+.chead button { padding: 0 12px; }
+.msgs { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+.msgs li { max-width: 80%; align-self: flex-start; }
+.msgs li.mine { align-self: flex-end; text-align: right; }
+.bub { display: inline-block; text-align: left; padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.mine .bub { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
+.bub img { display: block; max-width: 100%; border-radius: 8px; }
+.meta { display: block; color: var(--mut); font-size: 12px; margin-top: 2px; }
+.rowc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.rowc .main { flex: 1; min-width: 180px; }
+label.sw { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; cursor: pointer; }
+.sw input { appearance: none; -webkit-appearance: none; width: 40px; height: 24px; margin: 0; border-radius: 12px; background: var(--line); position: relative; cursor: pointer; transition: background-color .15s; }
+.sw input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.sw input:checked { background: var(--acc); }
+.sw input:checked::after { left: 19px; }
+.sw input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.qr { display: block; width: 200px; height: 200px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.ev { border: 1px solid var(--line); border-left: 4px solid var(--amb); border-radius: 8px; padding: 6px 10px; margin: 6px 0; font-size: 14px; overflow-wrap: anywhere; }
+.ev.bad { border-left-color: var(--red); }
+.ev b { font-weight: 600; }
+fieldset { border: 2px solid var(--red); border-radius: 12px; padding: 8px 12px 12px; margin: 16px 0; }
+legend { font-weight: 600; padding: 0 6px; color: var(--red); }
+fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.empty { color: var(--mut); padding: 16px 0; text-align: center; }
 </style>
 </head>
 <body>
-<header>OfflineMesh &nbsp; <span id="me"></span> &nbsp; links: <span id="nlinks">0</span> <span id="conn" class="grey"></span></header>
-<nav>
-  <button onclick="show('feed')">Feed</button>
-  <button onclick="show('messages')">Messages</button>
-  <button onclick="show('network')">Network</button>
-  <button onclick="show('security')">Security</button>
-</nav>
+<header>
+  <div class="wrap">
+    <div class="top"><b>OfflineMesh</b> <span id="me"></span> <span id="nlinks" class="pill">no links</span></div>
+    <nav>
+      <button data-s="feed" onclick="show('feed')">Feed<span class="n" id="n-feed"></span></button>
+      <button data-s="chats" onclick="show('chats')">Chats<span class="n" id="n-chats"></span></button>
+      <button data-s="network" onclick="show('network')">Network</button>
+      <button data-s="security" onclick="show('security')">Security<span class="n" id="n-security"></span></button>
+    </nav>
+  </div>
+  <div id="conn" hidden>Reconnecting…</div>
+</header>
 
+<main class="wrap">
 <section id="feed" class="on">
   <ul id="posts"></ul>
-  <input type="text" id="postText" placeholder="Write a post">
-  <button onclick="send({t:'post',text:val('postText')},'postText')">Post</button>
+  <div class="compose">
+    <div class="row">
+      <input type="text" id="postText" placeholder="Write a post" data-max="1000" data-btn="postBtn" data-count="postCount">
+      <button id="postBtn" class="pri" disabled onclick="sendPost()">Post</button>
+    </div>
+    <span id="postCount" class="mut"></span> <span id="postErr" class="err"></span>
+  </div>
 </section>
 
-<section id="messages">
-  <select id="peer" onchange="render()"></select>
-  <ul id="convo"></ul>
-  <input type="text" id="dmText" placeholder="Write a message">
-  <button onclick="peer.value && send({t:'dm',to:peer.value,text:val('dmText')},'dmText')">Send</button>
-  <label>Photo <input type="file" accept="image/*" onchange="photo(this)"></label>
+<section id="chats">
+  <div id="chatList">
+    <div class="chead"><h2 style="flex:1;margin:8px 0">Chats</h2>
+      <!-- GROUPS: the "New group" button goes here (13.3); groupSlot is reserved for it. -->
+      <span id="groupSlot"></span>
+    </div>
+    <!-- GROUPS: the New group form (name + checkbox list of known contacts) goes here. -->
+    <ul id="convos"></ul>
+  </div>
+  <div id="convoView" hidden>
+    <div class="chead">
+      <button onclick="closeChat()" aria-label="Back to chats">‹ Chats</button>
+      <div><b id="chatName"></b><br><small id="chatRoute"></small></div>
+    </div>
+    <!-- GROUPS: the group view (members, owner add/remove) goes here. -->
+    <ul id="convo" class="msgs"></ul>
+    <div class="compose">
+      <div class="row">
+        <label class="btn" title="Send a photo" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.lastChild.click()}">Photo<input type="file" accept="image/*" hidden onchange="photo(this)"></label>
+        <input type="text" id="dmText" placeholder="Write a message" data-max="39999" data-btn="dmBtn" data-count="dmCount">
+        <button id="dmBtn" class="pri" disabled onclick="sendDm()">Send</button>
+      </div>
+      <span id="dmCount" class="mut"></span> <span id="dmErr" class="err"></span>
+    </div>
+  </div>
 </section>
 
 <section id="network">
-  <p>My name: <input type="text" id="myName"> <button onclick="send({t:'name',name:val('myName')})">Save name</button></p>
-  <p>My fingerprint: <span id="fp"></span></p>
+  <h2>Me</h2>
+  <div class="row">
+    <input type="text" id="myName" aria-label="My name"> <button onclick="send({t:'name',name:val('myName')})">Save name</button>
+  </div>
+  <p>Fingerprint: <span id="fp" class="mono"></span></p>
   <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
-  <img id="myQr" width="200" height="200" alt="QR code of my fingerprint">
-  <p class="grey">To verify a contact: scan their QR (or read their screen), check it matches their ID below, then tick Verified.</p>
+  <img id="myQr" class="qr" width="200" height="200" alt="QR code of my fingerprint">
+  <p class="mut">To verify a contact: scan their QR (or read their screen), check it matches their ID below, then switch on Verified.</p>
   <div id="guest"></div>
-  <h3>Contacts</h3>
-  <table><thead><tr><th>Name</th><th>ID</th><th>Hops</th><th>Via</th><th>Linked</th><th>Verified</th><th>Muted</th></tr></thead><tbody id="contacts"></tbody></table>
-  <h3>Links</h3>
-  <table><thead><tr><th>Transport</th><th>Peer</th><th>State</th></tr></thead><tbody id="links"></tbody></table>
+  <h2>Contacts</h2>
+  <ul id="contacts"></ul>
+  <h2>Links</h2>
+  <ul id="links"></ul>
 </section>
 
 <section id="security">
-  <ul id="sec"></ul>
   <fieldset>
     <legend>Demo attacks</legend>
-    <label><input type="checkbox" id="tamper" onchange="send({t:'debug',flag:'tamper',on:this.checked})"> Tamper while relaying</label><br>
-    <label><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})"> Drop while relaying</label><br>
-    <button onclick="send({t:'attack',kind:'flood'})">Flood</button>
-    <button onclick="send({t:'attack',kind:'spoof'})">Spoof</button>
-    <button onclick="send({t:'attack',kind:'replay'})">Replay</button>
+    <label class="sw"><input type="checkbox" id="tamper" onchange="send({t:'debug',flag:'tamper',on:this.checked})"> Tamper while relaying</label><br>
+    <label class="sw"><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})"> Drop while relaying</label>
+    <div class="btns">
+      <button onclick="send({t:'attack',kind:'flood'})">Flood</button>
+      <button onclick="send({t:'attack',kind:'spoof'})">Spoof</button>
+      <button onclick="send({t:'attack',kind:'replay'})">Replay</button>
+    </div>
   </fieldset>
+  <h2>Security log</h2>
+  <ul id="sec"></ul>
 </section>
+</main>
 
 <script>
 // All mesh data is untrusted: only ever put it into the page with textContent, never innerHTML.
-let S = null;
+let S = null, cur = 'feed', open = null;           // open: contact id of the open conversation, or null for the list
+const unread = { feed: 0, security: 0 }, dmUnread = {};
+const MAX = 200;                                   // render at most the last 200 items of any list (A52s WebView)
+const BAD = ['BAD_SIGNATURE', 'BANNED', 'RATE_EQUIVOCATION'];
 const $ = id => document.getElementById(id);
-const peer = $('peer');
 const val = id => $(id).value.trim();
 const fp = id => (id.match(/.{1,4}/g) || []).join(' ');
+const bytes = s => new TextEncoder().encode(s).length;
+const hhmm = ms => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 function name(id) {
   if (!id) return '';
   if (S && id === S.self.id) return S.self.name;
@@ -82,22 +188,45 @@ function name(id) {
   return c && c.name ? c.name : id.slice(0, 8);
 }
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
-function route(m) { return m.hops + (m.hops === 1 ? ' hop' : ' hops') + (m.via ? ' via ' + name(m.via) : ''); }
+function add(p, ...kids) { for (const k of kids) p.appendChild(typeof k === 'string' ? document.createTextNode(k) : k); return p; }
+function route(m) { return m.hops == null ? 'no route yet' : m.hops + (m.hops === 1 ? ' hop' : ' hops') + (m.via && m.hops > 1 ? ' via ' + name(m.via) : ''); }
 function status(m) {
-  if (m.status === 'DELIVERED') return 'Delivered, ' + route(m);
-  return { QUEUED: 'Queued', SENT: 'Sent' }[m.status] || '';
+  if (m.status === 'DELIVERED') return 'Delivered ✓✓ · ' + route(m);
+  return { QUEUED: 'Queued •', SENT: 'Sent ✓' }[m.status] || '';
 }
 const byOrder = (a, b) => a.lamport - b.lamport || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const atBottom = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
+const toBottom = () => scrollTo(0, document.documentElement.scrollHeight);
 
 function show(id) {
+  cur = id;
   for (const s of document.querySelectorAll('section')) s.className = s.id === id ? 'on' : '';
+  for (const b of document.querySelectorAll('nav button')) b.toggleAttribute('aria-current', b.dataset.s === id);
+  if (id in unread) unread[id] = 0;
+  if (id === 'chats' && open) dmUnread[open] = 0;
+  render(); if (id === 'feed' || (id === 'chats' && open)) toBottom(); else scrollTo(0, 0);
 }
+function openChat(id) { open = id; dmUnread[id] = 0; $('dmErr').textContent = ''; render(); toBottom(); $('dmText').focus(); }
+function closeChat() { open = null; render(); scrollTo(0, 0); }
+
+// Compose bars: Enter sends, button disabled while empty or too long, byte counter from 80% of the limit.
+function compose(inp) {
+  const n = bytes(inp.value), max = +inp.dataset.max;
+  $(inp.dataset.btn).disabled = !inp.value.trim() || n > max;
+  $(inp.dataset.count).textContent = n >= max * 0.8 ? n + ' / ' + max + ' bytes' : '';
+}
+for (const inp of document.querySelectorAll('[data-max]')) {
+  inp.oninput = () => compose(inp);
+  inp.onkeydown = e => { if (e.key === 'Enter' && !e.isComposing && !$(inp.dataset.btn).disabled) $(inp.dataset.btn).click(); };
+}
+const sendPost = () => send({ t: 'post', text: val('postText') }, 'postText', 'postErr');
+const sendDm = () => open && send({ t: 'dm', to: open, text: val('dmText') }, 'dmText', 'dmErr');
 
 // Stretch 2: downscale and re-encode until the JPEG fits one DM (39,999 bytes + 1 kind byte = MAX_DM_PLAINTEXT).
 async function photo(input) {
   const f = input.files[0]; input.value = '';
-  if (!f || !peer.value) return;
-  const to = peer.value, bmp = await createImageBitmap(f);
+  if (!f || !open) return;
+  const to = open, bmp = await createImageBitmap(f);
   const c = document.createElement('canvas');   // never shown, only used to re-encode
   let side = 640, q = 0.8, blob;
   for (;;) {
@@ -107,29 +236,32 @@ async function photo(input) {
     blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
     if (blob && blob.size <= 39999) break;
     if (q > 0.45) q -= 0.15; else { side = Math.round(side * 0.75); q = 0.8; }
-    if (side < 32) return alert('Photo could not be made small enough');
+    if (side < 32) { $('dmErr').textContent = 'Photo could not be made small enough'; return; }
   }
   let bin = '';
   for (const x of new Uint8Array(await blob.arrayBuffer())) bin += String.fromCharCode(x);
-  send({t:'dm', to, img: btoa(bin)});
+  send({ t: 'dm', to, img: btoa(bin) }, null, 'dmErr');
 }
 
-function send(cmd, clearId) {
+function send(cmd, clearId, errId) {
+  const fail = t => errId ? ($(errId).textContent = 'Not sent: ' + t) : alert('Not sent: ' + t);
   fetch('/api/cmd', { method: 'POST', body: JSON.stringify(cmd) })
     .then(r => {
-      if (!r.ok) return r.text().then(t => alert('Not sent: ' + t));
-      if (clearId) $(clearId).value = '';
+      if (!r.ok) return r.text().then(t => fail(r.status === 429 ? 'slow down' : t));
+      if (errId) $(errId).textContent = '';
+      if (clearId) { $(clearId).value = ''; compose($(clearId)); }
       // No event reports these back, so keep the local copy in step.
       if (cmd.t === 'name') S.self.name = cmd.name;
       if (cmd.t === 'debug') S.debug[cmd.flag] = cmd.on;
       render();
     })
-    .catch(e => alert('Not sent: ' + e));
+    .catch(e => fail(e));
 }
 
 function upsert(list, m) {
   const i = list.findIndex(x => x.id === m.id);
   if (i >= 0) list[i] = m; else list.push(m);
+  return i < 0;
 }
 
 function apply(ev) {
@@ -137,75 +269,118 @@ function apply(ev) {
   if (!S) return;
   if (ev.t === 'msg') {
     const m = ev.msg;
-    if (m.to === null) upsert(S.feed, m);
-    else { const p = m.mine ? m.to : m.from; upsert(S.dms[p] = S.dms[p] || [], m); }
+    if (m.to === null) { if (upsert(S.feed, m) && !m.mine && cur !== 'feed') unread.feed++; }
+    else {
+      const p = m.mine ? m.to : m.from;
+      if (upsert(S.dms[p] = S.dms[p] || [], m) && !m.mine && !(cur === 'chats' && open === p)) dmUnread[p] = (dmUnread[p] || 0) + 1;
+    }
   } else if (ev.t === 'status') {
     for (const list of [S.feed, ...Object.values(S.dms)])
       for (const m of list) if (m.id === ev.id) { m.status = ev.status; m.hops = ev.hops; m.via = ev.via; }
   } else if (ev.t === 'net') { S.contacts = ev.contacts; S.links = ev.links; }
-  else if (ev.t === 'sec') S.security.push(ev.event);
+  else if (ev.t === 'sec') { S.security.push(ev.event); if (cur !== 'security') unread.security++; }
 }
 
-function checkbox(checked, onchange) {
-  const td = el('td'), c = el('input'); c.type = 'checkbox'; c.checked = checked; c.onchange = () => onchange(c.checked);
-  td.appendChild(c); return td;
-}
+function badge(id, n) { $(id).textContent = n > 0 ? (n > 99 ? '99+' : n) : ''; }
 
+// Header and badges always; then only the visible section.
 function render() {
   if (!S) return;
-  $('me').textContent = S.self.name + ' (' + fp(S.self.id) + ')';
-  $('nlinks').textContent = S.links.length;
+  $('me').textContent = S.self.name + ' · ' + fp(S.self.id.slice(0, 8));
+  const nl = S.links.filter(l => l.authed).length;
+  $('nlinks').textContent = nl ? nl + (nl === 1 ? ' link' : ' links') : 'no links';
+  $('nlinks').classList.toggle('on', nl > 0);
+  badge('n-feed', unread.feed); badge('n-security', unread.security);
+  badge('n-chats', Object.values(dmUnread).reduce((a, b) => a + b, 0));
+  const keep = (cur === 'feed' || (cur === 'chats' && open)) && atBottom();
+  ({ feed: renderFeed, chats: renderChats, network: renderNetwork, security: renderSecurity })[cur]();
+  if (keep) toBottom();
+}
+
+function renderFeed() {
+  const posts = $('posts'); posts.replaceChildren();
+  const list = [...S.feed].sort(byOrder).slice(-MAX);
+  if (!list.length) posts.appendChild(el('li', 'No posts yet. Say hello to everyone nearby.', 'empty'));
+  for (const m of list) {
+    const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);  // 5.13: signer first, so guest text cannot pose as a sender
+    const who = el('div', name(m.from), 'who');
+    if (g) who.appendChild(el('span', 'guest of ' + name(m.from) + ': ' + g[1], 'tag'));
+    posts.appendChild(add(el('li', null, 'card'), who, el('div', g ? g[2] : m.text, 'txt'),
+      el('span', hhmm(m.tsMs) + (m.mine ? (status(m) ? ' · ' + status(m) : '') : ' · ' + route(m)), 'meta')));
+  }
+}
+
+function renderChats() {
+  $('chatList').hidden = !!open; $('convoView').hidden = !open;
+  if (open) return renderConvo();
+  // GROUPS: merge group conversations into this list once the protocol has them.
+  const ids = [...new Set([...S.contacts.map(c => c.id), ...Object.keys(S.dms)])];
+  const rows = ids.map(id => { const ms = S.dms[id] || []; return { id, last: ms.reduce((a, m) => !a || byOrder(a, m) < 0 ? m : a, null) }; })
+    .sort((a, b) => (b.last ? b.last.tsMs : -1) - (a.last ? a.last.tsMs : -1) || name(a.id).localeCompare(name(b.id)));
+  const ul = $('convos'); ul.replaceChildren();
+  if (!rows.length) ul.appendChild(el('li', 'No contacts yet. They appear when another phone is in range.', 'empty'));
+  for (const r of rows.slice(0, MAX)) {
+    const c = S.contacts.find(c => c.id === r.id) || {}, b = el('button', null, 'chat');
+    b.onclick = () => openChat(r.id);
+    const prev = r.last ? (r.last.mine ? 'You: ' : '') + (r.last.img ? 'Photo' : r.last.text) : 'No messages yet';
+    const n = el('span', dmUnread[r.id] ? String(dmUnread[r.id]) : '', 'n');
+    add(b, add(el('div', null, 'main'),
+      add(el('div', null, 'line'), el('b', name(r.id)), el('small', r.last ? hhmm(r.last.tsMs) : '')),
+      add(el('div', null, 'line'), el('span', prev, 'prev'), n),
+      el('small', route(c))));
+    ul.appendChild(add(el('li'), b));
+  }
+}
+
+function renderConvo() {
+  const c = S.contacts.find(c => c.id === open) || {};
+  $('chatName').textContent = name(open);
+  $('chatRoute').textContent = route(c) + (c.verified ? ' · verified' : '');
+  const ul = $('convo'); ul.replaceChildren();
+  for (const m of [...(S.dms[open] || [])].sort(byOrder).slice(-MAX)) {
+    const bub = el('div', null, 'bub');
+    // "/9j/" is base64 for FF D8 FF: show only real JPEGs, and only via a data: URL (no innerHTML)
+    if (m.img && m.img.startsWith('/9j/')) { const im = el('img'); im.src = 'data:image/jpeg;base64,' + m.img; im.alt = 'photo'; bub.appendChild(im); }
+    else bub.appendChild(el('span', m.text, 'txt'));
+    ul.appendChild(add(el('li', null, m.mine ? 'mine' : ''), bub,
+      el('span', hhmm(m.tsMs) + ' · ' + (m.mine ? status(m) : route(m)), 'meta')));
+  }
+}
+
+function sw(label, checked, onchange) {
+  const l = el('label', null, 'sw'), c = el('input'); c.type = 'checkbox'; c.checked = checked; c.onchange = () => onchange(c.checked);
+  return add(l, c, label);
+}
+
+function renderNetwork() {
   $('fp').textContent = fp(S.self.id);
   const qr = '/api/qr?text=' + encodeURIComponent('omesh:' + S.self.id);
   if ($('myQr').getAttribute('src') !== qr) $('myQr').src = qr;
   if (document.activeElement !== $('myName')) $('myName').value = S.self.name;
-
-  const posts = $('posts'); posts.replaceChildren();
-  for (const m of [...S.feed].sort(byOrder)) {
-    const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);  // 5.13: signer first, so guest text cannot pose as a sender
-    const li = el('li', g ? name(m.from) + ' [guest: ' + g[1] + ']: ' + g[2] : name(m.from) + ': ' + m.text);
-    if (!m.mine) { li.appendChild(el('br')); li.appendChild(el('small', route(m))); }
-    posts.appendChild(li);
-  }
-
-  const sel = peer.value;
-  peer.replaceChildren();
-  for (const c of S.contacts) { const o = el('option', c.name || c.id.slice(0, 8)); o.value = c.id; peer.appendChild(o); }
-  if (sel && S.contacts.some(c => c.id === sel)) peer.value = sel;
-  const convo = $('convo'); convo.replaceChildren();
-  for (const m of [...(S.dms[peer.value] || [])].sort(byOrder)) {
-    const li = el('li', (m.mine ? 'me' : name(m.from)) + ': ' + m.text);
-    // "/9j/" is base64 for FF D8 FF: show only real JPEGs, and only via a data: URL (no innerHTML)
-    if (m.img && m.img.startsWith('/9j/')) { const im = el('img'); im.src = 'data:image/jpeg;base64,' + m.img; im.alt = 'photo'; li.appendChild(im); }
-    else li.appendChild(el('br'));
-    li.appendChild(el('small', m.mine ? status(m) : route(m)));
-    convo.appendChild(li);
-  }
-
   const ct = $('contacts'); ct.replaceChildren();
-  for (const c of S.contacts) {
-    const tr = el('tr');
-    tr.appendChild(el('td', c.name));
-    tr.appendChild(el('td', fp(c.id)));
-    tr.appendChild(el('td', c.hops == null ? '-' : c.hops));
-    tr.appendChild(el('td', c.via ? name(c.via) : '-'));
-    tr.appendChild(el('td', c.linked ? 'yes' : 'no'));
-    tr.appendChild(checkbox(c.verified, on => send({ t: 'verify', id: c.id, on })));
-    tr.appendChild(checkbox(c.muted, on => send({ t: 'mute', id: c.id, on })));
-    ct.appendChild(tr);
+  if (!S.contacts.length) ct.appendChild(el('li', 'No contacts yet.', 'empty'));
+  for (const c of S.contacts.slice(0, MAX)) {
+    ct.appendChild(add(el('li', null, 'rowc'),
+      add(el('div', null, 'main'), el('b', c.name || c.id.slice(0, 8)), el('br'), el('span', fp(c.id), 'mono'), el('br'),
+        el('small', route(c) + ' · ' + (c.linked ? 'linked' : 'not linked'))),
+      sw('Verified', c.verified, on => send({ t: 'verify', id: c.id, on })),
+      sw('Muted', c.muted, on => send({ t: 'mute', id: c.id, on }))));
   }
   const lt = $('links'); lt.replaceChildren();
-  for (const l of S.links) {
-    const tr = el('tr');
-    tr.appendChild(el('td', l.transport));
-    tr.appendChild(el('td', l.peer ? name(l.peer) + ' (' + fp(l.peer) + ')' : l.link));
-    tr.appendChild(el('td', l.authed ? 'authenticated' : 'connecting'));
-    lt.appendChild(tr);
+  if (!S.links.length) lt.appendChild(el('li', 'No links.', 'empty'));
+  for (const l of S.links.slice(0, MAX)) {
+    lt.appendChild(add(el('li', null, 'rowc'), add(el('div', null, 'main'),
+      el('b', l.peer ? name(l.peer) : l.link), ' ', el('span', l.peer ? fp(l.peer) : '', 'mono'), el('br'),
+      el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting')))));
   }
+}
 
+function renderSecurity() {
   const sec = $('sec'); sec.replaceChildren();
-  for (const e of [...S.security].sort((a, b) => b.tsMs - a.tsMs)) {
-    sec.appendChild(el('li', new Date(e.tsMs).toLocaleTimeString() + ' ' + e.kind + ' ' + e.detail +
+  if (!S.security.length) sec.appendChild(el('li', 'No security events.', 'empty'));
+  for (const e of [...S.security].sort((a, b) => b.tsMs - a.tsMs).slice(0, MAX)) {
+    sec.appendChild(add(el('li', null, 'ev' + (BAD.includes(e.kind) ? ' bad' : '')),
+      el('small', new Date(e.tsMs).toLocaleTimeString() + ' '), el('b', e.kind), ' ' + e.detail +
       (e.src ? ' src=' + name(e.src) : '') + (e.link ? ' link=' + e.link : '')));
   }
   $('tamper').checked = S.debug.tamper;
@@ -221,12 +396,12 @@ function guest() {
     guestKey = key;
     const d = $('guest'); d.replaceChildren();
     if (!g) return;
-    d.appendChild(el('h3', 'Guest access'));
-    d.appendChild(el('p', 'PIN: ' + g.pin));
+    d.appendChild(el('h2', 'Guest access'));
+    d.appendChild(add(el('p', 'PIN: '), el('b', g.pin, 'mono')));
     for (const u of g.urls) {
-      const im = el('img'); im.width = im.height = 200; im.alt = 'QR code of ' + u;
+      const im = el('img', null, 'qr'); im.width = im.height = 200; im.alt = 'QR code of ' + u;
       im.src = '/api/qr?text=' + encodeURIComponent(u);
-      d.appendChild(im); d.appendChild(el('p', u));
+      d.appendChild(im); d.appendChild(el('p', u, 'mono'));
     }
   }).catch(() => {});
 }
@@ -234,10 +409,11 @@ setInterval(guest, 3000); guest();
 
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => $('conn').textContent = '';
+  ws.onopen = () => $('conn').hidden = true;
   ws.onmessage = e => { apply(JSON.parse(e.data)); render(); };
-  ws.onclose = () => { $('conn').textContent = '(reconnecting)'; setTimeout(connect, 2000); };
+  ws.onclose = () => { $('conn').hidden = false; setTimeout(connect, 2000); };
 }
+show('feed');
 connect();
 </script>
 </body>

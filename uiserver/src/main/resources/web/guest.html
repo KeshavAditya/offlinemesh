@@ -5,53 +5,93 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OfflineMesh guest</title>
 <style>
-body { font-family: system-ui, sans-serif; font-size: 16px; color: #000; background: #fff; margin: 8px; }
-input[type=text] { width: 100%; box-sizing: border-box; font-size: 16px; margin: 4px 0; }
-button { font-size: 16px; margin: 4px 4px 4px 0; }
-ul { list-style: none; padding: 0; }
-li { border-bottom: 1px solid #ccc; padding: 6px 0; }
-.grey { color: #666; font-size: 13px; }
+:root { --bg: #fff; --fg: #15171a; --mut: #5f6670; --line: #dcdfe4; --card: #f3f4f6; --acc: #0b62c4; --accfg: #fff; --red: #c62828; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111316; --fg: #e9eaec; --mut: #9aa1aa; --line: #2d3137; --card: #1d2025; --acc: #5aa2ff; --accfg: #08121f; --red: #ef6461; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+.wrap { max-width: 680px; margin: 0 auto; padding: 0 16px; }
+main { padding-bottom: 136px; }
+header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+.top b { flex: 1; font-size: 17px; }
+.pill { font-size: 13px; padding: 2px 10px; border-radius: 12px; border: 1px solid var(--line); color: var(--mut); }
+.pill:empty { display: none; }
+.mut { color: var(--mut); font-size: 13px; }
+ul { list-style: none; padding: 0; margin: 0; }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 8px 0; }
+.who { font-weight: 600; font-size: 14px; }
+.tag { font-size: 12px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--mut); margin-left: 4px; font-weight: 400; }
+.txt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.compose { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; padding: 8px 16px; background: var(--bg); display: flex; flex-direction: column; gap: 8px; box-shadow: 0 -2px 6px rgba(0,0,0,.06); }
+.row { display: flex; gap: 8px; }
+input[type=text] { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+input[type=text]:focus, button:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+button { font: inherit; min-height: 44px; padding: 0 16px; border: 1px solid var(--acc); border-radius: 10px; background: var(--acc); color: var(--accfg); cursor: pointer; transition: background-color .15s; }
+button:active { opacity: .85; }
+.empty { color: var(--mut); padding: 16px 0; text-align: center; }
 </style>
 </head>
 <body>
-<header>OfflineMesh guest <span id="err" class="grey"></span></header>
-<p class="grey">Your posts are signed by the host phone, not by you. Guests have no keys and no direct messages.</p>
-<input type="text" id="name" placeholder="Your name" maxlength="20">
-<input type="text" id="text" placeholder="Write a post">
-<button id="post">Post</button>
+<header><div class="wrap top"><b>OfflineMesh guest</b> <span id="err" class="pill"></span></div></header>
+<main class="wrap">
+<p class="mut">Your posts are signed by the host phone, not by you. Guests have no keys and no direct messages.</p>
 <ul id="posts"></ul>
+<div class="compose">
+  <input type="text" id="name" placeholder="Your name" maxlength="20" aria-label="Your name">
+  <div class="row">
+    <input type="text" id="text" placeholder="Write a post" aria-label="Post">
+    <button id="post">Post</button>
+  </div>
+</div>
+</main>
 <script>
 const $ = id => document.getElementById(id);
 const pin = encodeURIComponent(new URLSearchParams(location.search).get('pin') || '');
 try { $('name').value = localStorage.getItem('guestName') || ''; } catch (e) {}
 
-function line(m) {
-  const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);
-  return g ? m.from.slice(0, 8) + ' [guest: ' + g[1] + ']: ' + g[2] : m.from.slice(0, 8) + ': ' + m.text;
+// Only textContent: feed text is untrusted. Signer first, so guest text cannot pose as a sender (5.13).
+function card(m) {
+  const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text), host = m.from.slice(0, 8);
+  const li = document.createElement('li'), who = document.createElement('div'), txt = document.createElement('div');
+  li.className = 'card'; who.className = 'who'; txt.className = 'txt';
+  who.textContent = host;
+  if (g) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = 'guest of ' + host + ': ' + g[1]; who.appendChild(t); }
+  txt.textContent = g ? g[2] : m.text;
+  li.append(who, txt);
+  return li;
 }
 
+let last = '';
 async function poll() {
   try {
     const r = await fetch('/api/feed?pin=' + pin);
     if (!r.ok) { $('err').textContent = r.status === 403 ? 'wrong PIN' : 'error ' + r.status; return; }
-    const feed = await r.json();
-    $('err').textContent = '';
-    $('posts').replaceChildren(...feed.slice().reverse().map(m => {
-      const li = document.createElement('li'); li.textContent = line(m); return li;
-    }));
+    const feed = await r.json(), key = JSON.stringify(feed);
+    if ($('err').textContent !== 'sent') $('err').textContent = '';
+    if (key === last) return;
+    last = key;
+    const bottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
+    // feed arrives oldest first; newest at the bottom, at most the last 200
+    const list = feed.slice(-200).map(card);
+    $('posts').replaceChildren(...(list.length ? list : [Object.assign(document.createElement('li'), { className: 'empty', textContent: 'No posts yet.' })]));
+    if (bottom) scrollTo(0, document.documentElement.scrollHeight);
   } catch (e) { $('err').textContent = 'offline'; }
 }
 
-$('post').onclick = async () => {
+async function post() {
   const name = $('name').value.trim(), text = $('text').value.trim();
   if (!name || !text) { $('err').textContent = 'enter a name and a post'; return; }
   try { localStorage.setItem('guestName', name); } catch (e) {}
   try {
     const r = await fetch('/api/guest-post?pin=' + pin, { method: 'POST', body: JSON.stringify({ name, text }) });
-    if (r.ok) { $('text').value = ''; $('err').textContent = 'sent'; poll(); }
-    else $('err').textContent = await r.text();
+    if (r.ok) { $('text').value = ''; $('err').textContent = 'sent'; setTimeout(() => { if ($('err').textContent === 'sent') $('err').textContent = ''; }, 2000); poll(); }
+    else $('err').textContent = r.status === 429 ? 'slow down' : await r.text();
   } catch (e) { $('err').textContent = 'offline'; }
-};
+}
+$('post').onclick = post;
+$('text').onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) post(); };
 
 poll();
 setInterval(poll, 2000);
