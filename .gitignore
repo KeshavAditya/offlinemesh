@@ -8,3 +8,5 @@ shots/
 .claude/settings.local.json
 build.log
 *.log
+.claude/worktrees/
+.playwright-mcp/

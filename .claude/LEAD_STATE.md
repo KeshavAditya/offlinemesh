@@ -35,3 +35,5 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 ## Log
 - 2026-11-14 ~14:00 lead started. P1 helper (mesh-core) launched on main directly (sole helper). Next: P2 = core helpers in sequence (codec/crypto/pow/identity -> security/router/sync/store/node -> sim tests), in parallel android spike (worktree) + UI on fake node (worktree).
 - 14:20 P1 done (cf539b5..7d9d596): AGP 8.11.0, Kotlin 2.0.21, Ktor 3.0.3, kx-ser 1.7.3. Stubs core/src/main/kotlin/mesh/core/Api.kt. Launching P2: core-1 (constants/identity/codec/crypto/pow), android spike, UI fake node — all worktrees.
+- 14:25 P2 launched: core-1 (identity/codec/crypto/pow+10.1), android BLE spike (emulators meshA/B), ui (UiServer+index.html on fake node). All worktrees. Next core helpers: core-2 security/router/sync/store/node, core-3 SimNetwork + 10.2 tests.
+- 14:35 core-1 done 5aed3cb (P-256 JDK crypto, 11 unit tests). core-2 launched: security/router/sync/store/node + SimNetwork + 10.2 #1-4,8. core-3 next: red-team 5.12 + 10.2 #5-7,9-11.
