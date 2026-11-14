@@ -33,7 +33,7 @@ enum class Attack { FLOOD, SPOOF, REPLAY }
 // UI-facing data, field names match the JSON UI protocol in section 6 so uiserver can encode them directly.
 
 enum class MsgStatus { QUEUED, SENT, DELIVERED, RECEIVED }
-enum class SecKind { MALFORMED, BAD_POW, BAD_SIGNATURE, STALE, RATE_EQUIVOCATION, LINK_FLOOD, LINK_CLOSED, BANNED }
+enum class SecKind { MALFORMED, BAD_POW, BAD_SIGNATURE, STALE, RATE_EQUIVOCATION, LINK_FLOOD, LINK_CLOSED, BANNED, ROUTE_FAILED }
 
 @Serializable
 data class Msg(
@@ -51,6 +51,7 @@ data class Msg(
     val group: String? = null,                         // 13.2: groupId hex for a group message (then to is null and id is senderId hex + groupMsgId hex)
     val delivered: Int? = null,                        // 13.2: own group messages only, fan-out DMs ACKed so far
     val total: Int? = null,                            // 13.2: own group messages only, number of other members
+    val rerouteVia: String? = null,                    // U10: own DMs only, node id of the backup first hop after a missed ACK
 )
 
 @Serializable

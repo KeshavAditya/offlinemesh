@@ -38,3 +38,4 @@
 [ui] [16:10] done: 13.1/13.2 UI side: group/group-members/gmsg commands, group chats in index.html (27 KB), NODES=N in run-3-desktop.sh, e2e items 7+8; e2e 3 nodes PASS 1-7, 5 nodes PASS 1-8
 [qa] [16:13] done: docs for section 13 (THREATS group rows + limits, DEMO optional group step, NUMBERS 5-node e2e + group cost + TODO 4-emulator row, DEVPOST groups/any phones/UI)
 [core] [16:45] v2 done: U11 forwarding bench (./gradlew :core:bench, NAIVE+CURRENT, 4 topologies + DROP_RELAY room) writes docs/NUMBERS.md; room: sends/post 88.5 vs 65.9, tx/DM 98.9 vs 5.0; core tests green
+[core] [16:56] v2 done: U10 DM failover (best+backup route on a different first link, ACK timer 3 s + 1 s/hop, resend same bytes on backup else flood once, max 2, ROUTE_FAILED, Msg.rerouteVia); room DROP_RELAY p95 1951 -> 439 ms, p99 14258 -> 5270 ms, delivery 0.993 both; 66 core tests green

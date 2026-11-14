@@ -59,6 +59,8 @@ class MeshNode(
     internal val debug = HashSet<DebugFlag>()   // 5.12 hook point
     /** U11 bench only (internal, never set by shipped code): NAIVE forwards every envelope to every link but the one it came on. */
     internal var naiveFlood = false
+    /** U10 DM failover; the bench turns it off for its without-U10 baseline. */
+    internal var failover = true
 
     /** Runs PoW mining off the loop. Simulator tests swap in an inline runner to stay in virtual time. */
     internal var offLoop: (() -> Unit) -> Unit = { worker.execute(it) }
@@ -313,8 +315,8 @@ class MeshNode(
     private fun emit(ev: MeshEvent) = listeners.forEach { try { it(ev) } catch (e: Exception) { e.printStackTrace() } }
     private fun emitNet() = emit(MeshEvent.NetworkChanged(contactList(), linkList()))
 
-    private fun sec(kind: SecKind, detail: String, l: Link?, src: String?) {
-        val s = Sec(now(), kind, detail, l?.id, src)
+    private fun sec(kind: SecKind, detail: String, l: Link?, src: String?, link: LinkId? = l?.id) {
+        val s = Sec(now(), kind, detail, link, src)
         secLog.addLast(s)
         if (secLog.size > 500) secLog.removeFirst()
         emit(MeshEvent.SecurityLogged(s))
@@ -403,7 +405,8 @@ class MeshNode(
     private fun ingress(l: Link, e: Envelope) {
         val mid = hex(e.msgId)
         val asked = l.wanted.remove(mid)   // before any early return, so dropped envelopes cannot fill the 512 cap for good
-        seen[mid]?.let { it.have += l.id; return }
+        // U10: duplicates teach backup routes (same msgId means same signed core, so src is genuine).
+        seen[mid]?.let { it.have += l.id; routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false); return }
         if (guard.accepted.containsKey(mid)) return   // replay of a POST/DM already evicted from the seen LRU
         val src = hex(e.srcId)
         val now = now()
@@ -636,7 +639,31 @@ class MeshNode(
         store.put(e, now(), relayOnly = false, log = true)
         if (gm == null) addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
         else if (gm.isNotEmpty()) fanout[mid] = gm
-        targets(e, s).forEach { give(it, e) }
+        val t = targets(e, s)
+        t.forEach { give(it, e) }
+        if (e.type == EnvType.DM && failover) watchAck(e, routeUsed(dst!!, t), 0)
+    }
+
+    /** U10: the fresh route [t] went out on as a unicast, or null when it was flooded. */
+    private fun routeUsed(dst: String, t: List<Link>) = routes.fresh(dst, now())?.takeIf { r -> t.size == 1 && t[0].id == r.link }
+
+    /**
+     * U10: an own DM with no valid ACK within 3 s + 1 s per route hop. Avoid its first link to that destination for
+     * ROUTE_TTL and log ROUTE_FAILED, then resend the same bytes on the backup route, else flood once; at most 2 resends.
+     * Nothing is banned: a dropped link and a black-hole relay look the same. Only the first hop is sure to differ.
+     */
+    private fun watchAck(e: Envelope, r: Route?, resends: Int): Unit = later(C.ACK_BASE_MS + C.ACK_PER_HOP_MS * (r?.hops ?: C.TTL_DM)) {
+        val mid = hex(e.msgId)
+        val s = seen[mid] ?: return@later
+        if (s.acked) return@later
+        val dst = hex(e.dst)
+        if (r != null) { routes.avoid(dst, r.link, now()); sec(SecKind.ROUTE_FAILED, "no ACK for msg $mid", null, dst, r.link) }
+        if (resends >= C.MAX_DM_RESENDS) return@later
+        val t = targets(e, s)
+        t.forEach { give(it, e) }
+        val b = routeUsed(dst, t)
+        if (b != null) msgs[mid]?.let { msgs[mid] = it.copy(rerouteVia = links[b.link]?.peer) }
+        watchAck(e, b, resends + 1)
     }
 
     private fun sendPresence() {

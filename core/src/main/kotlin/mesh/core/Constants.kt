@@ -26,7 +26,10 @@ object C {
     const val SYNC_INTERVAL_MS = 15_000L
     const val RELAY_STORE_CAP = 256
     const val SEEN_CAP = 4_096
-    const val ACK_TIMEOUT_MS = 5_000L
+    // U10: own DM failover; ACK wait is ACK_BASE_MS + ACK_PER_HOP_MS x route hops.
+    const val ACK_BASE_MS = 3_000L
+    const val ACK_PER_HOP_MS = 1_000L
+    const val MAX_DM_RESENDS = 2
 
     const val BUCKET_SIZE = 30
     const val BUCKET_WINDOW_MS = 10_000L
