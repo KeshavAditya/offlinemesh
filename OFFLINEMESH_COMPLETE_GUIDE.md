@@ -505,6 +505,7 @@ Three Android phones with mobile data and Wi-Fi internet off.
 | 5 | Android app: BLE L2CAP transport, foreground service, WebView shell | `app/` |
 | 6 | Red-team buttons (tamper, flood, spoof, replay) and security log | `core/`, `uiserver/` |
 | 7 | Message log on disk so history survives restart | `core/` |
+| 8 | Owner additions: any number of phones, group chats, nicer UI (section 13) | `core/`, `uiserver/`, `app/`, `scripts/` |
 
 #### Stretch (only after Gate 3, in this order)
 
@@ -835,6 +836,7 @@ class MeshNode(
 
 sealed interface MeshEvent
 // MessageAdded(msg), StatusChanged(id, status, hops, via), NetworkChanged(contacts, links), SecurityLogged(event)
+// Group additions (createGroup, setGroupMembers, sendGroup, GroupChanged, GroupStatusChanged): section 13.2
 ```
 
 #### UI protocol (JSON, same shapes over WebSocket `/ws` and HTTP)
@@ -878,7 +880,7 @@ The server binds **127.0.0.1 only**. Anything that reaches this port can send me
 
 One file, `uiserver/src/main/resources/web/index.html`, with inline CSS and JavaScript. No frameworks, no build step, no external requests.
 
-**Look:** system font, black text on white, default buttons and inputs, one-pixel grey borders. No dark theme, gradients, animations, icons, canvas or charts. CSS stays under about 40 lines. It must be readable on a phone held at arm's length: 16 px base font, full-width inputs.
+**Look (replaced by 13.3; kept for history):** system font, black text on white, default buttons and inputs, one-pixel grey borders. No dark theme, gradients, animations, icons, canvas or charts. CSS stays under about 40 lines. It must be readable on a phone held at arm's length: 16 px base font, full-width inputs.
 
 **Layout:** a header line and four sections switched by four plain buttons.
 
@@ -1095,6 +1097,82 @@ The Android Emulator has a shared virtual Bluetooth radio (netsim): every emulat
 - **Local UI port:** another app on the same phone could talk to 127.0.0.1:8080.
 - **Desk demo uses software muting** to force two hops.
 - **Android only.**
+
+---
+
+### 13. Owner additions (2026-11-14, after the first build): any number of phones, group chats, a nicer UI
+
+The owner asked for these after acceptance 1 to 6 passed. They come after everything above and must not break it: `e2e.sh 8081 8082 8083` items 1 to 6 still pass, and the desktop fallback still works.
+
+#### 13.1 Any number of phones
+
+The protocol already works for any number of nodes (10.2 #9 runs 25 nodes; the redteam suite runs 50). Each phone keeps at most `MAX_LINKS` (5) direct links; more phones simply form more hops. What changes:
+
+- `scripts/run-3-desktop.sh`: optional `NODES=N` (default 3, max 10). Nodes named A, B, C, D, ... wired in a line, UIs on `UI_BASE` to `UI_BASE+N−1`. With `NODES` unset it behaves exactly as before.
+- `scripts/e2e.sh` accepts any number of ports (3 or more). Items 1 to 6 use the first three, unchanged. New items, run **before item 5** (item 5 bans the first node for 10 minutes):
+  - **7. Group:** node 1 creates a group of every node, sends a group message; every other node shows it once in that group with the same id; node 1 shows `Delivered to N−1 of N−1` within 30 s.
+  - **8. Reach:** a post from node 1 reaches every node once (only checked when more than 3 ports are given).
+- `deploy-all.sh` and `forward-ui.sh` already handle every connected device; keep them that way and print the serial→port map.
+- Emulators: a fourth AVD `meshD` may be used for item 8 if the laptop has the RAM; otherwise test N > 3 on desktop nodes.
+- Acceptance (section 1) gains: **7.** With 3 or more phones, a group of all phones: a message from one phone reaches every other phone and the sender shows "Delivered to N−1 of N−1".
+
+#### 13.2 Group chats (fan-out over DMs)
+
+A group is an 8-byte random `groupId` (shown as hex), a name (32 bytes or less), an owner (the creator's NodeId) and a member list of 16 NodeIds or fewer, including the owner. Groups exist only on member devices.
+
+**No new envelope type, frame, crypto or ingress rule.** Every group message is sent as one ordinary DM (5.3, 5.4) to each other member, so relays see only DMs and each copy is end-to-end encrypted and ACKed on its own. DM plaintext `kind` gains two values:
+
+| kind | Name | Data after the kind byte |
+|---|---|---|
+| 2 | GROUP_INVITE | `8B groupId` `u8 nameLen` `name` `u8 count` then `count` × (`u8 pubLen` `pub`) |
+| 3 | GROUP_TEXT | `8B groupId` `8B groupMsgId` then UTF-8 text, 1,000 bytes or less |
+
+- **Create:** the owner sends GROUP_INVITE to every other member. The invite carries each member's public key, so every member can encrypt to every other member at once; member ids are derived from the keys (5.1), so a key cannot be swapped for another id. Members learned this way become unverified contacts if they were unknown.
+- **Membership changes:** only the owner can change the list, by sending a new GROUP_INVITE to every old and new member. A receiver accepts an invite for a new `groupId` from anyone (the sender must be in the list and be the owner), and for an existing group only from its owner. A member left out of the new list removes the group's live state, keeps its history, and gets no further messages because nobody sends to it.
+- **Send:** pick a random `groupMsgId`, send GROUP_TEXT as a DM to each other member. The sender shows one message, not N−1. Its status is `Delivered to k of n`, counting ACKs of the fan-out DMs.
+- **Receive:** show GROUP_TEXT only if the group is known and the sender is a member; otherwise drop it silently. The UI id of a group message is `groupMsgId`, the same on every member.
+- **Persistence:** invites and group texts are DMs, so replaying `messages.log` (5.11) rebuilds groups and their history. Nothing new on disk.
+- **Limits:** a group message costs one DM (with its own PoW) per other member; 16 members keeps that small. Relays can see that one source sent DMs to several ids at the same moment. State both in `docs/THREATS.md`.
+
+**Interface additions (section 6 is extended by these, same rules as section 6):**
+
+```kotlin
+// MeshNode
+fun createGroup(name: String, members: List<String /* nodeId hex */>): String   // returns groupId hex
+fun setGroupMembers(groupId: String, members: List<String>)                    // owner only, else ignored
+fun sendGroup(groupId: String, text: String)
+// MeshEvent: GroupChanged(group), GroupStatusChanged(groupMsgId, delivered, total)
+```
+
+UI protocol: snapshot gains `"groups":[{"id","name","owner","members":["<id>",...]}]` and `"gdms":{"<groupId>":[Msg]}`. `Msg` gains `"group"` (groupId, null otherwise) and, on own group messages, `"delivered"` and `"total"`. New server events `{"t":"group","group":{...}}` and `{"t":"gstatus","id":"<groupMsgId>","delivered":k,"total":n}`; group messages arrive as normal `{"t":"msg"}` events. New commands `{"t":"group","name":"...","members":["<id>",...]}`, `{"t":"group-members","id":"<gid>","members":[...]}`, `{"t":"gmsg","group":"<gid>","text":"..."}`.
+
+**Tests (add to 10.2):**
+
+| # | Scenario | Must hold |
+|---|---|---|
+| 12 | Random connected graph, 10 nodes; A creates a group {A, D, G, J} and sends | D, G, J each emit one `MessageAdded` with that group and the same `groupMsgId`; no other node emits `MessageAdded`; A ends at delivered 3 of 3 |
+| 13 | D (a member, not the owner) sends to the group | A, G and J receive it once |
+| 14 | GROUP_TEXT from a non-member; GROUP_INVITE change from a non-owner; owner removes J then sends | first two ignored; J receives nothing after removal |
+| 15 | A member restarts | its groups and group history come back from `messages.log` |
+
+**Android:** group messages raise the same notification as DMs, titled with the group name, and inline reply sends to the group.
+
+#### 13.3 UI refresh (replaces the **Look** paragraph of section 7)
+
+Layout, the four sections and the protocol of section 7 stay, except that **Messages** becomes **Chats** and lists DMs and groups together. The page stays light:
+
+- Still one file, `index.html` (and `guest.html` in the same style), with inline CSS and JavaScript. No frameworks, no build step, no web fonts, no icon files, no external requests. Under about 60 KB per page; CSS under about 150 lines.
+- **Look:** system font stack, 16 px base, spacing on an 8 px grid, content max 680 px wide and centred. CSS variables for colours with a light and a dark set chosen by `prefers-color-scheme`, no toggle. One accent colour. 1 px borders, 8 to 12 px corner radius. No gradients, no shadows beyond one subtle one on the compose bar, no animations except a 150 ms colour change on press. Text or Unicode only for symbols (✓, ✓✓, •).
+- **Header:** sticky; app name, my name and short fingerprint, a links pill (accent with "2 links" when linked, grey "no links" otherwise).
+- **Tabs:** Feed, Chats, Network, Security with unread counts. Bottom tab bar on screens narrower than 600 px, top bar on wider ones. Buttons and tabs at least 44 px tall.
+- **Chats:** a list of conversations (contact or group name, last message preview, time, unread count, `2 hops via B` for DMs). Tapping one opens it full width with a back button. A **New group** button opens a form: name plus a checkbox list of known contacts. The group view shows its members, and for the owner, add/remove.
+- **Messages:** bubbles, mine on the right with the accent colour, theirs on the left in a neutral colour. In groups, the sender's name above their bubble. A small grey line under each bubble: time, `2 hops via B`, and on mine the status: `Queued •`, `Sent ✓`, `Delivered ✓✓`, `Delivered to 3 of 4` for groups. A compose bar pinned to the bottom; Enter sends; the Send button is disabled while empty; a byte counter appears near the 1,000-byte limit; "slow down" shows inline when the node refuses a post.
+- **Feed:** posts as cards, newest at the bottom, auto-scroll only if already at the bottom. `guest of B` shown as a small tag.
+- **Network:** contacts as rows with Verified and Muted switches, fingerprints in monospace groups of four, links below. The QR code and guest PIN stay where they are.
+- **Security:** events as rows with a coloured left border (red for `BAD_SIGNATURE`, `BANNED`, `RATE_EQUIVOCATION`; amber for the rest), and a clearly framed "Demo attacks" box.
+- A thin "Reconnecting…" bar while the WebSocket is down (it still retries every 2 s and re-renders from the snapshot).
+- **Speed on the A52s WebView:** no virtual DOM; re-render only the visible section; render at most the last 200 items of any list.
+- Keep every element id or text that `e2e.sh` or the app relies on, or update them in the same commit.
 
 ---
 

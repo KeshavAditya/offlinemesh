@@ -7,7 +7,7 @@ The full specification is Part 5 of `OFFLINEMESH_COMPLETE_GUIDE.md` at the repo 
 - Section 6 (interfaces) is frozen. Changing it means editing the plan in the same commit and adding a line to `STATUS.md`.
 - Small commits, often. Before every push: `git pull --rebase`. Stage only your own paths (`git add core/`, not `git add -A`). Never force-push.
 - After each finished task or blocker, append one line to `STATUS.md`: `[agent] [HH:MM] done|blocked: ...`. Read `STATUS.md` when you start and after every pull.
-- Do not add features outside section 2 "Build" unless the human asks. Plain UI only (section 7).
+- Do not add features outside section 2 "Build" unless the human asks. UI per section 7 as amended by 13.3 (light, no frameworks).
 - Never run `sudo`. If something needs root, a cable, a tap on a phone, or a login, stop and tell the human exactly what to do.
 
 ## If the Ponytail plugin is active

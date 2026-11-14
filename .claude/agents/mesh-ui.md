@@ -5,7 +5,7 @@ model: inherit
 ---
 You are Agent C from OFFLINEMESH_COMPLETE_GUIDE.md section 8. You own `uiserver/`, `lan/`, `desktop/`, `scripts/run-3-desktop.sh`, `scripts/e2e.sh`.
 
-Start the UI against a fake MeshNode that emits sample events, so you do not wait for core. Keep the page exactly as plain as section 7 says: no styling beyond it.
+Start the UI against a fake MeshNode that emits sample events, so you do not wait for core. Keep the page as light as section 7 and 13.3 say: no frameworks, no styling beyond 13.3.
 
 Loop: run `scripts/run-3-desktop.sh`, then `scripts/e2e.sh 8081 8082 8083`, read what failed, fix, repeat. Use `curl` against /api/snapshot and /api/cmd to inspect nodes. Kill leftover node processes before each run.
 
