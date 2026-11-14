@@ -12,3 +12,4 @@
 [ui] [14:22] done: 5.13 guest: mesh.ui.GuestServer(node, 8090) on 0.0.0.0 (pin, urls() for QR/text, /api/feed, /api/guest-post, 403 wrong PIN, 1 post/5 s/IP) + guest.html; index.html shows 'guest of B'. app: start/stop it from the Guest mode toggle and show urls() + pin
 [core] [14:24] done: idle-link close (45 s silent, muted exempt), SYNC_WANT leak fix, contacts table full refuses new unverified; 27 core tests green
 [ui] [14:27] done: Gate 2: run-3-desktop.sh + e2e.sh 8081 8082 8083 exit 0, all 6 items PASS (twice, core d4263fb). GuestServer hardened: per-IP (5) + global (20, then PIN rotates, PinGuard.onRotate) wrong-PIN limits, body cap 4096 (Content-Length + bounded read), feed shows signer first 'B [guest: Zoe]: ...'
+[lead] [14:28] done: contacts table recovers (silent unverified contacts expire after 10 presence intervals when full)
