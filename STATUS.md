@@ -35,3 +35,4 @@
 [core] [15:58] done: 13.2 group hardening (owner-bound gid+salt, no contacts from invites, 32/4 group caps, dedup on sender+groupMsgId); GroupTest t16-t19; core 59 tests green
 [core] [16:03] done: 13.2 full group table evicts oldest unverified-owner group; verified owners always admitted; GroupTest t18b; core 60 tests green
 [core] [16:09] done: group eviction spares groups I posted in (flag rebuilt on replay); verified invites hard-capped at 64 (13.2); 63 core tests green
+[ui] [16:10] done: 13.1/13.2 UI side: group/group-members/gmsg commands, group chats in index.html (27 KB), NODES=N in run-3-desktop.sh, e2e items 7+8; e2e 3 nodes PASS 1-7, 5 nodes PASS 1-8

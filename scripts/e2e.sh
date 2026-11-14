@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Acceptance checks 1-6 (plan section 1) against three running nodes, driven over their UI ports with curl + jq.
-#   scripts/e2e.sh 8081 8082 8083      (desktop nodes from run-3-desktop.sh, or phones through adb forward)
+# Acceptance checks 1-6 (plan section 1) against three running nodes, driven over their UI ports with curl + jq,
+# plus 7 (group of every node) and, with more than 3 ports, 8 (a post reaches every node) from 13.1.
+#   scripts/e2e.sh 8081 8082 8083 [more ports...]   (desktop nodes from run-3-desktop.sh, or phones through adb forward)
 # A and C are muted toward each other first (5.9) so every A<->C message must go through B.
 # Prints PASS/FAIL per item; exits 1 if any item fails.
 set -u
-[ $# -eq 3 ] || { echo "usage: $0 <portA> <portB> <portC>"; exit 2; }
-PA=$1 PB=$2 PC=$3
+[ $# -ge 3 ] || { echo "usage: $0 <portA> <portB> <portC> [more ports...]"; exit 2; }
+PA=$1 PB=$2 PC=$3 PORTS=("$@")
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_B="${E2E_LOG_B:-$ROOT/.mesh-run/B.log}"   # B's log, checked for plaintext when present (desktop run)
 T=${E2E_TIMEOUT:-90}                           # seconds per wait; PoW mining is slow on phones
@@ -26,10 +27,11 @@ feed_count() { val "$1" --arg t "$2" '[.feed[] | select(.text == $t)] | length';
 FAILED=0
 result() { if [ "$2" = ok ]; then echo "PASS $1"; else echo "FAIL $1: $2"; FAILED=1; fi; }
 
-IA=$(val $PA .self.id); IB=$(val $PB .self.id); IC=$(val $PC .self.id)
-echo "A=$IA B=$IB C=$IC"
-for id in "$IA" "$IB" "$IC"; do
-    [ ${#id} -eq 16 ] || { for i in 1 2 3 4 5 6; do result $i "node ids missing (is the core running?)"; done; exit 1; }
+IDS=(); for p in "${PORTS[@]}"; do IDS+=("$(val $p .self.id)"); done
+IA=${IDS[0]} IB=${IDS[1]} IC=${IDS[2]}
+echo "A=$IA B=$IB C=$IC${IDS[3]:+ +$(($# - 3)) more}"
+for id in "${IDS[@]}"; do
+    [ ${#id} -eq 16 ] || { for i in 1 2 3 4 5 6 7; do result $i "node ids missing (is the core running?)"; done; exit 1; }
 done
 N=$RANDOM$$
 cmd $PA '{"t":"name","name":"A"}'; cmd $PB '{"t":"name","name":"B"}'; cmd $PC '{"t":"name","name":"C"}'
@@ -66,6 +68,57 @@ if wait_until $T on_both; then
     b=$(feed_count $PB "$T3"); c=$(feed_count $PC "$T3")
     if [ "$b" = 1 ] && [ "$c" = 1 ]; then result 3 ok; else result 3 "count B=$b C=$c"; fi
 else result 3 "post did not reach B and C (B=$(feed_count $PB "$T3") C=$(feed_count $PC "$T3"))"; fi
+
+# 7. (13.1, before 5 and 6 so no ban or mute is in the way) A makes a group of every node and sends to it;
+# every other node shows it once in that group with A's id for it; A shows delivered N-1 of N-1 within 30 s.
+T7="e2e group $N"; NM=$(($# - 1))
+OTHERS=$(printf '"%s",' "${IDS[@]:1}"); OTHERS="[${OTHERS%,}]"
+knows_all() { q $PA --argjson o "$OTHERS" '[.contacts[].id] as $c | all($o[]; . as $x | $c | index($x))'; }
+gid() { val "$1" --arg n "$T7" 'first(.groups[] | select(.name == $n) | .id) // empty'; }
+all_have_group() { local p; for p in "${PORTS[@]:1}"; do [ "$(gid $p)" = "$G7" ] || return 1; done; }
+gcount() { val "$1" --arg g "$G7" --arg t "$T7" --arg i "$M7" '[.gdms[$g][]? | select(.text == $t and .id == $i)] | length'; }
+all_got() { local p; for p in "${PORTS[@]:1}"; do [ "$(gcount $p)" -ge 1 ] || return 1; done; }
+g_delivered() { q $PA --arg i "$M7" --argjson n $NM 'any(.gdms[][]; .id == $i and .delivered == $n and .total == $n)'; }
+has_gid() { [ -n "$(gid $PA)" ]; }
+mine7() { val $PA --arg g "$G7" --arg t "$T7" 'first(.gdms[$g][]? | select(.text == $t and .mine) | .id) // empty'; }
+has_m7() { [ -n "$(mine7)" ]; }
+G7=; M7=
+if ! wait_until $T knows_all; then r7="A never learned every node as a contact"
+else
+    cmd $PA "{\"t\":\"group\",\"name\":\"$T7\",\"members\":$OTHERS}"
+    wait_until 10 has_gid; G7=$(gid $PA)
+    if [ -z "$G7" ]; then r7="group not in A's snapshot"
+    elif ! wait_until $T all_have_group; then r7="the invite did not reach every node"
+    else
+        cmd $PA "{\"t\":\"gmsg\",\"group\":\"$G7\",\"text\":\"$T7\"}"
+        s=$SECONDS
+        wait_until 10 has_m7; M7=$(mine7)
+        if [ ${#M7} -ne 32 ]; then r7="A shows no 32-hex id for its group message: '$M7'"
+        elif ! wait_until $T all_got; then r7="not on every node with id $M7"
+        elif ! wait_until $((30 - (SECONDS - s))) g_delivered; then
+            r7="A not delivered $NM of $NM in 30 s: $(val $PA --arg i "$M7" 'first(.gdms[][] | select(.id == $i)) | "\(.delivered) of \(.total)"')"
+        else
+            sleep 3; r7=ok
+            for p in "${PORTS[@]:1}"; do c=$(gcount $p); [ "$c" = 1 ] || r7="node on :$p shows it $c times"; done
+            echo "  item 7: delivered to $NM of $NM in $((SECONDS - s - 3)) s"
+        fi
+    fi
+fi
+result 7 "$r7"
+
+# 8. (13.1, only with more than 3 ports) a post from A reaches every node exactly once.
+if [ $# -gt 3 ]; then
+    T8="e2e reach $N"
+    cmd $PA "{\"t\":\"post\",\"text\":\"$T8\"}"
+    on_all() { local p; for p in "${PORTS[@]:1}"; do [ "$(feed_count $p "$T8")" -ge 1 ] || return 1; done; }
+    if wait_until $T on_all; then
+        sleep 3; r8=ok
+        for p in "${PORTS[@]:1}"; do c=$(feed_count $p "$T8"); [ "$c" = 1 ] || r8="node on :$p shows it $c times"; done
+    else
+        r8="missing on:"; for p in "${PORTS[@]:1}"; do [ "$(feed_count $p "$T8")" -ge 1 ] || r8="$r8 :$p"; done
+    fi
+    result 8 "$r8"
+fi
 
 # 6. (run before 5, which bans A on B) A posts while C is cut off; after reconnecting C has it within 20 s.
 T6="e2e partition $N"
