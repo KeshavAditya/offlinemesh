@@ -48,6 +48,7 @@ class MeshNode(
     private val verified = HashSet<String>()
     private val msgs = LinkedHashMap<String, Msg>()
     private val groups = LinkedHashMap<String, Grp>()
+    private val posted = HashSet<String>()                  // groups I have sent in (sendGroup; rebuilt from own GROUP_TEXT on replay)
     private val fanout = HashMap<String, String>()          // own fan-out DM msgId -> group message id, until its ACK
     private val logPubs = HashMap<String, ByteArray>()      // start-up only: keys seen in messages.log, to reopen own DMs
     private val seen = Seen()
@@ -142,6 +143,7 @@ class MeshNode(
         val g = groups[groupId] ?: return@loop
         val body = text.toByteArray(Charsets.UTF_8)
         if (body.isEmpty() || body.size > C.MAX_POST_BODY) return@loop
+        posted += groupId
         val gm = Crypto.randomBytes(8)
         val uid = me + hex(gm)
         val others = g.members.filterKeys { it != me }
@@ -201,14 +203,14 @@ class MeshNode(
         if (gid != gidOf(src, salt) || src !in members || (old != null && old.owner != src)) return true
         if (old == null && src != me && me in members) {
             if (src !in verified && groups.values.count { it.owner == src } >= MAX_GROUPS_PER_OWNER) return true
-            // Like a full contacts table (onPresence), cheap unverified owners yield: the oldest of their groups makes room,
-            // and verified owners always get in. The evicted group leaves like a removed member: live state gone, history kept.
+            // Full table: the oldest group that is not mine, not a verified owner's and never posted in makes room; with none,
+            // only verified owners get in, up to the hard cap. The evicted group leaves like a removed member: live state gone, history kept.
             if (groups.size >= MAX_GROUPS) {
-                val ev = groups.values.firstOrNull { it.owner != me && it.owner !in verified }
+                val ev = groups.values.firstOrNull { it.owner != me && it.owner !in verified && it.id !in posted }
                 if (ev != null) {
                     groups.remove(ev.id)
                     if (emit) emit(MeshEvent.GroupChanged(ev.info().let { it.copy(members = it.members - me) }))
-                } else if (src !in verified) return true
+                } else if (src !in verified || groups.size >= MAX_GROUPS_HARD) return true
             }
         }
         val g = Grp(gid, salt, name, src, members)   // member keys stay here, never in contacts
@@ -224,7 +226,7 @@ class MeshNode(
         val uid = src + hex(p.copyOfRange(9, 17))   // includes the sender, so one member cannot suppress another's message
         val text = String(p, 17, p.size - 17, Charsets.UTF_8)
         val g = groups[gid]
-        if (src == me) fanout[mid] = uid
+        if (src == me) { fanout[mid] = uid; posted += gid }
         if (g == null || src !in g.members || uid in msgs) return true
         if (src == me) addMsg(Msg(uid, me, null, text, e.lamport, now, true, MsgStatus.QUEUED, 0, null,
             group = gid, delivered = 0, total = g.members.size - 1), emit = false)
@@ -716,7 +718,7 @@ class MeshNode(
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_PER_OWNER = 4 }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4 }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */

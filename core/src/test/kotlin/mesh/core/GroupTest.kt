@@ -199,26 +199,64 @@ class GroupTest {
         assertTrue(d.node.snapshot().groups.any { it.id == sixth }, "a verified owner is not capped at 4")
     }
 
-    @Test fun t18b_fullTableEvictsOldestUnverifiedGroupForNewInvites() {
+    /** Forges invites to D, as [owner], for a fresh group {owner, D}; returns its gid. */
+    private fun offer(s: Setup, owner: Identity): String {
+        val salt = Crypto.randomBytes(8)
+        val gid = Crypto.hex(Crypto.sha256(owner.nodeId, salt).copyOf(8))
+        forge(s, "B", "D", invite(gid, salt, "g", listOf(owner.publicDer, s.n("D").node.id.publicDer)), owner)
+        s.net.runFor(3_000)
+        return gid
+    }
+    private fun groupsOf(s: Setup, name: String) = s.n(name).node.snapshot().groups.map { it.id }
+    private fun spam(s: Setup) = List(8) { Identity.generate() }.flatMap { o -> List(4) { offer(s, o) } }
+
+    @Test fun t18b_fullTableEvictsOldestEvictableGroupForNewInvites() {
         val s = setup()
-        val d = s.n("D")
-        fun offer(owner: Identity): String {
-            val salt = Crypto.randomBytes(8)
-            val gid = Crypto.hex(Crypto.sha256(owner.nodeId, salt).copyOf(8))
-            forge(s, "B", "D", invite(gid, salt, "g", listOf(owner.publicDer, d.node.id.publicDer)), owner)
-            s.net.runFor(3_000)
-            return gid
-        }
-        fun have() = d.node.snapshot().groups.map { it.id }
-        val spam = List(8) { Identity.generate() }.flatMap { o -> List(4) { offer(o) } }
-        assertEquals(spam, have(), "8 unverified owners x 4 fill the table; crew, the oldest, made room for the last")
+        val spam = spam(s)
+        assertEquals(spam, groupsOf(s, "D"), "8 unverified owners x 4 fill the table; crew, the oldest and never posted in, made room for the last")
         val j = s.n("J")
-        d.node.setVerified(j.id, true)
+        s.n("D").node.setVerified(j.id, true)
         s.net.runFor(100)
-        val fromJ = offer(j.node.id)
-        assertEquals(spam.drop(1) + fromJ, have(), "a verified owner gets in by evicting the oldest unverified group")
-        val ninth = offer(Identity.generate())
-        assertEquals(spam.drop(2) + fromJ + ninth, have(), "a 9th unverified owner evicts the oldest unverified group, not the verified one")
+        val fromJ = offer(s, j.node.id)
+        assertEquals(spam.drop(1) + fromJ, groupsOf(s, "D"), "a verified owner gets in by evicting the oldest evictable group")
+        val ninth = offer(s, Identity.generate())
+        assertEquals(spam.drop(2) + fromJ + ninth, groupsOf(s, "D"), "a 9th unverified owner evicts the oldest unverified group, not the verified one")
+    }
+
+    @Test fun t18c_groupIPostedInIsNeverEvictedBySpam() {
+        val s = setup()
+        s.n("D").node.sendGroup(s.gid, "hi")
+        s.net.runFor(10_000)
+        val spam = spam(s)
+        assertEquals(listOf(s.gid) + spam.drop(1), groupsOf(s, "D"), "crew stays; the oldest spam group made room instead")
+        val v = List(31) { Identity.generate() }.onEach { s.n("D").node.setVerified(Crypto.hex(it.nodeId), true) }
+        s.net.runFor(100)
+        val fromV = v.map { offer(s, it) }
+        offer(s, Identity.generate())
+        assertEquals(listOf(s.gid) + fromV, groupsOf(s, "D"), "with only crew and verified groups left, a spam invite is dropped")
+    }
+
+    @Test fun t18d_verifiedInvitesStopAtHardCap() {
+        val s = setup()
+        val owners = List(70) { Identity.generate() }
+        owners.forEach { s.n("D").node.setVerified(Crypto.hex(it.nodeId), true) }
+        s.net.runFor(100)
+        val fromV = owners.map { offer(s, it) }
+        assertEquals(fromV.take(64), groupsOf(s, "D"), "crew made room once, then verified owners filled up to 64; the rest were dropped")
+    }
+
+    @Test fun t18e_postedFlagSurvivesRestart() {
+        val s = setup()
+        s.n("D").node.sendGroup(s.gid, "hi")
+        s.net.runFor(10_000)
+        val links = s.adj.getValue("D").map { s.net.linkOf("D", it) }
+        links.forEach { it.down() }
+        s.net.runFor(100)
+        s.n("D").restart()
+        links.forEach { it.up() }
+        s.net.runFor(10_000)
+        val spam = spam(s)
+        assertEquals(listOf(s.gid) + spam.drop(1), groupsOf(s, "D"), "crew is still marked posted after restart")
     }
 
     @Test fun t19_twoMembersReusingOneGroupMsgIdAreBothDelivered() {
