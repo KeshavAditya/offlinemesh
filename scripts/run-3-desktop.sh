@@ -23,6 +23,10 @@ stop() {
 if [ "${1:-}" = "stop" ]; then stop; echo "stopped"; exit 0; fi
 
 stop
+# Another run (other checkout or agent) on these ports would answer our readiness checks and e2e would test it instead.
+for p in 8081 8082 8083; do
+    curl -s --max-time 1 "http://127.0.0.1:$p/" >/dev/null && { echo "port $p is already in use by another process; stop it first"; exit 1; }
+done
 mkdir -p "$ROOT/build"
 (cd "$ROOT" && ./gradlew :desktop:installDist -q > "$ROOT/build/run-3-desktop-build.log" 2>&1) || {
     echo "build failed, see build/run-3-desktop-build.log"; tail -20 "$ROOT/build/run-3-desktop-build.log"; exit 1; }
@@ -45,5 +49,12 @@ for p in 8081 8082 8083; do
         sleep 0.5
     done
     [ -n "$ok" ] || { echo "node on :$p did not come up; logs in $RUN"; stop; exit 1; }
+done
+# The node answering each port must be ours: its id is the one our process printed.
+for x in A:8081 B:8082 C:8083; do
+    n=${x%:*} p=${x#*:}
+    id=$(sed -n 's/^node \([0-9a-f]\{16\}\) .*/\1/p' "$RUN/$n.log" | head -1)
+    curl -s --max-time 2 "http://127.0.0.1:$p/api/snapshot" | grep -q "\"id\":\"$id\"" && [ -n "$id" ] ||
+        { echo "node $n is not the one answering :$p (bind failed?); see $RUN/$n.log"; stop; exit 1; }
 done
 echo "A http://127.0.0.1:8081  B http://127.0.0.1:8082  C http://127.0.0.1:8083  (stop: $0 stop)"
