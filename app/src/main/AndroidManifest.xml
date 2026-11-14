@@ -22,5 +22,6 @@
             </intent-filter>
         </activity>
         <service android:name=".MeshService" android:exported="false" android:foregroundServiceType="connectedDevice" />
+        <receiver android:name=".ReplyReceiver" android:exported="false" />
     </application>
 </manifest>

@@ -38,6 +38,7 @@ class MeshService : Service() {
 
     private lateinit var node: MeshNode
     private lateinit var ui: UiServer
+    lateinit var dms: DmNotifier; private set
     lateinit var ble: Switchable; private set
     lateinit var lan: Switchable; private set
     private var multicast: WifiManager.MulticastLock? = null
@@ -62,6 +63,7 @@ class MeshService : Service() {
         lan = Switchable("lan") { LanTransport(LAN_PORT, emptyList(), prefix) }
         node = MeshNode(filesDir, ExecutorScheduler(), listOf(ble, lan))
         ui = UiServer(node, UI_PORT) { guest }
+        dms = DmNotifier(this, node).also { node.addListener(it::onEvent) }
         thread(name = "mesh-start") {
             node.start()
             applyPrefs()
@@ -98,7 +100,7 @@ class MeshService : Service() {
     private fun setGuest(want: Boolean) {
         if (want && guest == null) {
             val g = GuestServer(node, GUEST_PORT)
-            try { g.start(); guest = g; Log.i(TAG, "guest listening 0.0.0.0:$GUEST_PORT ${g.urls()}") }
+            try { g.start(); guest = g; Log.i(TAG, "guest listening 0.0.0.0:$GUEST_PORT") }
             catch (e: Exception) { Log.e(TAG, "guest server failed: $e"); runCatching { g.stop() } }
         } else if (!want && guest != null) {
             val g = guest; guest = null; runCatching { g?.stop() }

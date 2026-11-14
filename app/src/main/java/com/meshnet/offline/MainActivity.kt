@@ -55,7 +55,9 @@ class MainActivity : Activity() {
         })
     }
 
-    override fun onResume() { super.onResume(); check() }
+    override fun onResume() { super.onResume(); DmNotifier.foreground = true; MeshService.instance?.dms?.clear(); check() }
+
+    override fun onPause() { DmNotifier.foreground = false; super.onPause() }
 
     override fun onDestroy() { MeshService.onListening = null; pick?.onReceiveValue(null); web.destroy(); super.onDestroy() }
 
