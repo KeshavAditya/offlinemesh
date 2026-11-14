@@ -15,6 +15,7 @@ In a blackout, a flood or a packed stadium, the network is the first thing to go
 - **Attacks are caught and shown.** Every message is signed. A relay that changes a message is caught at the next phone. A key that floods posts is banned, with proof other phones can check. The Security tab shows each rejection as it happens.
 - **Built-in red-team buttons** (tamper, drop, flood, spoof, replay) so you can attack the mesh live and watch it hold.
 - **Photo DMs** (downscaled to under 40 KB), **QR code** of your identity, and **guest access**: a phone without the app can join from a browser over the host phone's hotspot.
+- **Notifications for incoming DMs with inline reply**, so you can answer from the notification shade.
 
 ## How we built it
 
@@ -55,8 +56,6 @@ In a blackout, a flood or a packed stadium, the network is the first thing to go
 ## What's next
 
 - Run the full test on the three real phones and measure range and timing.
-- Pace presence beacons so meshes of 50+ phones do not trip their own rate limits.
-- Notifications with inline reply (planned).
 - Forward secrecy and in-app QR scanning.
 
 ## Built with

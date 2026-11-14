@@ -83,7 +83,7 @@ Use `127.0.0.1`, not `localhost` (on this laptop `localhost` can reach another s
 
 ## Optional extras (only if time is left)
 
-- **Guest join** (only once the app's Guest mode toggle exists; at the time of writing the server side is done, the app toggle is not): B turns on its hotspot and Guest mode; the iPhone scans the QR on B's Network tab and posts from Safari. The post shows as "guest of B".
+- **Guest join**: B turns on its hotspot and Guest mode; the iPhone scans the QR on B's Network tab and posts from Safari. The post shows as "guest of B".
 - **Photo DM:** A sends C a photo (downscaled to under 40 KB, one frame).
 
 ## Judge questions
