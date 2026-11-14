@@ -25,7 +25,7 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 
 ## Progress
 - [x] Setup (Parts 1-3)
-- [x] P1  - [x] P2/Gate1  - [ ] P3/Gate2  - [ ] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
+- [x] P1  - [x] P2/Gate1  - [x] P3/Gate2  - [ ] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
 
 ## Rules in force
 - Owner's global CLAUDE.md token rules: small helper goals, helper handoff at ~200k, quiet builds (output to file, read failures only).
@@ -52,3 +52,4 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 - 16:45 core-3 done d4263fb: 26 tests, all 10.2; #9 = 41 tx / 40 links (bound 80), 25 nodes, seed 42. Fixed replay-after-SEEN_CAP (real bug), contacts cap 256, Identity perms, HELLO timeout test. Pending: idle-link timeout msg (should resume). Open: routes map uncapped; own sent DMs '(sent before restart)'.
 - 17:00 ui-3 built desktop+scripts (06f0155) — e2e items 1-4,6 pass on desktop, 5 waited for attack() (now in). It ALSO built stretch 1 guest (496dd89, GuestServer 8090 + guest.html) early. Sent: rerun e2e (Gate 2) + 3 guest security fixes (PIN lockout, body cap, guest label order). Sent core-3: wanted-set leak + contacts refuse-when-full + idle timeout.
 - 17:10 core fixes done 7a83506: 27 tests; silent-link close 45s (muted links exempt; liveness from PRESENCE 30s), wanted-set leak fixed, contacts refuse-when-full. Core workstream COMPLETE.
+- 17:30 GATE 2 PASSED (desktop e2e all 6, twice, 90bdb66). Guest fixes in. Lead fixed contacts aging 7aecadf. STATUS.md now merge=union. Owner TODO later: record Gate 2 backup video (can't do from here). Waiting: android-3 (service/WebView/3 emulators), qa redteam tests.
