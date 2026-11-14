@@ -25,7 +25,7 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 
 ## Progress
 - [x] Setup (Parts 1-3)
-- [x] P1  - [x] P2/Gate1  - [x] P3/Gate2  - [ ] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
+- [x] P1  - [x] P2/Gate1  - [x] P3/Gate2  - [x] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
 
 ## Rules in force
 - Owner's global CLAUDE.md token rules: small helper goals, helper handoff at ~200k, quiet builds (output to file, read failures only).
@@ -54,3 +54,8 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 - 17:10 core fixes done 7a83506: 27 tests; silent-link close 45s (muted links exempt; liveness from PRESENCE 30s), wanted-set leak fixed, contacts refuse-when-full. Core workstream COMPLETE.
 - 17:30 GATE 2 PASSED (desktop e2e all 6, twice, 90bdb66). Guest fixes in. Lead fixed contacts aging 7aecadf. STATUS.md now merge=union. Owner TODO later: record Gate 2 backup video (can't do from here). Waiting: android-3 (service/WebView/3 emulators), qa redteam tests.
 - 17:55 qa redteam done e1e9abc (16 tests). Lead fixed SYNC_WANT bugs -> 43 core tests, 0 skipped. QUEUED THREATS.md: HELLO_AUTH relay/MITM binding (sigs still hold). Guest PIN hardened by lead 1c8f0c3.
+- 18:05 lead: per-link wantServed set (SYNC_WANT not dependent on LRU). Sent android-3: readiness via service signal not TCP probe (port squat). THREATS.md: unauth loopback UI (by design).
+- 18:15 PROVISIONAL GATE 3 PASSED: e2e all 6 on 3 emulators over BLE (f21a4c3). Serial map: emulator-5554=A/8081, 5556=B/8082, 5558=C/8083. Emulator start: meshA first, wait for %TEMP%/netsim.ini, then B, C; only one netsimd.exe. android-3 resumed for readiness-signal fix.
+- Stretch plan: 1 guest (uiserver done; app toggle+hotspot IP+QR pending -> android), 2 photo DM (ui), 3 notif inline reply (android), 4 ban-proof gossip (core), 5 QR identity verify (ui; QR also used by guest). Launching core-ban-gossip + ui-photo now.
+- P5 leftovers: persistence restart check on emulators; plaintext-in-B-log check on phones.
+- 18:25 ui-3 final: Gate 2 confirmed (2 runs). NOTE desktop run-3 uses 8081-8083 = same as emulator adb forwards; stop forwards (adb forward --remove-all) before desktop e2e. Desktop e2e rerun on latest core still TODO (do at end).
