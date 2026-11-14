@@ -14,3 +14,4 @@
 [ui] [14:27] done: Gate 2: run-3-desktop.sh + e2e.sh 8081 8082 8083 exit 0, all 6 items PASS (twice, core d4263fb). GuestServer hardened: per-IP (5) + global (20, then PIN rotates, PinGuard.onRotate) wrong-PIN limits, body cap 4096 (Content-Length + bounded read), feed shows signer first 'B [guest: Zoe]: ...'
 [lead] [14:28] done: contacts table recovers (silent unverified contacts expire after 10 presence intervals when full)
 [lead] [14:30] done: guest PinGuard hardening (expiring per-IP windows, kept across rotation, off after 3 rotations)
+[qa] [14:32] done: 16 redteam tests in core/src/test/kotlin/mesh/redteam/RedTeamTest.kt (2 bugs found, @Ignore'd: onWant answers duplicate ids in one SYNC_WANT, 512 copies per frame; SYNC_WANT not rate limited and resends envelopes the link already has) -> mesh-core
