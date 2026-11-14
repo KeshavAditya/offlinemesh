@@ -10,3 +10,4 @@
 [android] [14:20] done: BleL2capTransport + permissions (2 emulators: 3 small + 59,990 B frame both ways, CRC match, ~5 s; close -> onLinkDown both sides, redial <1 s; BT toggle -> new PSM re-advertised, relink ~4 s. Note: netsim BT stack once SIGABRT on HCI LE_ADV_FILTER timeout, emulator-only; peer saw no link-down after that crash, so core must detect silent links)
 [core] [14:21] done: red-team hooks + all 10.2 tests (#9: 41 transmissions / 40 links, bound 80); replay-after-LRU dedupe, contacts cap 256, hello-timeout test, key tmp owner-only
 [ui] [14:22] done: 5.13 guest: mesh.ui.GuestServer(node, 8090) on 0.0.0.0 (pin, urls() for QR/text, /api/feed, /api/guest-post, 403 wrong PIN, 1 post/5 s/IP) + guest.html; index.html shows 'guest of B'. app: start/stop it from the Guest mode toggle and show urls() + pin
+[core] [14:24] done: idle-link close (45 s silent, muted exempt), SYNC_WANT leak fix, contacts table full refuses new unverified; 27 core tests green
