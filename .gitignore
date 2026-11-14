@@ -10,3 +10,4 @@ build.log
 *.log
 .claude/worktrees/
 .playwright-mcp/
+.mesh-run/

@@ -8,4 +8,6 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":lan"))
     implementation(project(":uiserver"))
+    testImplementation(kotlin("test"))
 }
+tasks.test { useJUnitPlatform() }
