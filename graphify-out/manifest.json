@@ -1,0 +1,386 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1794685629.5601532,
+    "seen": 1794691900.2417912,
+    "ast_hash": "005f49c12439d500daebcaec44e991ad",
+    "semantic_hash": ""
+  },
+  "app/build.gradle.kts": {
+    "mtime": 1794685999.533742,
+    "seen": 1794691900.2417912,
+    "ast_hash": "7944c42b293b0900280c48deb164a043",
+    "semantic_hash": ""
+  },
+  "app/src/main/java/com/meshnet/offline/BleL2capTransport.kt": {
+    "mtime": 1794690717.348008,
+    "seen": 1794691900.2417912,
+    "ast_hash": "0d0ff247dbd555701506cf5b70fb2bfa",
+    "semantic_hash": ""
+  },
+  "app/src/main/java/com/meshnet/offline/DmNotifier.kt": {
+    "mtime": 1794691701.914975,
+    "seen": 1794691900.2417912,
+    "ast_hash": "d7844e6dc92ffd6ba32f6b9508bf32bb",
+    "semantic_hash": ""
+  },
+  "app/src/main/java/com/meshnet/offline/MainActivity.kt": {
+    "mtime": 1794691701.9177332,
+    "seen": 1794691900.2417912,
+    "ast_hash": "8b6ce87de166e749c6eca4a384026234",
+    "semantic_hash": ""
+  },
+  "app/src/main/java/com/meshnet/offline/MeshService.kt": {
+    "mtime": 1794691701.9202585,
+    "seen": 1794691900.2417912,
+    "ast_hash": "fd7fe344aca67c6ac2e3786e00b81d22",
+    "semantic_hash": ""
+  },
+  "app/src/main/java/com/meshnet/offline/Perms.kt": {
+    "mtime": 1794687970.0590885,
+    "seen": 1794691900.2417912,
+    "ast_hash": "91bc8870f033955bbb4e1252f35e4804",
+    "semantic_hash": ""
+  },
+  "build.gradle.kts": {
+    "mtime": 1794685999.3595371,
+    "seen": 1794691900.2417912,
+    "ast_hash": "9c821f815ce0637007aad54e35172dd2",
+    "semantic_hash": ""
+  },
+  "core/build.gradle.kts": {
+    "mtime": 1794685999.4240527,
+    "seen": 1794691900.2417912,
+    "ast_hash": "029a34924c5983b4809545dcf95a3c4a",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Api.kt": {
+    "mtime": 1794690389.0941224,
+    "seen": 1794691900.2417912,
+    "ast_hash": "0aa4baf2e5414ca48d8a74f76d58a7b3",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Codec.kt": {
+    "mtime": 1794690389.0961425,
+    "seen": 1794691900.2417912,
+    "ast_hash": "2eb2f5eda2460f63b06df99ab4b597ca",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Constants.kt": {
+    "mtime": 1794690717.351596,
+    "seen": 1794691900.2417912,
+    "ast_hash": "f9ea71203e056438078c74c45ddf72fa",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Crypto.kt": {
+    "mtime": 1794686548.8455956,
+    "seen": 1794691900.2417912,
+    "ast_hash": "2eb49fb7bd41eabe1f008d321dbf899a",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Identity.kt": {
+    "mtime": 1794687970.0902991,
+    "seen": 1794691900.2417912,
+    "ast_hash": "3902b3ce0a5015dc9d30a78becc4836c",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/MeshNode.kt": {
+    "mtime": 1794690717.352595,
+    "seen": 1794691900.2417912,
+    "ast_hash": "ca70fe9480330be2df76f21f45793ede",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Pow.kt": {
+    "mtime": 1794686548.8569477,
+    "seen": 1794691900.2417912,
+    "ast_hash": "f461ca9d1d432b76dbc513c1d72ac924",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Router.kt": {
+    "mtime": 1794687970.0953002,
+    "seen": 1794691900.2417912,
+    "ast_hash": "67e882329cc884ddf5a2a5a2bc9f786e",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Security.kt": {
+    "mtime": 1794690717.3535943,
+    "seen": 1794691900.2417912,
+    "ast_hash": "f90ba7465e9931b3c244be74a56492a4",
+    "semantic_hash": ""
+  },
+  "core/src/main/kotlin/mesh/core/Store.kt": {
+    "mtime": 1794687970.103887,
+    "seen": 1794691900.2417912,
+    "ast_hash": "be86e55d8d3e182fced9f596993b3593",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/core/ApiSmokeTest.kt": {
+    "mtime": 1794686020.7994506,
+    "seen": 1794691900.2417912,
+    "ast_hash": "eb64b7a794b4e5a5c99ba4b61eb136a4",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/core/BanProofTest.kt": {
+    "mtime": 1794690389.1014543,
+    "seen": 1794691900.2417912,
+    "ast_hash": "6fff49bd9e920d908377321be46cc79a",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/core/PhotoDmTest.kt": {
+    "mtime": 1794690389.1024623,
+    "seen": 1794691900.2417912,
+    "ast_hash": "fc449439a491a75ff78fb32178d5d82f",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/core/Sim.kt": {
+    "mtime": 1794687970.106141,
+    "seen": 1794691900.2417912,
+    "ast_hash": "fa4b2fc86331b95d24b638b8819bd224",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/core/SimTest.kt": {
+    "mtime": 1794687970.1081471,
+    "seen": 1794691900.2417912,
+    "ast_hash": "7e595684595b3801904e366d2fbbf7a4",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/core/UnitTest.kt": {
+    "mtime": 1794686548.8702126,
+    "seen": 1794691900.2417912,
+    "ast_hash": "fa2b9b0419ad863112088ca077a7fb77",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/redteam/BroadcastCostTest.kt": {
+    "mtime": 1794690717.3545947,
+    "seen": 1794691900.2417912,
+    "ast_hash": "64af865caf1fd369eee1554f3d3b5f17",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/redteam/PowTimingTest.kt": {
+    "mtime": 1794690389.104463,
+    "seen": 1794691900.2417912,
+    "ast_hash": "05d4df0bd33e650b54300cfd8f2ed168",
+    "semantic_hash": ""
+  },
+  "core/src/test/kotlin/mesh/redteam/RedTeamTest.kt": {
+    "mtime": 1794688468.523965,
+    "seen": 1794691900.2417912,
+    "ast_hash": "f33a1feed774bd2734d3917a9f62e6c5",
+    "semantic_hash": ""
+  },
+  "desktop/build.gradle.kts": {
+    "mtime": 1794687970.1106524,
+    "seen": 1794691900.2417912,
+    "ast_hash": "3bd84cdeabcde6856045761606bb9397",
+    "semantic_hash": ""
+  },
+  "desktop/src/main/kotlin/mesh/desktop/Main.kt": {
+    "mtime": 1794687970.1132026,
+    "seen": 1794691900.2417912,
+    "ast_hash": "5329662a56046b2b52e757665e7e67f1",
+    "semantic_hash": ""
+  },
+  "desktop/src/test/kotlin/mesh/desktop/ArgsTest.kt": {
+    "mtime": 1794687970.1187234,
+    "seen": 1794691900.2417912,
+    "ast_hash": "62d0582637d384ffc93a285a7cbda4d4",
+    "semantic_hash": ""
+  },
+  "gradlew": {
+    "mtime": 1794686083.6208515,
+    "seen": 1794691900.2417912,
+    "ast_hash": "794669d78aef1dd5c7d889ef618b311a",
+    "semantic_hash": ""
+  },
+  "lan/build.gradle.kts": {
+    "mtime": 1794687970.1212478,
+    "seen": 1794691900.2417912,
+    "ast_hash": "6a92ce314b8bc0373e9ba3ead2041b0a",
+    "semantic_hash": ""
+  },
+  "lan/src/main/kotlin/mesh/lan/LanTransport.kt": {
+    "mtime": 1794687970.1237726,
+    "seen": 1794691900.2417912,
+    "ast_hash": "76279f15615f88b4ce934e41a2017fc5",
+    "semantic_hash": ""
+  },
+  "lan/src/test/kotlin/mesh/lan/LanTransportTest.kt": {
+    "mtime": 1794687970.1308365,
+    "seen": 1794691900.2417912,
+    "ast_hash": "60826e65fc49d88551901e92512d39c9",
+    "semantic_hash": ""
+  },
+  "scripts/deploy-all.sh": {
+    "mtime": 1794690717.355654,
+    "seen": 1794691900.2417912,
+    "ast_hash": "37287ba8a0d9126565d22d5806117ff4",
+    "semantic_hash": ""
+  },
+  "scripts/e2e.sh": {
+    "mtime": 1794688132.1081731,
+    "seen": 1794691900.2417912,
+    "ast_hash": "0aaa7172c1a0d8de50d2f96dfc278e5f",
+    "semantic_hash": ""
+  },
+  "scripts/forward-ui.sh": {
+    "mtime": 1794688649.3057811,
+    "seen": 1794691900.2417912,
+    "ast_hash": "2d581c013b5fe21ef05c3c2b74d4fb79",
+    "semantic_hash": ""
+  },
+  "scripts/hooks/stop-check.sh": {
+    "mtime": 1794685629.5611525,
+    "seen": 1794691900.2417912,
+    "ast_hash": "781e820747ef43c592059e8f252cc9af",
+    "semantic_hash": ""
+  },
+  "scripts/run-3-desktop.sh": {
+    "mtime": 1794691141.9356072,
+    "seen": 1794691900.2417912,
+    "ast_hash": "bae2a40d30fc0f6637797f895ed95487",
+    "semantic_hash": ""
+  },
+  "scripts/setup-check.sh": {
+    "mtime": 1794685629.5611525,
+    "seen": 1794691900.2417912,
+    "ast_hash": "6f6048c9f697d8369708580a65f78ac6",
+    "semantic_hash": ""
+  },
+  "settings.gradle.kts": {
+    "mtime": 1794685999.328681,
+    "seen": 1794691900.2417912,
+    "ast_hash": "c807899cb9d1b80bac1ad020361026c5",
+    "semantic_hash": ""
+  },
+  "uiserver/build.gradle.kts": {
+    "mtime": 1794690389.1104434,
+    "seen": 1794691900.2417912,
+    "ast_hash": "d97bac276f8b785717d053bdc3739268",
+    "semantic_hash": ""
+  },
+  "uiserver/src/main/kotlin/mesh/ui/Cmd.kt": {
+    "mtime": 1794690389.1125154,
+    "seen": 1794691900.2417912,
+    "ast_hash": "3004136bf9cf1f9aa6eefbbe0802097e",
+    "semantic_hash": ""
+  },
+  "uiserver/src/main/kotlin/mesh/ui/GuestServer.kt": {
+    "mtime": 1794688209.699482,
+    "seen": 1794691900.2417912,
+    "ast_hash": "d0852b6449610735445914055c717b92",
+    "semantic_hash": ""
+  },
+  "uiserver/src/main/kotlin/mesh/ui/UiServer.kt": {
+    "mtime": 1794690389.1140237,
+    "seen": 1794691900.2417912,
+    "ast_hash": "9be3daad020418eeea92db8e22428184",
+    "semantic_hash": ""
+  },
+  "uiserver/src/test/kotlin/mesh/ui/CmdTest.kt": {
+    "mtime": 1794690389.1171136,
+    "seen": 1794691900.2417912,
+    "ast_hash": "2eb8b2530ab04a3c746557d63ec8f27c",
+    "semantic_hash": ""
+  },
+  "uiserver/src/test/kotlin/mesh/ui/FakeNode.kt": {
+    "mtime": 1794690389.119113,
+    "seen": 1794691900.2417912,
+    "ast_hash": "172206ab14cf234dad5a7640eeb72698",
+    "semantic_hash": ""
+  },
+  "uiserver/src/test/kotlin/mesh/ui/GuestServerTest.kt": {
+    "mtime": 1794688215.5436704,
+    "seen": 1794691900.2417912,
+    "ast_hash": "34257f25e0f154602c39e23822d97c13",
+    "semantic_hash": ""
+  },
+  "uiserver/src/test/kotlin/mesh/ui/QrTest.kt": {
+    "mtime": 1794690389.120113,
+    "seen": 1794691900.2417912,
+    "ast_hash": "d07a8de6886e4f85d1f92d8ecff353b9",
+    "semantic_hash": ""
+  },
+  ".claude/LEAD_STATE.md": {
+    "mtime": 1794691821.1971114,
+    "seen": 1794691900.2417912,
+    "ast_hash": "e0b7b28796f4bb2dfbdcd2d6b2b8a9e5",
+    "semantic_hash": ""
+  },
+  ".claude/agents/mesh-android.md": {
+    "mtime": 1794685629.5626605,
+    "seen": 1794691900.2417912,
+    "ast_hash": "e7e6ab2ef59e37d529f4b3bbb3d05446",
+    "semantic_hash": ""
+  },
+  ".claude/agents/mesh-core.md": {
+    "mtime": 1794685629.5626605,
+    "seen": 1794691900.2417912,
+    "ast_hash": "b5f6b5ddb5738e37e8a73267b91c3678",
+    "semantic_hash": ""
+  },
+  ".claude/agents/mesh-qa.md": {
+    "mtime": 1794685629.5646772,
+    "seen": 1794691900.2417912,
+    "ast_hash": "2815d6a0ac0465ab8560b42d00548b56",
+    "semantic_hash": ""
+  },
+  ".claude/agents/mesh-ui.md": {
+    "mtime": 1794685629.5636685,
+    "seen": 1794691900.2417912,
+    "ast_hash": "6d2aa2eeaf6a8bf0c15b1cab858f0c70",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1794685629.5426962,
+    "seen": 1794691900.2417912,
+    "ast_hash": "089226fd1b8960cbf473616468e66348",
+    "semantic_hash": ""
+  },
+  "OFFLINEMESH_COMPLETE_GUIDE.md": {
+    "mtime": 1794690389.0910766,
+    "seen": 1794691900.2417912,
+    "ast_hash": "78f37afa86051e3096c18faba81d3ee1",
+    "semantic_hash": ""
+  },
+  "STATUS.md": {
+    "mtime": 1794691701.9117591,
+    "seen": 1794691900.2417912,
+    "ast_hash": "202bd0f568c9d1011cafb53263f7c132",
+    "semantic_hash": ""
+  },
+  "docs/DEMO.md": {
+    "mtime": 1794691718.9055016,
+    "seen": 1794691900.2417912,
+    "ast_hash": "830e2049e5e6df02947aa548960bdcf6",
+    "semantic_hash": ""
+  },
+  "docs/DEVPOST.md": {
+    "mtime": 1794691718.8561728,
+    "seen": 1794691900.2417912,
+    "ast_hash": "c7fde7a5c6350bc86c349800d4514a41",
+    "semantic_hash": ""
+  },
+  "docs/NUMBERS.md": {
+    "mtime": 1794690732.4128435,
+    "seen": 1794691900.2417912,
+    "ast_hash": "1a1f7a71e81a6475cc9250f21e527272",
+    "semantic_hash": ""
+  },
+  "docs/THREATS.md": {
+    "mtime": 1794690724.5223205,
+    "seen": 1794691900.2417912,
+    "ast_hash": "e0bf08bc171121b4a0927e3f359f31bc",
+    "semantic_hash": ""
+  },
+  "uiserver/src/main/resources/web/guest.html": {
+    "mtime": 1794688132.1144035,
+    "seen": 1794691900.2417912,
+    "ast_hash": "2f5e8791f429db63c65c6a07a8a27f30",
+    "semantic_hash": ""
+  },
+  "uiserver/src/main/resources/web/index.html": {
+    "mtime": 1794690389.1161058,
+    "seen": 1794691900.2417912,
+    "ast_hash": "21461c1ea74f9e2584e4e98540de095f",
+    "semantic_hash": ""
+  }
+}
