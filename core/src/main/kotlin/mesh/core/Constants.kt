@@ -48,4 +48,4 @@ object C {
 
 object EnvType { const val PRESENCE = 1; const val POST = 2; const val DM = 3; const val ACK = 4 }
 
-object FrameType { const val ENVELOPE = 0x01; const val HELLO = 0x10; const val HELLO_AUTH = 0x11; const val SYNC_OFFER = 0x12; const val SYNC_WANT = 0x13 }
+object FrameType { const val ENVELOPE = 0x01; const val HELLO = 0x10; const val HELLO_AUTH = 0x11; const val SYNC_OFFER = 0x12; const val SYNC_WANT = 0x13; const val BAN_PROOF = 0x14 }

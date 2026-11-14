@@ -44,6 +44,13 @@ internal class Guard {
     /** Step 8 POST: false when this (src, epoch, slot) already holds a different msgId (equivocation). */
     fun ledger(src: String, epoch: Long, slot: Int, msgId: String) = ledger.getOrPut(Triple(src, epoch, slot)) { msgId } == msgId
 
+    fun ledgerOf(src: String, epoch: Long, slot: Int): String? = ledger[Triple(src, epoch, slot)]
+
+    /** Stretch 4: a ban proof is valid only if it proves equivocation on its own, whoever relayed it. */
+    fun proofOk(a: Envelope, b: Envelope) = a.type == EnvType.POST && b.type == EnvType.POST && a.srcPub.contentEquals(b.srcPub) &&
+        a.epoch == b.epoch && a.slot == b.slot && a.slot < C.SLOTS_PER_EPOCH && !a.msgId.contentEquals(b.msgId) &&
+        Crypto.verify(a.srcPub, a.core, a.sig) && Crypto.verify(b.srcPub, b.core, b.sig)
+
     /** Step 8 PRESENCE: one per srcId per 10 s of local time. */
     fun presenceOk(src: String, now: Long): Boolean {
         val last = lastPresence[src]

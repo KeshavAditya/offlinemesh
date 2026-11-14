@@ -37,6 +37,8 @@ sealed interface Frame {
     class HelloAuth(val sig: ByteArray) : Frame
     class SyncOffer(val ids: List<ByteArray>) : Frame
     class SyncWant(val ids: List<ByteArray>) : Frame
+    /** Stretch 4: two POSTs by one key for one (epoch, slot) with different msgIds. */
+    class BanProof(val a: Envelope, val b: Envelope) : Frame
 }
 
 // Sections 5.2 and 5.3. Decoders are strict: wrong lengths, unknown types or trailing bytes give null.
@@ -61,6 +63,7 @@ object Codec {
             is Frame.HelloAuth -> { u8(FrameType.HELLO_AUTH); u8Bytes(f.sig) }
             is Frame.SyncOffer -> { u8(FrameType.SYNC_OFFER); ids(f.ids) }
             is Frame.SyncWant -> { u8(FrameType.SYNC_WANT); ids(f.ids) }
+            is Frame.BanProof -> { u8(FrameType.BAN_PROOF); listOf(f.a, f.b).forEach { val x = encodeEnvelope(it); writeShort(x.size); write(x) } }
         }
     }.also { require(it.size <= C.MAX_FRAME) { "frame too large: ${it.size}" } }
 
@@ -73,6 +76,7 @@ object Codec {
                 FrameType.HELLO_AUTH -> Frame.HelloAuth(bytes(u8().also { need(it > 0) }))
                 FrameType.SYNC_OFFER -> Frame.SyncOffer(List(u16()) { bytes(8) })
                 FrameType.SYNC_WANT -> Frame.SyncWant(List(u16()) { bytes(8) })
+                FrameType.BAN_PROOF -> Frame.BanProof(proofPost(), proofPost())
                 else -> null
             }
         }
@@ -108,6 +112,8 @@ object Codec {
         need(nonce == 0L || type == EnvType.POST || type == EnvType.DM)
         return Envelope(version, type, srcPub, dst, lamport, epoch, slot, initTtl, body, nonce, sig, ttl, hops)
     }
+
+    private fun Reader.proofPost(): Envelope = decodeEnvelope(bytes(u16()))?.takeIf { it.type == EnvType.POST } ?: throw Bad()
 
     private class Bad : Exception()
     private class Reader(b: ByteArray) {

@@ -18,3 +18,4 @@
 [lead] [14:34] done: fixed redteam SYNC_WANT amplification bugs; core 43 tests green, 0 skipped
 [android] [14:37] done: MeshService + WebView + deploy/forward (3 emulators meshA/B/C = emulator-5554/5556/5558 -> 8081/8082/8083: full BLE mesh, 2 authed links each; WebView UI ok, survives rotation; LAN toggle on/off ok; e2e.sh items 1-6 PASS). Emulator gotcha: start meshA, wait for %TEMP%/netsim.ini, then B and C, else a 2nd netsimd isolates one emulator's Bluetooth
 [ui] [14:40] done: run-3-desktop.sh refuses busy ports and checks each port answers with its own node id. Rerun on core after 14:24 not done: 8081-8083 held by another run (ids 750c/95ef/37d4); my e2e briefly drove those nodes (named A/B/C, A-C left muted)
+[core] [14:43] done: stretch 4 ban-proof gossip (new frame 0x14 BAN_PROOF; guide 5.2 table and 5.6 POST rule edited; section 6 unchanged; core 46 tests green)

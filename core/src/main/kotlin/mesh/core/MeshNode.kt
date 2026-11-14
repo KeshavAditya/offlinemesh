@@ -191,6 +191,7 @@ class MeshNode(
             is Frame.Env -> ingress(l, f.env)
             is Frame.SyncOffer -> onOffer(l, f.ids)
             is Frame.SyncWant -> onWant(l, f.ids)
+            is Frame.BanProof -> onBanProof(l, f.a, f.b)
             null -> penalize(l, C.SCORE_MALFORMED, SecKind.MALFORMED, "unparseable frame", null)
             else -> {}
         }
@@ -263,8 +264,8 @@ class MeshNode(
         EnvType.POST -> when {
             e.slot >= C.SLOTS_PER_EPOCH -> { penalize(l, C.SCORE_MALFORMED, SecKind.MALFORMED, "slot ${e.slot}", src); false }
             !guard.ledger(src, e.epoch, e.slot, mid) -> {
-                guard.bans[src] = now + C.BAN_DURATION_MS
-                sec(SecKind.RATE_EQUIVOCATION, "two posts for epoch ${e.epoch} slot ${e.slot}; banned 10 min", l, src)
+                val first = guard.ledgerOf(src, e.epoch, e.slot)?.let { store.envs[it]?.env }
+                ban(src, first, e, l, "two posts for epoch ${e.epoch} slot ${e.slot}; banned 10 min")
                 false
             }
             else -> true
@@ -272,6 +273,26 @@ class MeshNode(
         EnvType.PRESENCE -> guard.presenceOk(src, now)
         EnvType.ACK -> seen[hex(e.body)].let { it != null && it.type == EnvType.DM && it.dst == src && !it.acked }
         else -> true
+    }
+
+    /** Bans [src] and floods the proof once (stretch 4); [first] is null when its envelope has left the store. */
+    private fun ban(src: String, first: Envelope?, second: Envelope, l: Link, detail: String) {
+        guard.bans[src] = now() + C.BAN_DURATION_MS
+        sec(SecKind.RATE_EQUIVOCATION, detail, l, src)
+        if (first == null) return
+        val proof = Frame.BanProof(first, second)
+        // after the forward jitter, so posts already queued for a neighbour reach it before the ban (10.2 test 6)
+        later(C.JITTER_MAX_MS + 1) { links.values.filter { live(it) && it !== l && it.peer != src }.forEach { frame(it, proof) } }
+    }
+
+    private fun onBanProof(l: Link, a: Envelope, b: Envelope) {
+        val src = hex(a.srcId)
+        val now = now()
+        if (!l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
+        if (guard.banned(src, now)) return   // dedupe: a node relays a proof only when it bans
+        if (!guard.proofOk(a, b)) return penalize(l, C.SCORE_BAD_SIG, SecKind.BAD_SIGNATURE, "forged ban proof", src)
+        if (!guard.fresh(a.epoch, epochNow())) return
+        ban(src, a, b, l, "ban proof via ${l.peer}: epoch ${a.epoch} slot ${a.slot}; banned 10 min")
     }
 
     /** Accept step; also the trusted start-up replay path ([l] null, no sends, no events). */

@@ -631,6 +631,7 @@ u8   frameType
 | `0x11` | HELLO_AUTH | `u8 sigLen` `sig` |
 | `0x12` | SYNC_OFFER | `u16 count` then `count` × 8-byte msgId |
 | `0x13` | SYNC_WANT | `u16 count` then `count` × 8-byte msgId |
+| `0x14` | BAN_PROOF | stretch 4: `u16 len` POST envelope, `u16 len` POST envelope (5.3, trailers ignored) |
 
 A length outside 1..60000 closes the link at once. Never allocate from an unchecked length.
 
@@ -715,7 +716,7 @@ Run in this order for every ENVELOPE frame. Cheap checks first.
 
 **Type rules (step 8)**
 
-- **POST:** `slot` must be 0..2. Keep a ledger `(srcId, epoch, slot) → msgId`. A second, different `msgId` for the same key is equivocation: two valid signatures by the same key for the same slot. Ban `srcId` for `BAN_DURATION`, log `RATE_EQUIVOCATION`, drop. Evict ledger entries older than `MAX_AGE_EPOCHS`.
+- **POST:** `slot` must be 0..2. Keep a ledger `(srcId, epoch, slot) → msgId`. A second, different `msgId` for the same key is equivocation: two valid signatures by the same key for the same slot. Ban `srcId` for `BAN_DURATION`, log `RATE_EQUIVOCATION`, drop. Evict ledger entries older than `MAX_AGE_EPOCHS`. Stretch 4: after `JITTER_MAX` the banning node sends BAN_PROOF (the stored first POST and the second) to every live link except the one it came on and the offender. A receiver takes a link token (else `LINK_FLOOD`), ignores proofs for keys it already bans (this is the dedupe), then checks both are POSTs with the same `srcPub`, `epoch` and `slot` (0..2), different `msgId`s and valid signatures; any failure is link score −100 and `BAD_SIGNATURE`, banning nobody. A valid, fresh proof bans the key, logs `RATE_EQUIVOCATION` and is relayed the same way.
 - **PRESENCE:** accept at most one per `srcId` per 10 s of local time; drop the rest silently. Update the contact table (name, public key, last seen) only if its `lamport` is higher than the cached one. Keep the latest PRESENCE envelope per contact for the link-up replay in 5.5. Not stored in the message store.
 - **DM:** no slot rule.
 - **ACK:** accept only if the acknowledged `msgId` is a DM in the seen set, that DM's `dst` equals this ACK's `srcId`, and no ACK for that DM was accepted before. Otherwise drop silently. This allows exactly one ACK per real DM.
