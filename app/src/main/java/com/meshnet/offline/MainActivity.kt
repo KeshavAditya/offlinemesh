@@ -59,11 +59,13 @@ class MainActivity : Activity() {
         if (!btGranted) return   // plan 8: start the service only once permissions are granted
         startForegroundService(Intent(this, MeshService::class.java))
         MeshService.onListening = { runOnUiThread { load() } }
-        if (MeshService.listening) load()
+        if (MeshService.listening || MeshService.failed != null) load()
     }
 
     private fun load() {
         if (loaded || isDestroyed) return
+        MeshService.failed?.let { status.text = it; return }   // bind failed: never load whatever else answers on the port
+        if (!MeshService.listening) return
         loaded = true
         web.loadUrl("http://127.0.0.1:${MeshService.UI_PORT}/")
     }

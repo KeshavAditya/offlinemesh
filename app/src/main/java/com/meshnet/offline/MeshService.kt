@@ -18,8 +18,6 @@ import mesh.core.Transport
 import mesh.core.TransportListener
 import mesh.lan.LanTransport
 import mesh.ui.UiServer
-import java.net.InetSocketAddress
-import java.net.Socket
 import kotlin.concurrent.thread
 
 /** Foreground service (plan 8, Agent B step 4): owns the MeshNode, its transports and the UI server on 127.0.0.1:8080. */
@@ -29,8 +27,10 @@ class MeshService : Service() {
         const val LAN_PORT = 9001
         const val PREFS = "mesh"
         @Volatile var instance: MeshService? = null; private set
-        /** Set once the UI server accepts connections; the activity waits on this instead of a fixed delay. */
+        /** Set only after our own ui.start() bound the port; the activity waits on this instead of a fixed delay. */
         @Volatile var listening = false; private set
+        /** Why the UI server could not start (e.g. port taken by another app); the activity shows it and loads nothing. */
+        @Volatile var failed: String? = null; private set
         @Volatile var onListening: (() -> Unit)? = null
     }
 
@@ -45,6 +45,14 @@ class MeshService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Ktor's accept coroutine rethrows a bind failure to the uncaught handler after start() already threw (and we
+        // reported it via `failed`); on Android that would kill the process. Swallow only that, pass everything else on.
+        // shortcut: app-wide handler, upgrade to a CoroutineExceptionHandler inside UiServer (uiserver/, mesh-ui) when it takes one.
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            if (e is java.net.BindException) Log.w(TAG, "ignored late bind failure on ${t.name}")
+            else prev?.uncaughtException(t, e)
+        }
         startForeground(1, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         val prefix = Identity.loadOrCreate(filesDir).nodeId.copyOf(4)
         ble = Switchable("ble") { BleL2capTransport(this, prefix) }
@@ -54,11 +62,16 @@ class MeshService : Service() {
         thread(name = "mesh-start") {
             node.start()
             applyPrefs()
-            ui.start()
-            // Ktor's start may return before the socket accepts; probe it so the WebView never sees a refused connection.
-            while (!runCatching { Socket().use { it.connect(InetSocketAddress("127.0.0.1", UI_PORT), 500) } }.isSuccess) Thread.sleep(50)
-            Log.i(TAG, "ui listening 127.0.0.1:$UI_PORT")
-            listening = true
+            // Ktor binds inside start(wait=false) and throws if it cannot, so returning means our own server owns the port.
+            // Never probe the port instead: another app squatting 8080 would answer and the WebView would load its page.
+            try {
+                ui.start()
+                Log.i(TAG, "ui listening 127.0.0.1:$UI_PORT")
+                listening = true
+            } catch (e: Exception) {
+                Log.e(TAG, "ui server failed: $e")
+                failed = "UI server could not start on port $UI_PORT (${(e.cause ?: e).javaClass.simpleName}). Close the app using it and restart OfflineMesh."
+            }
             onListening?.invoke()
         }
     }
