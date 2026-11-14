@@ -15,3 +15,4 @@
 [lead] [14:28] done: contacts table recovers (silent unverified contacts expire after 10 presence intervals when full)
 [lead] [14:30] done: guest PinGuard hardening (expiring per-IP windows, kept across rotation, off after 3 rotations)
 [qa] [14:32] done: 16 redteam tests in core/src/test/kotlin/mesh/redteam/RedTeamTest.kt (2 bugs found, @Ignore'd: onWant answers duplicate ids in one SYNC_WANT, 512 copies per frame; SYNC_WANT not rate limited and resends envelopes the link already has) -> mesh-core
+[lead] [14:34] done: fixed redteam SYNC_WANT amplification bugs; core 43 tests green, 0 skipped
