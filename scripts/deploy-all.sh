@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Install the debug APK on every connected device, grant runtime permissions, turn Bluetooth on, launch (plan 10.3).
-#   ./gradlew :app:assembleDebug && scripts/deploy-all.sh
+#   ./gradlew :app:assembleDebug && scripts/deploy-all.sh [--fresh]
+# --fresh wipes app data (new identities, no stored bans). Use it before each e2e.sh rerun: e2e item 5 bans A for
+# 10 min by design, and phones keep that ban across restarts, so a rerun within 10 min fails items 1, 3 and 4.
 set -u
+FRESH=0; [ "${1:-}" = "--fresh" ] && FRESH=1
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APK="$ROOT/app/build/outputs/apk/debug/app-debug.apk"
 PKG=com.meshnet.offline
@@ -14,6 +17,7 @@ for s in $SERIALS; do
     if [ "$sdk" -ge 31 ]; then perms="BLUETOOTH_SCAN BLUETOOTH_ADVERTISE BLUETOOTH_CONNECT"; else perms="ACCESS_FINE_LOCATION"; fi
     if [ "$sdk" -ge 33 ]; then perms="$perms POST_NOTIFICATIONS"; fi
     adb -s "$s" install -r "$APK" >/dev/null || { echo "$s: install failed"; fail=1; continue; }
+    if [ $FRESH = 1 ]; then adb -s "$s" shell pm clear $PKG >/dev/null || echo "$s: pm clear failed"; fi
     for p in $perms; do adb -s "$s" shell pm grant $PKG android.permission.$p || echo "$s: grant $p failed"; done
     adb -s "$s" shell cmd bluetooth_manager enable >/dev/null 2>&1 || echo "$s: could not enable Bluetooth; turn it on by hand"
     adb -s "$s" shell am start -n $PKG/.MainActivity >/dev/null || { echo "$s: launch failed"; fail=1; continue; }
