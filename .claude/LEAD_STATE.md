@@ -25,7 +25,7 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 
 ## Progress
 - [x] Setup (Parts 1-3)
-- [x] P1  - [ ] P2/Gate1  - [ ] P3/Gate2  - [ ] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
+- [x] P1  - [x] P2/Gate1  - [ ] P3/Gate2  - [ ] P4/Gate3(prov)  - [ ] P5  - [ ] Stretch 1-5  - [ ] Docs  - [ ] Graphify  - [ ] Final report
 
 ## Rules in force
 - Owner's global CLAUDE.md token rules: small helper goals, helper handoff at ~200k, quiet builds (output to file, read failures only).
@@ -37,3 +37,18 @@ Spike rule: if BLE L2CAP fails on emulators (unverified per 10.3a), note it in S
 - 14:20 P1 done (cf539b5..7d9d596): AGP 8.11.0, Kotlin 2.0.21, Ktor 3.0.3, kx-ser 1.7.3. Stubs core/src/main/kotlin/mesh/core/Api.kt. Launching P2: core-1 (constants/identity/codec/crypto/pow), android spike, UI fake node — all worktrees.
 - 14:25 P2 launched: core-1 (identity/codec/crypto/pow+10.1), android BLE spike (emulators meshA/B), ui (UiServer+index.html on fake node). All worktrees. Next core helpers: core-2 security/router/sync/store/node, core-3 SimNetwork + 10.2 tests.
 - 14:35 core-1 done 5aed3cb (P-256 JDK crypto, 11 unit tests). core-2 launched: security/router/sync/store/node + SimNetwork + 10.2 #1-4,8. core-3 next: red-team 5.12 + 10.2 #5-7,9-11.
+- QUEUED for core-3: Identity.kt save() — set tmp file owner-only (setReadable/Writable(false,false) then (true,true)) before writing key (security review finding).
+- 14:50 ui-1 done 6c09f58: UiServer (UiNode iface in uiserver, Host/Origin loopback check), index.html, runFake task. ui-2 launched: LanTransport + loopback test. Next ui-3 (after core-2): desktop main + run-3-desktop.sh + e2e.sh. Later: guest.html/8090 (stretch 1).
+- QUEUED for qa/THREATS.md limitations: loopback UI API is unauthenticated by design (e2e/adb forward); other local apps on same device can drive it; browser pages blocked by Host/Origin check.
+- 15:05 ui-2 done 6566fea: LanTransport(listenPort, staticPeers, discoveryPrefix?); static peer on ONE side only per pair (else 2 links); discovery untested. Waiting core-2 before ui-3 desktop/scripts.
+- 15:08 ui-3 launched: desktop Main + run-3-desktop.sh + e2e.sh (will run e2e once core-2 lands).
+- 15:25 android spike-1 blocked on adb "unauthorized": FIX = cold boot (`emulator -avd X -no-snapshot-load -no-snapshot-save`); meshA now authorized. Spike code b10b177 (SpikeActivity, BleSpike.kt, UUID 6d657368-6e65-7400-8000-00805f9b34fb). Relaunching spike-2.
+- QUEUED android: SpikeActivity exported=true -> remove or exported=false in app build step.
+- QUEUED lan: cap discovery dialer threads (check links.size/MAX_LINKS before thread); core must close links with no HELLO within HELLO_TIMEOUT (verify in core-3).
+- 15:45 spike-2 WORKS on emulators (f4e389e): advertise/scan/L2CAP/text both ways. Gate1 BLE half met. android-2 launched: BleL2capTransport + permissions/manifest. android-3 next: MeshService + WebView + settings row + deploy/forward scripts (+ remove/unexport SpikeActivity).
+- 16:00 core-2 done 6bf366a: MeshNode/Security/Router/Store real, 17 tests (10.2 #1-4,8). GATE 1 MET. core-3 launched: attacks FLOOD/SPOOF/REPLAY, 10.2 #5-7,9-11, Identity perms, HELLO timeout, 5.10/5.11 gaps.
+- QUEUED qa/THREATS.md: route hijack via unsigned hop count (5.7 reverse path) = known limitation. Sent core-3: replay-after-SEEN_CAP test, contacts cap.
+- 16:30 android-2 done 5361ce5: BleL2capTransport(ctx,prefix4), Perms, manifest; spike removed; 59,990B frames OK on emulators. Sent core-3: idle-link timeout 45s. android-3 launched: MeshService+WebView+settings row+deploy-all/forward-ui; leaves 3 emulators running.
+- 16:45 core-3 done d4263fb: 26 tests, all 10.2; #9 = 41 tx / 40 links (bound 80), 25 nodes, seed 42. Fixed replay-after-SEEN_CAP (real bug), contacts cap 256, Identity perms, HELLO timeout test. Pending: idle-link timeout msg (should resume). Open: routes map uncapped; own sent DMs '(sent before restart)'.
+- 17:00 ui-3 built desktop+scripts (06f0155) — e2e items 1-4,6 pass on desktop, 5 waited for attack() (now in). It ALSO built stretch 1 guest (496dd89, GuestServer 8090 + guest.html) early. Sent: rerun e2e (Gate 2) + 3 guest security fixes (PIN lockout, body cap, guest label order). Sent core-3: wanted-set leak + contacts refuse-when-full + idle timeout.
+- 17:10 core fixes done 7a83506: 27 tests; silent-link close 45s (muted links exempt; liveness from PRESENCE 30s), wanted-set leak fixed, contacts refuse-when-full. Core workstream COMPLETE.
