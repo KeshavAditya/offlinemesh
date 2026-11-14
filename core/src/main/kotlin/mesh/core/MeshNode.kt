@@ -165,7 +165,7 @@ class MeshNode(
 
     private fun listenerFor(t: Transport) = object : TransportListener {
         override fun onLinkUp(link: LinkId, description: String) = loop { linkUp(t, link, description) }
-        override fun onFrame(link: LinkId, frame: ByteArray) = loop { links[link]?.let { onFrame(it, frame) } }
+        override fun onFrame(link: LinkId, frame: ByteArray) = loop { links[link]?.let { it.lastRxMs = now(); onFrame(it, frame) } }
         override fun onLinkDown(link: LinkId) = loop { if (links.remove(link) != null) { routes.dropLink(link); emitNet() } }
     }
 
@@ -244,6 +244,7 @@ class MeshNode(
     // Steps 1 to 6 penalise the link that delivered the envelope, never the claimed source.
     private fun ingress(l: Link, e: Envelope) {
         val mid = hex(e.msgId)
+        val asked = l.wanted.remove(mid)   // before any early return, so dropped envelopes cannot fill the 512 cap for good
         seen[mid]?.let { it.have += l.id; return }
         if (guard.accepted.containsKey(mid)) return   // replay of a POST/DM already evicted from the seen LRU
         val src = hex(e.srcId)
@@ -254,7 +255,7 @@ class MeshNode(
         if (!Crypto.verify(e.srcPub, e.core, e.sig)) return penalize(l, C.SCORE_BAD_SIG, SecKind.BAD_SIGNATURE, "msg $mid", src)
         if (!guard.fresh(e.epoch, epochNow())) return sec(SecKind.STALE, "epoch ${e.epoch}", l, src)
         if (!typeRules(l, e, src, mid, now)) return
-        if (!l.wanted.remove(mid) && !l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
+        if (!asked && !l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
         accept(e, l, now, replay = false)
     }
 
@@ -326,10 +327,10 @@ class MeshNode(
         if (src == me) return
         val old = contacts[src]
         if (old != null && e.lamport <= old.lamport) return
+        // PRESENCE costs nothing to make: a full table refuses new unverified contacts rather than evicting known ones.
+        if (old == null && src !in verified && contacts.size >= MAX_CONTACTS) return
         val n = e.body[0].toInt() and 0xff
         contacts[src] = Peer(String(e.body, 1, n, Charsets.UTF_8), e.srcPub, now, e.lamport, e)
-        // PRESENCE costs nothing to make: cap the table, dropping the least recently seen unverified contact.
-        if (contacts.size > MAX_CONTACTS) contacts.entries.filter { it.key !in verified }.minByOrNull { it.value.lastSeen }?.let { contacts.remove(it.key) }
         emitNet()
     }
 
@@ -447,7 +448,17 @@ class MeshNode(
         if (ids.isNotEmpty()) frame(l, Frame.SyncOffer(ids))
     }
 
-    private fun syncLoop(l: Link): Unit = later(C.SYNC_INTERVAL_MS) { if (links[l.id] === l) { offer(l); syncLoop(l) } }
+    /**
+     * Also closes links silent for 3 x SYNC_INTERVAL: a BLE peer can vanish without an IOException.
+     * Live peers send PRESENCE every 30 s, so a healthy link is never silent that long.
+     * shortcut: links to peers we muted are exempt (a muted pair sends nothing by design); a one-sided mute
+     * still lets the unmuted side close the link after 45 s, fine since the demo mutes both ways.
+     */
+    private fun syncLoop(l: Link): Unit = later(C.SYNC_INTERVAL_MS) {
+        if (links[l.id] !== l) return@later
+        if (l.peer !in muted && now() - l.lastRxMs > 3 * C.SYNC_INTERVAL_MS) { sec(SecKind.LINK_CLOSED, "silent for 45 s", l, l.peer); closeLink(l); return@later }
+        offer(l); syncLoop(l)
+    }
 
     private fun onOffer(l: Link, ids: List<ByteArray>) {
         val want = ArrayList<ByteArray>()
@@ -455,7 +466,7 @@ class MeshNode(
             val mid = hex(b)
             val s = seen[mid]
             // Cap outstanding wants: a wanted envelope skips the token bucket, so an offerer must not get unlimited skips.
-            if (s != null) s.have += l.id else if (l.wanted.size < 512 && l.wanted.add(mid)) want += b
+            if (s != null) s.have += l.id else if (!guard.accepted.containsKey(mid) &&l.wanted.size < 512 && l.wanted.add(mid)) want += b
         }
         if (want.isNotEmpty()) frame(l, Frame.SyncWant(want))
     }

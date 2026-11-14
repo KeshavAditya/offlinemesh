@@ -7,6 +7,7 @@ internal class Link(val id: LinkId, val transport: Transport, val desc: String, 
     var peer: String? = null                 // NodeId hex once authenticated
     var authed = false
     var score = C.SCORE_START
+    var lastRxMs = nowMs                     // any frame, for the silent-link check
     val wanted = HashSet<String>()           // msgIds we asked for with SYNC_WANT: exempt from the bucket once
     private var tokens = C.BUCKET_SIZE.toDouble()
     private var bucketAt = nowMs

@@ -243,6 +243,19 @@ class SimTest {
         assertTrue(net.nodes.getValue("B").security().any { it.kind == SecKind.LINK_CLOSED && it.link == "sim:S" })
     }
 
+    /** A peer that vanishes without onLinkDown is closed after 3 x SYNC_INTERVAL of silence; a quiet but live link is not. */
+    @Test fun silentLinkIsClosed() {
+        val net = SimNetwork()
+        line(net)
+        net.runFor(3 * C.SYNC_INTERVAL_MS + 30_000)   // idle but alive: PRESENCE keeps it open
+        assertTrue(net.linkOf("A", "B").isUp && net.linkOf("B", "C").isUp, "live link closed as silent")
+        net.linkOf("A", "B").blackhole = true
+        net.runFor(3 * C.SYNC_INTERVAL_MS + C.SYNC_INTERVAL_MS + 1_000)
+        assertFalse(net.linkOf("A", "B").isUp, "silent link still open")
+        assertTrue(net.nodes.getValue("B").security().any { it.kind == SecKind.LINK_CLOSED && it.link == "sim:A" })
+        assertTrue(net.linkOf("B", "C").isUp)
+    }
+
     /** Lead's extra: a replay after its msgId fell out of the SEEN_CAP LRU must still be dropped (POST and DM). */
     @Test fun replayAfterSeenEvictionIsStillDropped() {
         val net = SimNetwork()
@@ -263,9 +276,18 @@ class SimTest {
         }
         net.runFor((C.SEEN_CAP + 10) * 400L + 1_000)
         assertTrue(b.security().none { it.kind == SecKind.LINK_FLOOD }, "presence pacing tripped the bucket")
-        assertTrue(b.node.snapshot().contacts.size <= 257, "contacts not capped: ${b.node.snapshot().contacts.size}")
+        val contacts = b.node.snapshot().contacts
+        assertEquals(256, contacts.size, "contacts not capped")
+        assertTrue(contacts.any { it.id == m.id }, "the established contact M was pushed out")
         old.forEach { net.inject("M", "B", it) }
         net.runFor(2_000)
         assertEquals(2, b.added().size, "replay re-accepted: ${b.added().map { it.text }}")
+        // Offering the evicted-but-accepted ids must not make B want them (that would leak SYNC_WANT slots).
+        val oldIds = old.map { (Codec.decodeFrame(it) as Frame.Env).env.msgId }
+        val before = net.sent.size
+        net.inject("M", "B", Codec.encodeFrame(Frame.SyncOffer(oldIds)))
+        net.runFor(1_000)
+        val wants = net.sent.drop(before).mapNotNull { Codec.decodeFrame(it.frame) as? Frame.SyncWant }.flatMap { it.ids }
+        assertTrue(wants.none { w -> oldIds.any { it.contentEquals(w) } }, "B asked again for envelopes it already accepted")
     }
 }

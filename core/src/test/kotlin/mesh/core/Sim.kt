@@ -58,8 +58,12 @@ class SimLink(private val net: SimNetwork, val a: SimNode, val b: SimNode) {
         net.post { a.transport.listener?.onLinkDown(idAt(a)); b.transport.listener?.onLinkDown(idAt(b)) }
     }
 
+    /** Peer vanished silently: frames are swallowed and nobody sees an onLinkDown. */
+    var blackhole = false
+
     fun carry(from: SimNode, frame: ByteArray): Boolean {
         if (!isUp) return false
+        if (blackhole) return true
         val to = if (from === a) b else a
         net.schedule(SimNetwork.LATENCY_MS) {
             if (isUp) { net.sent += SimNetwork.Sent(from.name, to.name, frame, net.nowMs()); to.transport.listener?.onFrame(idAt(to), frame) }
