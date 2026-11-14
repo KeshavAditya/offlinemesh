@@ -12,3 +12,6 @@ build.log
 .playwright-mcp/
 .mesh-run/
 graphify-out/cache/
+.playwright-mcp/
+.claude/worktrees/
+.mesh-run/
