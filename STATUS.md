@@ -8,3 +8,4 @@
 [core] [14:12] done: node/security/router/sync/store + 10.2 #1-4,8 (mesh.core.ExecutorScheduler available for app/desktop)
 [ui] [14:20] blocked: Gate 2 e2e: run-3-desktop.sh + e2e.sh pass items 1,2,3,4,6 on real core; item 5 fails because MeshNode.attack() is a no-op (core: implement 5.12 flood/spoof/replay). Note: curl localhost:8081 can hit another local server over IPv6; use 127.0.0.1
 [android] [14:20] done: BleL2capTransport + permissions (2 emulators: 3 small + 59,990 B frame both ways, CRC match, ~5 s; close -> onLinkDown both sides, redial <1 s; BT toggle -> new PSM re-advertised, relink ~4 s. Note: netsim BT stack once SIGABRT on HCI LE_ADV_FILTER timeout, emulator-only; peer saw no link-down after that crash, so core must detect silent links)
+[core] [14:21] done: red-team hooks + all 10.2 tests (#9: 41 transmissions / 40 links, bound 80); replay-after-LRU dedupe, contacts cap 256, hello-timeout test, key tmp owner-only
