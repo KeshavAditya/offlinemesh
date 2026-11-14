@@ -327,8 +327,12 @@ class MeshNode(
         if (src == me) return
         val old = contacts[src]
         if (old != null && e.lamport <= old.lamport) return
-        // PRESENCE costs nothing to make: a full table refuses new unverified contacts rather than evicting known ones.
-        if (old == null && src !in verified && contacts.size >= MAX_CONTACTS) return
+        // PRESENCE costs nothing to make: a full table refuses new unverified contacts rather than evicting known ones,
+        // but first drops unverified ones silent for 10 presence intervals so injected entries age out.
+        if (old == null && src !in verified && contacts.size >= MAX_CONTACTS) {
+            contacts.entries.removeIf { it.key !in verified && now - it.value.lastSeen > 10 * C.PRESENCE_INTERVAL_MS }
+            if (contacts.size >= MAX_CONTACTS) return
+        }
         val n = e.body[0].toInt() and 0xff
         contacts[src] = Peer(String(e.body, 1, n, Charsets.UTF_8), e.srcPub, now, e.lamport, e)
         emitNet()
