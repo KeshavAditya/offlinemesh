@@ -949,7 +949,7 @@ Done when acceptance checks 1 to 6 pass on three phones.
 
 1. `UiServer(node, port)`: static page, `/ws`, `/api/snapshot`, `/api/cmd`, bound to 127.0.0.1. Start with a fake `MeshNode` that emits sample events so the page can be built before the core exists.
 2. `index.html` per section 7.
-3. `LanTransport` (in `lan/`, no Android imports): TCP listener plus optional UDP broadcast discovery (port 47474, every 2 s, payload `"OMESH1" || 4-byte NodeId prefix || u16 tcpPort`), plus static peers from the command line. Same tie-break as Bluetooth for discovered peers (the LAN beacon keeps the NodeId prefix; only the Bluetooth advert uses a random tag).
+3. `LanTransport` (in `lan/`, no Android imports): TCP listener plus optional UDP broadcast discovery (port 47474, every 2 s, payload `"OMESH1" || 4 random bytes || u16 tcpPort`, the random tag drawn fresh per transport instance so the beacon is not a tracking handle), plus static peers from the command line. Same tie-break as Bluetooth for discovered peers (smaller random tag dials).
 4. `desktop` main: `--data <dir> --ui-port <n> --listen <n> [--peer host:port]... [--no-discovery]`.
 5. `run-3-desktop.sh`: three nodes on one laptop wired in a line (A↔B, B↔C, discovery off), UIs on 8081 to 8083.
 6. `e2e.sh`: drives three UIs through `curl` (works against desktop nodes and against phones through `adb forward`) and checks acceptance items 1 to 6. For item 6 it mutes B and C toward each other to create the partition, then unmutes.
