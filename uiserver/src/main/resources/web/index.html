@@ -299,7 +299,7 @@ function send(cmd, clearId, errId) {
       // No event reports these back, so keep the local copy in step.
       if (cmd.t === 'name') S.self.name = cmd.name;
       if (cmd.t === 'debug') S.debug[cmd.flag] = cmd.on;
-      if (cmd.t === 'profile' || cmd.t === 'panic') return fetch('/api/snapshot').then(r => r.json()).then(s => { apply(Object.assign(s, { t: 'snapshot' })); render(); });
+      if (cmd.t === 'profile') return fetch('/api/snapshot').then(r => r.json()).then(s => { apply(Object.assign(s, { t: 'snapshot' })); render(); });
       render();
     })
     .catch(e => fail(e));
@@ -313,7 +313,7 @@ function upsert(list, m) {
 
 function apply(ev) {
   if (ev.t === 'snapshot') {
-    if (S && S.self.id !== ev.self.id) { open = null; unread.feed = unread.security = 0; for (const k in dmUnread) delete dmUnread[k]; }   // U2: wiped, new identity
+    if (S && S.self.id !== ev.self.id) { open = null; unread.feed = unread.security = 0; for (const k in dmUnread) delete dmUnread[k]; }   // U2: wiped, new identity (the server pushes this snapshot on Reset)
     S = ev; S.groups = S.groups || []; S.gdms = S.gdms || {}; return; }
   if (!S) return;
   if (ev.t === 'msg') {
