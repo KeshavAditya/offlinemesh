@@ -57,7 +57,7 @@
 
   // "Enter the new PIN" prompt, built from the page's own classes.
   const form = document.createElement('form');
-  form.className = 'box'; form.hidden = true;
+  form.className = 'box'; form.hidden = true; form.style.marginTop = '8px';
   form.innerHTML = '<p>Can\'t join the host. If its PIN changed, enter the new PIN.</p>'
     + '<div class="row" style="margin-bottom:12px"><input type="text" id="pinIn" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="PIN">'
     + '<button class="pri">Join</button></div>';
@@ -88,7 +88,7 @@
       + '<p class="mut">File SHA-256, check it before installing:<br><span class="mono"></span></p><img class="qr" alt="QR code of the app download link">';
     d.querySelector('.mono').textContent = OM_APK.sha256.match(/.{4}/g).join(' ');
     d.querySelector('img').src = qr(new URL('/app.apk', location.href).href);
-    $('posts').before(d);
+    $('guest').before(d);   // Me tab, under my fingerprint
   }
 
   const b = window.OM_BACKEND = {

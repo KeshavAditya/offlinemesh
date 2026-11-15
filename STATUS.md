@@ -66,3 +66,4 @@
 [ui-redesign] [22:39] done: index.html redesign (39 KB, backend object, e2e 1-7 PASS on 3 desktop nodes, :uiserver:test green)
 [mesh-ui] [22:50] done: guest URL / serves full web client (in-browser leaf via meshnode.js, PoW Worker, PIN re-entry prompt), /lite read-only, /app.apk + SHA-256 + QR (desktop --apk, MeshService sourceDir); Chromium at LAN IP (insecure context): post, DM 2 hops both ways DELIVERED, group both ways, reload keeps id, wrong PIN prompt
 [android] [23:10] done: v2 final check on emulators, R8 release: e2e 1-8 PASS on 4 emulators; guest web client on meshA: browser DM to C via B DELIVERED + reply, /app.apk hash matches; forward-ui.sh takes SERIALS and PORT
+[mesh-ui] [23:24] done: merged ui-app-structure (Chats/Feed/People/Me) into v2; web client kept: app download moved to Me, PIN prompt above tabs; uiserver tests, meshcore 6/6, webnode-interop, e2e on 3 desktop nodes, Playwright 390x844 app + LAN guest (wrong PIN, join, DM 3 hops) pass
