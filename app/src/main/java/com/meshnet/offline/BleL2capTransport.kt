@@ -28,6 +28,7 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.IOException
+import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
@@ -38,11 +39,14 @@ import java.util.concurrent.atomic.AtomicInteger
 const val TAG = "OfflineMesh"
 val MESH_SERVICE_UUID: ParcelUuid = ParcelUuid(UUID.fromString("6d657368-6e65-7400-8000-00805f9b34fb"))
 
-/** Scan-response service data: 4-byte NodeId prefix || 2-byte PSM (big endian). */
-fun encodeServiceData(prefix: ByteArray, psm: Int) = prefix + byteArrayOf((psm shr 8).toByte(), psm.toByte())
+/** Scan-response service data: 4-byte advert tag || 2-byte PSM (big endian). */
+fun encodeServiceData(tag: ByteArray, psm: Int) = tag + byteArrayOf((psm shr 8).toByte(), psm.toByte())
 fun decodePsm(data: ByteArray) = ((data[4].toInt() and 0xff) shl 8) or (data[5].toInt() and 0xff)
 
-/** Unsigned lexicographic compare; the lower prefix dials. */
+/** 4 random bytes per transport start: a static NodeId prefix in the advert would be a passive tracking handle. */
+fun newAdvertTag() = ByteArray(4).also { SecureRandom().nextBytes(it) }
+
+/** Unsigned lexicographic compare; the lower tag dials. */
 fun prefixLess(a: ByteArray, b: ByteArray): Boolean {
     for (i in a.indices) { val d = (a[i].toInt() and 0xff) - (b[i].toInt() and 0xff); if (d != 0) return d < 0 }
     return false
@@ -51,11 +55,10 @@ fun prefixLess(a: ByteArray, b: ByteArray): Boolean {
 /**
  * Insecure LE L2CAP CoC links (plan 8, Agent B "BleL2capTransport details"), framed with Codec.writeFrame/readFrame.
  * Peer identity is core's job (5.5); this only moves frames. Caller must hold the Bluetooth runtime permissions.
- * @param prefix this node's 4-byte NodeId prefix, advertised for the dial tie-break.
  * @param longRange U5: the profile asks for a coded-PHY advert and scan; used only if the adapter supports both.
  */
 @SuppressLint("MissingPermission")
-class BleL2capTransport(ctx: Context, private val prefix: ByteArray, longRange: Boolean = false) : Transport {
+class BleL2capTransport(ctx: Context, longRange: Boolean = false) : Transport {
     override val name = "ble"
 
     private companion object {
@@ -69,15 +72,14 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray, longRange: 
     private val adapter: BluetoothAdapter = (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
     private val running = AtomicBoolean(false)
     private val links = ConcurrentHashMap<LinkId, Link>()
-    private val dialing = ConcurrentHashMap.newKeySet<String>()   // hex prefixes of peers with a dialer (or its live link) alive
+    private val dialing = ConcurrentHashMap.newKeySet<String>()   // hex advert tags of peers with a dialer (or its live link) alive
     private val ids = AtomicInteger()
     private val pending = AtomicInteger()   // dialers not yet connected; a connected dialer is already in links
     private lateinit var listener: TransportListener
     @Volatile private var server: BluetoothServerSocket? = null
     private val coded = longRange && adapter.isLeCodedPhySupported && adapter.isLeExtendedAdvertisingSupported
     private val seen = ConcurrentHashMap<String, String>()   // address -> " rssi -61[ phy coded]" from its last scan result (U1)
-
-    init { require(prefix.size == 4) }
+    private val tag = newAdvertTag()   // advertised for the dial tie-break only; Switchable builds a new instance per start
 
     override fun start(listener: TransportListener) {
         this.listener = listener
@@ -133,7 +135,7 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray, longRange: 
         // UUID in the advert, service data in the scan response: both in one packet exceeds 31 bytes.
         val data = AdvertiseData.Builder().setIncludeDeviceName(false).addServiceUuid(MESH_SERVICE_UUID).build()
         val resp = AdvertiseData.Builder().setIncludeDeviceName(false)
-            .addServiceData(MESH_SERVICE_UUID, encodeServiceData(prefix, psm)).build()
+            .addServiceData(MESH_SERVICE_UUID, encodeServiceData(tag, psm)).build()
         adv.startAdvertising(settings, data, resp, advCb)
         if (!coded) return
         // U5: a second, extended set on coded PHY. Extended connectable adverts are not scannable: UUID and data in one packet.
@@ -142,7 +144,7 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray, longRange: 
             .setPrimaryPhy(BluetoothDevice.PHY_LE_CODED).setSecondaryPhy(BluetoothDevice.PHY_LE_CODED)
             .setInterval(AdvertisingSetParameters.INTERVAL_LOW).setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH).build()
         val all = AdvertiseData.Builder().setIncludeDeviceName(false).addServiceUuid(MESH_SERVICE_UUID)
-            .addServiceData(MESH_SERVICE_UUID, encodeServiceData(prefix, psm)).build()
+            .addServiceData(MESH_SERVICE_UUID, encodeServiceData(tag, psm)).build()
         runCatching { adv.startAdvertisingSet(p, all, null, null, null, codedCb) }.onFailure { Log.e(TAG, "ble coded advertise start failed: $it") }
     }
 
@@ -157,9 +159,9 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray, longRange: 
             val peer = sd.copyOf(4)
             if (seen.size > 64) seen.clear()   // rotating or spoofed addresses must not grow the map
             seen[r.device.address] = " rssi ${r.rssi}" + if (coded) " phy ${phyName(r.primaryPhy)}" else ""
-            if (adapter.bluetoothLeAdvertiser != null && !prefixLess(prefix, peer)) return   // tie-break; also skips ourselves
-            // One dialer per prefix, not per address: Android rotates private addresses (~15 min), and an address key
-            // re-dials an already-linked peer forever (seen on emulators: 870 duplicate links in 10 min). A spoofed prefix
+            if (adapter.bluetoothLeAdvertiser != null && !prefixLess(tag, peer)) return   // tie-break; also skips ourselves
+            // One dialer per tag, not per address: Android rotates private addresses (~15 min), and an address key
+            // re-dials an already-linked peer forever (seen on emulators: 870 duplicate links in 10 min). A spoofed tag
             // only holds the slot until core rejects its hello; the global cap below bounds spoofed dialers.
             val key = hex(peer)
             if (links.size + pending.get() >= C.MAX_LINKS || !dialing.add(key)) return   // global cap: spoofed adverts cannot spawn unbounded dialers
@@ -171,7 +173,7 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray, longRange: 
                 try {
                     dial(r.device, decodePsm(sd), connected)
                     // Core closes links it will not keep (banned peer, duplicate); without a pause the next scan result
-                    // redials at once, forever (seen: 342 dials to a banned peer). Hold the prefix slot for a while.
+                    // redials at once, forever (seen: 342 dials to a banned peer). Hold the tag slot for a while.
                     if (!counted.get() && System.currentTimeMillis() - t0 < SHORT_LINK_MS) sleep(REDIAL_COOLDOWN_MS)
                 } finally { connected(); dialing.remove(key) }
             }

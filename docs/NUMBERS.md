@@ -6,15 +6,16 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 
 | What | Result |
 |---|---|
-| `./gradlew :core:test` (v2 branch) | 108 tests, all pass, none ignored (lan 2, uiserver 10) |
-| of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 19, all pass |
+| `./gradlew test` (v2 branch, counted from the test reports) | 145 tests, all pass, none ignored: core 121, uiserver 16, app 4, lan 2, desktop 2 |
+| of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 29, all pass (RedTeamTest 26 incl. T1-T7 and T11, BroadcastCostTest 2, PowTimingTest 1); plus 4 guest-server attack tests (T8) in uiserver |
+| Browser client tests (`node --test`) | meshcore.js vectors 6/6 against the Kotlin core both ways; browser node against 2 desktop nodes 11/11 |
 | `scripts/e2e.sh` on 3 desktop nodes (TCP, one laptop) | items 1-6 PASS (run twice) |
 | `scripts/e2e.sh` on 3 Android emulators (API 36, emulated Bluetooth) | items 1-6 PASS |
 | `scripts/e2e.sh` on 5 desktop nodes (`NODES=5`, TCP, one laptop, in a line) | items 1-8 PASS; item 7 (group of all 5) showed `Delivered to 4 of 4` in about 1 s |
 | `scripts/e2e.sh` on 4 Android emulators | items 1-8 PASS (fresh deploy, no manual mutes; group notification shown on C) |
 | v2 on 4 emulators: `e2e.sh` + persistent-link check (10 DMs, `linkUps` must not rise) | items 1-8 PASS (fresh deploy, no manual mutes; item 7 delivered 3 of 3 in 2 s, item 6 C caught up in 3 s). 10 DMs B to D (A is banned on B after item 5), all DELIVERED: `linkUps`/`linkDowns` A 3/0, B 3/0, C 4/1, D 4/1 before and after, so no relinks (C/D's extra up/down happened at startup, before e2e). Network tab shows each link as `ble <mac> rssi 20` (emulator rssi is constant) |
 | v2 final, R8 release APK (2.45 MB) on 4 emulators + guest web client | `e2e.sh` items 1-8 PASS (second run; the first failed 7 and 8 only because meshD's emulator Bluetooth stack crashed 10 s after boot, the app relinked once BT was re-enabled). Browser (Playwright, 390x844) at A's guest port: 1 web link on A next to its 2 BLE links (none refused); DM browser to C 3 hops via A and B DELIVERED, C's reply received. `/app.apk` SHA-256 = shown hash = installed base.apk = build output |
-| `scripts/e2e.sh` on the 3 real phones | **not run yet** |
+| Real phones, one run (OPPO + A52s over Bluetooth, laptop desktop node over LAN with a static peer; no Fold 7) | items 1, 2, 3, 4, 6, 7 PASS; item 5 FAIL: the OPPO went silent mid-test (B logged LINK_CLOSED after 45 s silent, adb to the OPPO hung), so Android battery saving or ColorOS stopped the app. B's flood and ban logic was correct. One BLE DM took 560 ms. Source: orchestrator log, 21:04. Not re-run since the battery prompt was added |
 
 ## Broadcast cost (simulator, real core code, virtual time)
 
@@ -74,7 +75,7 @@ A group message is sent as one ordinary DM to each other member, so it costs **(
 ## Still to measure
 
 - PoW time on each real phone.
-- `e2e.sh` on the three real phones, and real Bluetooth range and timing.
+- A full `e2e.sh` pass on the three real phones (after the battery fix), and real Bluetooth range and timing.
 
 ## Forwarding benchmark in plain words
 

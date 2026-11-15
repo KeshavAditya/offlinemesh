@@ -16,6 +16,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.security.SecureRandom
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -26,7 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * TCP links framed as u32 length + frame (Codec.writeFrame/readFrame). Peer identity is core's job (5.5); this only moves frames.
  * @param listenPort TCP port to accept on (0 = ephemeral, read [port] after start).
  * @param staticPeers "host:port" entries, always dialled, redialled with backoff while the transport runs.
- * @param discoveryPrefix 4-byte NodeId prefix; non-null turns on UDP broadcast discovery on [DISCOVERY_PORT].
+ * @param discoveryPrefix non-null turns on UDP broadcast discovery on [DISCOVERY_PORT]. Its bytes are not sent: the beacon carries
+ *   [tag], 4 random bytes per instance, so it is not a tracking handle (same as the Bluetooth advert).
  */
 class LanTransport(
     private val listenPort: Int,
@@ -49,6 +51,7 @@ class LanTransport(
     private lateinit var listener: TransportListener
     private var server: ServerSocket? = null
     private var udp: DatagramSocket? = null
+    internal val tag = ByteArray(4).also { SecureRandom().nextBytes(it) }   // beacon tie-break only; callers build a new instance per start
 
     /** Bound TCP port, valid after [start]. */
     val port: Int get() = server?.localPort ?: -1
@@ -67,7 +70,7 @@ class LanTransport(
             val host = p.substringBeforeLast(':'); val pt = p.substringAfterLast(':').toInt()
             thread("lan-dial-$p") { dialLoop(host, pt, forever = true) }
         }
-        if (discoveryPrefix != null) startDiscovery(discoveryPrefix)
+        if (discoveryPrefix != null) startDiscovery(tag)
     }
 
     override fun stop() {
@@ -99,7 +102,6 @@ class LanTransport(
     }
 
     private fun startDiscovery(prefix: ByteArray) {
-        require(prefix.size == 4)
         val sock = DatagramSocket(null).apply { reuseAddress = true; broadcast = true; bind(InetSocketAddress(DISCOVERY_PORT)) }
         udp = sock
         val beacon = ByteBuffer.allocate(12).put(MAGIC).put(prefix).putShort(port.toShort()).array()
@@ -117,7 +119,7 @@ class LanTransport(
                 try { sock.receive(pkt) } catch (e: IOException) { return@thread }
                 if (pkt.length != 12 || !buf.copyOfRange(0, 6).contentEquals(MAGIC)) continue
                 val peer = buf.copyOfRange(6, 10)
-                if (!lessUnsigned(prefix, peer)) continue          // tie-break: only the smaller prefix dials (also skips our own beacon)
+                if (!lessUnsigned(prefix, peer)) continue          // tie-break: only the smaller tag dials (also skips our own beacon)
                 val host = pkt.address.hostAddress
                 val tcp = ((buf[10].toInt() and 0xff) shl 8) or (buf[11].toInt() and 0xff)
                 val key = "$host:$tcp"
@@ -126,7 +128,7 @@ class LanTransport(
         }
     }
 
-    private fun lessUnsigned(a: ByteArray, b: ByteArray): Boolean {
+    internal fun lessUnsigned(a: ByteArray, b: ByteArray): Boolean {
         for (i in a.indices) {
             val x = a[i].toInt() and 0xff; val y = b[i].toInt() and 0xff
             if (x != y) return x < y
