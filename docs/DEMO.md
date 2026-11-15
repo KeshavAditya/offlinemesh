@@ -11,7 +11,7 @@ Have the fallback (desktop) ready in a second terminal before you start.
 1. All three phones: airplane mode on, Bluetooth on, mobile data off, Wi-Fi off.
 2. Plug all three into the laptop, then:
    ```
-   ./gradlew :app:assembleDebug
+   ./gradlew :app:assembleRelease   # R8-shrunk, ~2.4 MB
    scripts/deploy-all.sh          # install, grant permissions, Bluetooth on, launch
    scripts/forward-ui.sh          # prints "<serial> -> http://127.0.0.1:808N/"
    ```
