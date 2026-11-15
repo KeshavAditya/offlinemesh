@@ -614,7 +614,7 @@ function renderChats() {
   const q = val('q').toLowerCase();
   const row = (kind, id) => ({ kind, id, title: kind === 'group' ? gname(id) : name(id), last: ((kind === 'group' ? S.gdms : S.dms)[id] || []).reduce((a, m) => !a || byOrder(a, m) < 0 ? m : a, null) });
   const when = r => r.last ? r.last.tsMs : r.kind === 'group' ? 0 : -1;
-  const rows = [...[...new Set([...others().map(c => c.id), ...Object.keys(S.dms)])].map(id => row('dm', id)),
+  const rows = [...[...new Set([...others().filter(c => !c.revoked).map(c => c.id), ...Object.keys(S.dms)])].map(id => row('dm', id)),   // a wiped identity is not offered as "in range"
                 ...[...new Set([...S.groups.map(g => g.id), ...Object.keys(S.gdms)])].map(id => row('group', id))]
     .filter(r => !q || r.title.toLowerCase().includes(q) || (r.last && r.last.text || '').toLowerCase().includes(q))
     .sort((a, b) => when(b) - when(a) || a.title.localeCompare(b.title));
