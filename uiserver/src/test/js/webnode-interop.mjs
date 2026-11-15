@@ -61,7 +61,7 @@ process.on('SIGINT', () => { cleanup(); process.exit(130); });
 
 try {
   if (!process.env.SKIP_BUILD) {
-    const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
+    const gradlew = process.platform === 'win32' ? '.\\gradlew.bat' : './gradlew'; // explicit .\ : cmd may not search cwd
     const b = spawnSync(gradlew, [':desktop:installDist', '-q'], { cwd: root, encoding: 'utf8', shell: process.platform === 'win32' });
     if (b.status !== 0) throw new Error('build failed:\n' + (b.stderr || b.stdout).split('\n').slice(-20).join('\n'));
   }
