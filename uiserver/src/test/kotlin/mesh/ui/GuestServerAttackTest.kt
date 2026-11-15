@@ -40,7 +40,9 @@ class GuestServerAttackTest {
         val (status, reply) = raw(head)
         assertFalse("SECRET" in reply, "$head leaked a data file")
         assertFalse(status in 500..599, "$head gave $status")
-        assertTrue(status == 0 || status in 400..499, "$head gave $status")
+        // A 302 is safe only to the fixed page root (captive-portal catch-all), never a reflected path or Host.
+        val loc = reply.lineSequence().firstOrNull { it.startsWith("Location:", true) }?.substringAfter(':')?.trim()
+        assertTrue(status == 0 || status in 400..499 || (status == 302 && loc == "/"), "$head gave $status $loc")
     }
 
     @Test fun traversalAndOddPathsServeNothingOutsideTheApkAndPages() {
@@ -53,7 +55,15 @@ class GuestServerAttackTest {
         for (p in paths) assertSafe("GET $p HTTP/1.1")
         val (status, reply) = raw("GET /app.apk HTTP/1.1")   // control: the APK itself is public, so raw() really talks HTTP
         assertTrue(status == 200 && "APK-BYTES" in reply, "control GET /app.apk gave $status")
-        assertTrue(raw("GET /../secret.txt HTTP/1.1").first == 404)
+        assertTrue(raw("GET /../secret.txt HTTP/1.1").first == 302)
+    }
+
+    @Test fun captiveProbesRedirectToTheFixedRoot() {
+        for (p in listOf("/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html", "/ncsi.txt",
+                "/connecttest.txt", "/canonical.html", "/success.txt", "/a/b?x=http://evil")) {
+            val (status, reply) = raw("GET $p HTTP/1.1")
+            assertTrue(status == 302 && "\r\nLocation: /\r\n" in reply, "$p gave $status")
+        }
     }
 
     @Test fun onlyGetServesTheApk() {

@@ -16,6 +16,7 @@ import io.ktor.server.plugins.origin
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -126,6 +127,9 @@ class GuestServer(
                     node.exec(Cmd.Post(body))
                     call.respondText("""{"ok":true}""", ContentType.Application.Json)
                 }
+                // Captive-portal probes (/generate_204, /hotspot-detect.html, ...) and any other unknown GET land on the
+                // page; fixed Location so neither the path nor the Host header is reflected. Lowest priority: real routes win.
+                get("{...}") { call.respondRedirect("/") }
             }
         }.start(wait = false)
     }

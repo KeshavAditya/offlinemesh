@@ -58,10 +58,10 @@ class WebTransportTest {
             val e = runCatching { connect(port, "nope") }.exceptionOrNull()
             val h = assertIs<WebSocketHandshakeException>((e as CompletionException).cause)
             assertEquals(403, h.response.statusCode())
-            for (path in listOf("/mesh", "/mesh/", "//mesh", "/%6Desh", "/mesh/?pin=")) {   // no PIN on any spelling of the route
+            for (path in listOf("/mesh", "/mesh/", "//mesh", "/%6Desh", "/mesh/?pin=")) {   // no PIN on any spelling of the route (302 = captive catch-all to /, still no upgrade)
                 val r = runCatching { http.newWebSocketBuilder().buildAsync(URI("ws://127.0.0.1:$port$path"), Client()).join() }
                 assertTrue(r.isFailure, "upgraded without PIN: $path")
-                (r.exceptionOrNull()?.cause as? WebSocketHandshakeException)?.let { assertTrue(it.response.statusCode() in listOf(403, 404), "$path ${it.response.statusCode()}") }
+                (r.exceptionOrNull()?.cause as? WebSocketHandshakeException)?.let { assertTrue(it.response.statusCode() in listOf(403, 404, 302), "$path ${it.response.statusCode()}") }
             }
 
             val (ws, c) = connect(port, guard.pin)
