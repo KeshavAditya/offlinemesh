@@ -68,6 +68,7 @@ data class Contact(
     val muted: Boolean,
     val lastSeenMs: Long,
     val suspect: Boolean = false,   // U8: unverified, with the same name as a verified contact
+    val revoked: Boolean = false,   // U2: its owner panic-wiped; later DMs from this key are dropped
 )
 
 @Serializable
@@ -134,5 +135,6 @@ sealed interface MeshEvent {
     data class SecurityLogged(val event: Sec) : MeshEvent
     data class GroupChanged(val group: Group) : MeshEvent                                   // 13.2; members without self = left
     data class GroupStatusChanged(val id: String, val delivered: Int, val total: Int) : MeshEvent
+    object Reset : MeshEvent                                                                  // U2: state replaced (wipe, peer revoke); reload snapshot()
 }
 // MeshNode (section 6) lives in MeshNode.kt.

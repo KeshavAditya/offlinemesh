@@ -92,6 +92,7 @@ class FakeNode : UiNode {
                 emit(MeshEvent.MessageAdded(m))
                 ex.schedule({ gdms[g.id]?.replaceAll { if (it.id == m.id) it.copy(delivered = n) else it }; emit(MeshEvent.GroupStatusChanged(m.id, n, n)) }, 2, TimeUnit.SECONDS)
             }
+            Cmd.Panic -> {}
         }
     }
 }

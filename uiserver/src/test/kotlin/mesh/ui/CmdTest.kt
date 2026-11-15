@@ -23,6 +23,7 @@ class CmdTest {
         assertEquals(Cmd.GroupMembers(id, listOf()), parseCmd("""{"t":"group-members","id":"$id","members":[]}"""))
         assertEquals(Cmd.GroupMsg(id, "hi"), parseCmd("""{"t":"gmsg","group":"$id","text":"hi"}"""))
         assertEquals(Cmd.Profile(mesh.core.Profile.TUNNEL), parseCmd("""{"t":"profile","name":"TUNNEL"}"""))
+        assertEquals(Cmd.Panic, parseCmd("""{"t":"panic","confirm":"WIPE"}"""))
     }
 
     @Test fun rejectsBadInput() {
@@ -38,6 +39,7 @@ class CmdTest {
             """{"t":"group-members","id":"x","members":[]}""", """{"t":"gmsg","group":"$id","text":"${"x".repeat(1001)}"}""",
             """{"t":"debug","flag":"evil","on":true}""", """{"t":"attack","kind":"nuke"}""",
             """{"t":"profile","name":"tunnel"}""", """{"t":"profile","name":"FAST"}""", """{"t":"profile"}""",
+            """{"t":"panic"}""", """{"t":"panic","confirm":"wipe"}""", """{"t":"panic","confirm":true}""",
         )
         for (b in bad) assertFailsWith<IllegalArgumentException>(b) { parseCmd(b) }
     }

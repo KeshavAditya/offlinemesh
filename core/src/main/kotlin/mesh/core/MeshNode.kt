@@ -47,6 +47,9 @@ class MeshNode(
     private val contacts = HashMap<String, Peer>()
     private val muted = HashSet<String>()
     private val verified = HashSet<String>()
+    private val revoked = HashSet<String>()                  // U2: keys whose owner wiped; their DMs are dropped (kept via the logged revoke)
+    private var gen = 0                                       // U2: bumped by a wipe so timers of the old identity stop
+    private var revokesLeft = 0; private val revokeIds = HashSet<String>()   // U2: own revoke DMs not yet handed to a link
     private val impLogged = HashMap<String, Long>()          // U8: contact id -> last NAME_IMPERSONATION log time
     private val msgs = LinkedHashMap<String, Msg>()
     private val groups = LinkedHashMap<String, Grp>()
@@ -54,8 +57,8 @@ class MeshNode(
     private val fanout = HashMap<String, String>()          // own fan-out DM msgId -> group message id, until its ACK
     private val logPubs = HashMap<String, ByteArray>()      // start-up only: keys seen in messages.log, to reopen own DMs
     private val seen = Seen()
-    private val routes = Routes()
-    private val guard = Guard()
+    private var routes = Routes()
+    private var guard = Guard()
     private lateinit var store: Store
     private val secLog = ArrayDeque<Sec>()
     internal val debug = HashSet<DebugFlag>()   // 5.12 hook point
@@ -128,6 +131,51 @@ class MeshNode(
     /** Stretch 2: one JPEG in one DM (plaintext kind 1), no chunking. Dropped if not JPEG or over MAX_DM_PLAINTEXT. */
     fun sendDmImage(to: String, jpeg: ByteArray) {
         if (isJpeg(jpeg)) sealDm(to, byteArrayOf(1) + jpeg, PHOTO, Base64.getEncoder().encodeToString(jpeg))
+    }
+
+    /**
+     * U2: one revoke DM (kind 4, no data) to every DM peer and group member; at most 3 s for them to reach a link;
+     * then delete identity.bin, messages.log and name.txt, clear all state and restart in place with a new identity.
+     * Other files in the data dir (the U3 profile) are settings, not node data, and are kept.
+     */
+    fun panicWipe() = loop {
+        val peers = LinkedHashMap<String, ByteArray>()
+        for (m in msgs.values) if (m.group == null && m.to != null) { val p = if (m.mine) m.to else m.from; pubOf(p)?.let { peers[p] = it } }
+        groups.values.forEach { peers.putAll(it.members) }
+        peers.remove(me)
+        revokesLeft = peers.size
+        peers.forEach { (p, pub) -> dmTo(p, pub, byteArrayOf(4), "", null, REVOKE) }
+        awaitRevokes(now() + REVOKE_WAIT_MS)
+    }
+
+    private fun awaitRevokes(deadline: Long) {
+        val left = deadline - now()
+        when {
+            left <= 0 -> wipe()
+            revokesLeft == 0 -> later(minOf(left, FLUSH_MS)) { wipe() }   // let transport queues write the frames before links close
+            else -> later(50) { awaitRevokes(deadline) }
+        }
+    }
+
+    private fun wipe() {
+        gen++
+        links.values.toList().forEach { it.transport.close(it.id) }   // transports redial; peers re-handshake with the new key
+        links.clear()
+        for (f in listOf("identity.bin", "identity.bin.tmp", "messages.log", "messages.log.tmp", "name.txt")) File(dataDir, f).delete()
+        listOf(contacts, msgs, groups, fanout, logPubs, seen, missing, impLogged).forEach { it.clear() }
+        listOf(muted, verified, revoked, posted, revokeIds).forEach { it.clear() }
+        secLog.clear(); rtts.clear(); drops.keys.forEach { drops[it] = 0 }
+        routes = Routes(); guard = Guard()
+        originated = 0; relayed = 0; dupes = 0; skipped = 0; bytesOut = 0; bytesIn = 0; powMsLast = 0
+        syncRounds = 0; syncRecovered = 0; linkUps = 0; linkDowns = 0; fullSends = 0; ihaveIds = 0; grafts = 0; prunes = 0
+        lamport = 0; postEpoch = -1; postSlots = 0; myPresence = null; revokesLeft = 0
+        id = Identity.loadOrCreate(dataDir)
+        me = id.idHex
+        name = fitName("")
+        store = Store(File(dataDir, "messages.log")).also { it.relayCap = profile.relayStoreCap }
+        startEpoch = epochNow()
+        presenceLoop()
+        emit(MeshEvent.Reset)
     }
 
     private fun sealDm(to: String, plain: ByteArray, text: String, img: String?) = loop {
@@ -341,7 +389,7 @@ class MeshNode(
     // ---- loop plumbing ----
 
     private fun loop(task: () -> Unit) = scheduler.post { run(task) }
-    private fun later(ms: Long, task: () -> Unit) = scheduler.schedule(ms) { run(task) }
+    private fun later(ms: Long, task: () -> Unit) { val g = gen; scheduler.schedule(ms) { run { if (g == gen) task() } } }
     private fun run(task: () -> Unit) = synchronized(lock) {
         if (running) try { task() } catch (e: Exception) { System.err.println("OfflineMesh: task failed"); e.printStackTrace() }
     }
@@ -541,6 +589,7 @@ class MeshNode(
             }
             EnvType.DM -> when {
                 dst == me -> {
+                    if (src in revoked) return   // U2: the owner wiped this key, so anything signed with it now is not them
                     val raw = Crypto.open(Crypto.dmKey(id.private, e.srcPub), e.srcId + e.dst, e.body) ?: return
                     // Validly signed, so the relay could not have known: log only, no link penalty.
                     val p = Crypto.unpadDm(raw)?.takeIf { it.isNotEmpty() } ?: return sec(SecKind.MALFORMED, "dm $mid bad padding", l, src)
@@ -607,9 +656,34 @@ class MeshNode(
             }
             2 -> return onInvite(src, p, emit = !replay)
             3 -> return onGroupText(e, p, mid, src, now, hops, via, emit = !replay)
+            4 -> { if (p.size != 1) return false; if (!mine) onRevoke(src, replay) }
             else -> return false
         }
         return true
+    }
+
+    /** U2: [x] wiped. Forget the DM conversation with x, x's group messages and x's groups, on disk too; refuse x's key from now on. */
+    private fun onRevoke(x: String, replay: Boolean) {
+        val gone = groups.values.filter { it.owner == x }.map { it.id }.toSet()
+        if (!replay) store.rewrite { !revokeDrops(it, x, gone) }
+        msgs.values.removeIf { if (it.group == null) it.to != null && (it.from == x || it.to == x) else it.from == x || it.group in gone }
+        gone.forEach { groups.remove(it) }
+        revoked += x
+        if (replay) return
+        sec(SecKind.PEER_REVOKED, "peer wiped its node", null, x)
+        emit(MeshEvent.Reset)
+    }
+
+    /** True for a stored envelope a revoke from [x] removes. x's public POSTs stay, like any feed item. */
+    private fun revokeDrops(e: Envelope, x: String, gone: Set<String>): Boolean {
+        val src = hex(e.srcId)
+        val dst = if (e.isBroadcast) null else hex(e.dst)
+        if (src == x) return e.type != EnvType.POST
+        if (e.type != EnvType.DM) return dst == x
+        val p = when { dst == me -> openDm(e, e.srcPub); src == me -> pubOf(dst!!)?.let { openDm(e, it) }; else -> null }
+        val k = p?.get(0)?.toInt()
+        if (p != null && (k == 2 || k == 3) && p.size >= 9 && hex(p.copyOfRange(1, 9)) in gone) return true
+        return dst == x && k != 2 && k != 3   // own group fan-outs to x in my groups stay: they rebuild my group history
     }
 
     private fun sendAck(dm: Envelope, l: Link) {
@@ -667,6 +741,7 @@ class MeshNode(
         val ok = tx(l, Codec.encodeFrame(Frame.Env(o.wire)))
         if (ok && !o.own) relayed++
         if (ok && (o.wire.type == EnvType.POST || o.wire.type == EnvType.PRESENCE)) fullSends++
+        if (ok && revokeIds.remove(o.mid)) revokesLeft--
         val shown = fanout[o.mid] ?: o.mid
         if (ok && o.own && msgs[shown]?.status == MsgStatus.QUEUED) setStatus(shown, MsgStatus.SENT, 0, null)
     }
@@ -815,7 +890,7 @@ class MeshNode(
             val t0 = System.nanoTime()
             val e = Envelope.create(ident, type, dst, lam, ep, slot, ttl, body)
             val ms = (System.nanoTime() - t0) / 1_000_000
-            loop { powMsLast = ms; originate(e, text, img, gm) }
+            loop { if (ident === id) { powMsLast = ms; originate(e, text, img, gm) } }   // not after a wipe
         }
     }
 
@@ -827,7 +902,8 @@ class MeshNode(
         originated++
         guard.accepted[mid] = e.epoch
         store.put(e, now(), relayOnly = false, log = true)
-        if (gm == null) addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
+        if (gm == REVOKE) revokeIds += mid
+        else if (gm == null) addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
         else if (gm.isNotEmpty()) fanout[mid] = gm
         val t = targets(e, s)
         broadcast(e, t)
@@ -948,7 +1024,7 @@ class MeshNode(
         return contacts.map { (cid, p) ->
             val r = routes.fresh(cid, now)
             Contact(cid, p.name, cid in verified, r?.let { it.hops + 1 }, r?.let { links[it.link]?.peer },
-                links.values.any { it.authed && it.peer == cid }, cid in muted, p.lastSeen, impersonated(cid) != null)
+                links.values.any { it.authed && it.peer == cid }, cid in muted, p.lastSeen, impersonated(cid) != null, cid in revoked)
         }
     }
 
@@ -960,7 +1036,8 @@ class MeshNode(
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4; const val MAX_MISSING = 512; const val IMPERSONATION_LOG_MS = 10 * 60_000L }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4; const val MAX_MISSING = 512; const val IMPERSONATION_LOG_MS = 10 * 60_000L
+        const val REVOKE = "revoke"; const val REVOKE_WAIT_MS = 3_000L; const val FLUSH_MS = 500L }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */

@@ -29,6 +29,15 @@ internal class Store(private val file: File) {
         DataOutputStream(FileOutputStream(file, true).buffered()).use { it.writeInt(b.size); it.write(b); it.writeLong(at) }
     }
 
+    /** U2: rewrites the log (and the in-memory set) with only the envelopes [keep] accepts. */
+    fun rewrite(keep: (Envelope) -> Boolean) {
+        val tmp = File(file.path + ".tmp").also { it.delete(); it.createNewFile() }
+        val out = Store(tmp)
+        replay { e, at -> if (keep(e)) out.append(e, at) }
+        if (!tmp.renameTo(file)) { file.delete(); check(tmp.renameTo(file)) { "cannot write $file" } }
+        envs.values.removeIf { !keep(it.env) }
+    }
+
     /** Reads the log in order; stops quietly at a truncated or corrupt tail. */
     fun replay(f: (Envelope, Long) -> Unit) {
         if (!file.exists()) return
