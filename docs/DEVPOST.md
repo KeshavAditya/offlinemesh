@@ -1,39 +1,56 @@
 # OfflineMesh (Devpost draft)
 
-**Tagline:** Secure messaging between phones with no internet, no cell signal and no server. Messages hop phone to phone over Bluetooth.
+**Tagline:** A secure messaging protocol for phones with no internet and no server, where every relay is a stranger's phone. It protects privacy, detects attacks and mitigates them, with working code you can attack live.
+
+*Optional, only if the main theme is confirmed as "Let's Dig In":* the TUNNEL profile and the relay chain A → B → C are the literal reading, a message passed hand to hand out of a collapsed tunnel (Devpost title "SubTerra"; the code keeps its name).
 
 ## Inspiration
 
-In a blackout, a flood or a packed stadium, the network is the first thing to go. Phones still have Bluetooth. We wanted people to keep talking when the towers are down, without trusting the strangers whose phones carry their messages.
+In a blackout, a flood or a packed stadium, the network is the first thing to go. Phones still have Bluetooth. But a message that hops phone to phone passes through strangers, any of whom may read, change, drop or flood it. We built the protocol so that does not matter.
 
-## What it does
+## What it does (Privacy and Security Challenge)
 
-- Phones in range link over Bluetooth LE and form a mesh. A message to someone out of range hops through phones in between.
-- **Direct messages** are encrypted end to end. The phones that relay them cannot read them. The sender sees "Delivered, 2 hops via B" when the recipient's signed receipt comes back.
-- **Public posts** reach everyone nearby, up to 6 hops.
-- **Group chats** of up to 16 people. A group message goes out as one encrypted DM to each member, so relays still see only DMs, and the sender sees "Delivered to 3 of 4". Only the group's owner can change who is in it.
-- **Any number of phones.** Each phone keeps up to 5 direct links; more phones simply add more hops.
-- **Missed messages catch up.** When a phone comes back in range, neighbours compare message lists and fill the gap.
-- **Attacks are caught and shown.** Every message is signed. A relay that changes a message is caught at the next phone. A key that floods posts is banned, with proof other phones can check. The Security tab shows each rejection as it happens.
+**Protects user privacy**
+- **Direct messages are encrypted end to end** (ECDH + AES-256-GCM). The phones that relay them cannot read them.
+- **Length padding:** every DM is padded to a size bucket, so relays see sender, recipient, timing and a size bucket, never content or exact length.
+- **Panic wipe:** type `WIPE` and the phone sends a signed revoke to its contacts, deletes its identity and messages, and starts over with a new ID. Contacts delete their conversation with the old key. It is a request, not a guarantee; the limits are in `docs/THREATS.md`.
+- **Group chats** of up to 16 people. A group message goes out as one encrypted DM to each member, so relays still see only DMs.
+
+**Detects threats**
+- **Every message is signed.** A relay that changes one bit is caught at the next phone, and the link that delivered it is blamed, not the named sender.
+- **Security log** of each rejection as it happens: bad signature, bad proof of work, replay, link flood, rate-limit cheating.
+- **Impersonation warning:** names can be copied, keys cannot. A newcomer using the name of a contact you verified is flagged "same name as a verified contact". It warns; it does not ban.
+- **Dropped DMs are noticed:** no signed receipt in time means the route failed, and it is logged.
+
+**Mitigates attacks**
+- **Rate limit with proof:** 3 posts per 10 seconds per key, by numbered slot. Breaking it forces two signatures for one slot. That is proof anyone can check, and the key is banned.
+- **Link scoring:** each link has a token bucket and a score; a misbehaving link is closed.
+- **DM failover:** a DM with no receipt is resent on a backup route through a different first link.
 - **Built-in red-team buttons** (tamper, drop, flood, spoof, replay) so you can attack the mesh live and watch it hold.
-- **Photo DMs** (downscaled to under 40 KB), **QR code** of your identity, and **guest access**: a phone without the app can join from a browser over the host phone's hotspot.
-- **Notifications for incoming DMs with inline reply**, so you can answer from the notification shade.
+
+**Also:** missed messages catch up when a phone comes back in range; live statistics counted by the code (drops by kind, duplicates, delivery time); mission profiles that trade airtime against delivery speed; photo DMs; guest access from a browser over the host phone's hotspot; notifications with inline reply.
+
+## "Does it just spam messages to everyone?"
+
+No. Direct messages are routed: each phone learns from signed beacons which neighbour leads to each person, so a DM takes one path, one transmission per hop, and the receipt comes back the same way. In our simulator with 30 phones in a room, a delivered DM cost 5.17 transmissions against 97.80 for plain flooding. Public posts have to reach everyone, so each phone forwards a post once per link and never back to a neighbour that has it: 66.2 sends per post against 88.5 for plain flooding. We also built a self-repairing broadcast tree (Plumtree) that cuts posts to 36.2 sends, but in the same room it delivered 0.898 of posts against 0.993, so it is off by default. If a relay starts dropping messages, the sender notices the missing receipt and reroutes. All figures come from `docs/NUMBERS.md`, generated by `./gradlew :core:bench`.
 
 ## How we built it
 
 - **Protocol core** in Kotlin, shared by the Android app and a desktop node. Identity is an EC key pair; the ID is a hash of the public key. ECDSA signatures, ECDH plus AES-256-GCM for DMs, a small proof of work per message, a numbered slot system for the post rate limit, and an ingress pipeline that runs cheap checks before expensive ones.
-- **Routing:** broadcasts go once per link and never back to a neighbour that has them. DMs follow learned routes and receipts walk the same path back.
+- **Routing:** broadcasts go once per link and never back to a neighbour that has them. DMs follow learned routes, keep a backup route, and receipts walk the same path back.
 - **Android:** a foreground service runs Bluetooth LE L2CAP channels (connection-oriented, up to 60 KB frames) and a WebView UI.
-- **UI:** one plain HTML file with inline CSS and JavaScript, about 27 KB, no frameworks, no build step, no web fonts. Light and dark themes follow the phone, and it stays quick on a mid-range phone's WebView.
+- **UI:** one plain HTML file with inline CSS and JavaScript, no frameworks, no build step. Light and dark themes follow the phone.
 - **Desktop node** over TCP, used as the fallback demo and for testing.
-- **Simulator:** an in-memory network with virtual time runs the real core code. Tests cover the acceptance checks plus red-team cases: forged receipts, presence spam, slot reuse across restarts, oversized and truncated frames, sync amplification.
-- One acceptance script (`scripts/e2e.sh`) drives three nodes over HTTP and checks all six goals: two-hop DM, relay cannot read it, post arrives once, tampering rejected, flood banned, catch-up after reconnect.
+- **Simulator:** an in-memory network with virtual time runs the real core code. 108 core tests cover the acceptance checks plus red-team cases: forged receipts, presence spam, slot reuse across restarts, oversized and truncated frames, sync amplification, impersonation, panic wipe, failover.
+- **Benchmark:** `./gradlew :core:bench` compares plain flooding, our routing and the tree on four topologies and writes the table into `docs/NUMBERS.md`, so every figure we quote traces to code.
+- One acceptance script (`scripts/e2e.sh`) drives the nodes over HTTP and checks the goals: two-hop DM, relay cannot read it, post arrives once, tampering rejected, flood banned, catch-up after reconnect.
 
 ## Challenges we ran into
 
 - **Punishing the right party.** Anyone can put someone else's public key on a forged message. So a bad signature penalises the link that delivered it, never the named sender. A key is banned only on cryptographic proof: two signed posts for the same slot.
 - **Restarts.** A phone that restarts could reuse a post slot and get itself banned. It now waits for the next 10-second epoch before posting.
 - **Sync amplification.** Our own red-team tests found that one request could pull 512 copies of a message. Fixed in core before the demo.
+- **The tree was not a free win.** Plumtree roughly halved the sends per post, but tree paths are longer than shortest paths, so the 6-hop limit cuts off far phones. We measured it, kept flooding as the default, and say so.
 - **Bluetooth on emulators.** Only one Bluetooth simulator may run, so emulators must start in a set order.
 
 ## Accomplishments we're proud of
@@ -41,26 +58,33 @@ In a blackout, a flood or a packed stadium, the network is the first thing to go
 - All six acceptance checks pass on three desktop nodes and on three Android emulators talking over emulated Bluetooth.
 - Five desktop nodes pass all eight checks, including a group of all five delivered to 4 of 4 in about a second.
 - One public post on a 25-phone simulated mesh with 40 links took 41 transmissions, about one per link.
+- Every efficiency figure we quote comes from a generated benchmark table, including the ones that do not flatter us.
 - An honest list of what we do not defend against (`docs/THREATS.md`).
 
 ## What we learned
 
 - Proof of work is a weak defence: a laptop mines about 165 posts per second per core at our difficulty. Rate limits with signed slots do the real work.
-- Bluetooth links are point-to-point, so "stay silent if a neighbour already relayed" tricks do not apply.
+- Bluetooth links are point-to-point, so tricks that rely on a shared broadcast radio save nothing here.
+- Measure before you claim: the routing idea that sounded best (the tree) lost delivery in our own benchmark.
 
 ## Honest limits
 
-- Tested on desktop and emulators; **not yet on the real phones** at the time of writing.
-- No protection against one person making many identities.
-- Relays see who talks to whom, message sizes and timing.
+- Tested on desktop nodes, emulators and the simulator; **not yet on the real phones** at the time of writing. The newest features (padding, impersonation warning, failover, panic wipe, profiles) are not on the phones yet.
+- No protection against one person making many identities; each one gets its own rate limit.
+- Metadata is visible to relays and to radio listeners: who talks to whom, timing and a size bucket.
 - No forward secrecy: a stolen key decrypts past DMs.
+- Panic wipe is a request: a modified or offline phone keeps its copy.
+- Failover only guarantees a different first hop.
+- A 2.4 GHz jammer stops Bluetooth. We need no cell tower or GPS, and the fallback is the LAN transport on a 5 GHz hotspot.
 - Android only; iPhones join as browser guests, and guest posts are signed by the host phone.
 - On a desk all phones are in range, so the demo forces two hops in software.
 
 ## What's next
 
 - Run the full test on the three real phones and measure range and timing.
-- Forward secrecy and in-app QR scanning.
+- QR hop screens on Android (the core and API already move a message by QR with every radio off).
+- Long-range Bluetooth mode where the phone supports it; not range-tested.
+- Forward secrecy.
 
 ## Built with
 
