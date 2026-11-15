@@ -27,6 +27,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Open a .omb bundle from Files / Quick Share. pathPattern only matches file-style paths; content URIs fall back to the mime. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
         <activity android:name=".QrActivity" android:exported="false" android:label="QR hop" />
         <service android:name=".MeshService" android:exported="false" android:foregroundServiceType="connectedDevice" />

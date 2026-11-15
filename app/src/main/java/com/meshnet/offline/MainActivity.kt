@@ -23,6 +23,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import mesh.core.C
 import java.io.File
 import java.security.MessageDigest
 
@@ -53,6 +54,7 @@ class MainActivity : Activity() {
             addView(Button(this@MainActivity).apply { text = "Invite guests"; setOnClickListener { invite = InviteDialog(this@MainActivity) { guest.isChecked = true }.also { it.show() } } })
             addView(Button(this@MainActivity).apply { text = "QR hop"; setOnClickListener { startActivity(Intent(this@MainActivity, QrActivity::class.java)) } })
             addView(Button(this@MainActivity).apply { text = "Share app"; setOnClickListener { shareApp() } })
+            addView(Button(this@MainActivity).apply { text = "Bundle"; setOnClickListener { bundleDialog() } })
             addView(Button(this@MainActivity).apply { text = "Keep alive"; setOnClickListener { KeepAlive.dialog(this@MainActivity) } })
             addView(Switch(this@MainActivity).apply { text = "Block screenshots"; isChecked = prefs.getBoolean(SECURE, false); setPadding(16, 0, 32, 0)
                 setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(SECURE, on).apply(); secure(window)
@@ -111,6 +113,7 @@ class MainActivity : Activity() {
 
     @Deprecated("Activity API; this app uses plain Activity")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == IMPORT) { data?.data?.takeIf { resultCode == RESULT_OK }?.let { importBundle(it) }; return }
         if (requestCode != PICK) return
         val uris = WebChromeClient.FileChooserParams.parseResult(resultCode, data)
         android.util.Log.i(TAG, "file chooser result ${uris?.size ?: "cancel"}")
@@ -158,16 +161,67 @@ class MainActivity : Activity() {
             }.show().also { secure(it.window) }
     }
 
+    /** Data-mule bundle (OMB1): every live envelope this node holds, in one signed file a person carries to a cut-off group. */
+    private fun bundleDialog() {
+        AlertDialog.Builder(this).setTitle("Bundle")
+            .setMessage("Export saves all messages this phone holds into one file to carry over Quick Share, Bluetooth or USB. Import reads a file someone brought.")
+            .setNegativeButton("Import") { _, _ ->
+                try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), IMPORT) }
+                catch (e: Exception) { toast("No file picker on this phone") }
+            }
+            .setPositiveButton("Export") { _, _ -> exportBundle() }
+            .show().also { secure(it.window) }
+    }
+
+    private fun exportBundle() {
+        val node = MeshService.instance?.node ?: return toast("Mesh service not running")
+        Thread {
+            val bytes = node.exportBundle()
+            val f = File(cacheDir, "omb").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+                .resolve("offlinemesh-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())}.omb")
+            f.writeBytes(bytes)
+            android.util.Log.i(TAG, "bundle export ${bytes.size} bytes -> ${f.name}")
+            runOnUiThread {
+                val send = Intent(Intent.ACTION_SEND).setType("application/octet-stream")
+                    .putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(this, "$packageName.files", f)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                startActivity(Intent.createChooser(send, "Share bundle"))
+            }
+        }.start()
+    }
+
+    private fun importBundle(uri: Uri) {
+        val node = MeshService.instance?.node ?: return toast("Mesh service not running")
+        Thread {
+            // Read one byte past the cap so an oversized file is refused, never loaded whole.
+            val bytes = runCatching { contentResolver.openInputStream(uri)!!.use { inp ->
+                val out = java.io.ByteArrayOutputStream(); val buf = ByteArray(65536)
+                while (out.size() <= C.BUNDLE_MAX_BYTES) { val n = inp.read(buf); if (n < 0) break; out.write(buf, 0, n) }
+                out.toByteArray() } }.getOrNull()
+            val r = bytes?.takeIf { it.size <= C.BUNDLE_MAX_BYTES }?.let { node.importBundle(it) }
+            val msg = if (bytes == null) "Could not read the file" else if (r == null) "Not a valid bundle" else {
+                val name = node.snapshot().contacts.firstOrNull { it.id == r.from }?.name ?: r.from.take(8)
+                "From $name: ${r.accepted} accepted, ${r.duplicates} duplicates, ${r.rejected} rejected"
+            }
+            android.util.Log.i(TAG, "bundle import ${bytes?.size} bytes: $msg")
+            runOnUiThread { AlertDialog.Builder(this).setTitle("Bundle import").setMessage(msg).setPositiveButton("OK", null).show().also { secure(it.window) } }
+        }.start()
+    }
+
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
+
     private fun load() {
         if (loaded || isDestroyed) return
         MeshService.failed?.let { status.text = it; return }   // bind failed: never load whatever else answers on the port
         if (!MeshService.listening) return
         loaded = true
+        // A .omb opened from Files or Quick Share: import once the node is up.
+        intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data?.let { intent.action = null; importBundle(it) }
         web.loadUrl("http://127.0.0.1:${MeshService.UI_PORT}/")
     }
 }
 
 private const val PICK = 2
+private const val IMPORT = 4
 private const val SECURE = "secure"
 
 /** "Block screenshots" (default off: it also blanks adb screencap, recording and mirroring). Dialogs are separate windows, so each calls this too. */
