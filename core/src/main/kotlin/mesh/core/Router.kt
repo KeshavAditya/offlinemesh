@@ -1,10 +1,10 @@
 package mesh.core
 
 /** 5.7 seen-set entry: first link, links known to have it, and for DMs the dst and acked flag. */
-internal class SeenEntry(val firstLink: LinkId?, val dst: String?, val type: Int, var ttl: Int = C.MAX_INIT_TTL) {
+/** U9: [firstLink] becomes the tree parent when the optimisation swaps it; [dist] is links from the source of the copy we hold (0 = own). */
+internal class SeenEntry(var firstLink: LinkId?, val dst: String?, val type: Int, var ttl: Int = C.MAX_INIT_TTL, var dist: Int = 0) {
     val have = HashSet<LinkId>()
     var acked = false
-    var regraft = false   // U9: grafted once already for a copy with more ttl left
 }
 
 /** LRU of msgId hex, SEEN_CAP entries. */

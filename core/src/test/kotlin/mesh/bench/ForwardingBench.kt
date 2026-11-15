@@ -55,8 +55,8 @@ class ForwardingBench {
     private val wide = random("50 over a wide area", 50, 100.0, 25.0)
 
     private fun run(t: Topo, naive: Boolean, dropRelayFraction: Double = 0.0, posts: Int = 2, dms: Int = 10, failover: Boolean = !naive,
-                    mode: BroadcastMode = BroadcastMode.FLOOD): Result {
-        val net = SimNetwork(mode = mode)
+                    mode: BroadcastMode = BroadcastMode.FLOOD, netSeed: Long = seed.toLong()): Result {
+        val net = SimNetwork(mode = mode, seed = netSeed)
         val rnd = Random(seed)
         val names = List(t.n) { "N$it" }
         names.forEach { net.node(it).node.also { n -> n.naiveFlood = naive; n.failover = failover } }

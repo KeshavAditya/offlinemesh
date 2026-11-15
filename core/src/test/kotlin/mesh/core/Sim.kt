@@ -1,11 +1,17 @@
 package mesh.core
 
 import java.nio.file.Files
+import java.io.File
+import java.security.KeyPairGenerator
+import java.security.SecureRandom
+import java.security.spec.ECGenParameterSpec
 import java.util.PriorityQueue
+import kotlin.random.Random
 
 /** Virtual-time scheduler shared by every node in one simulation; also the network the SimTransports talk over. */
-/** [mode]: U9 BROADCAST_MODE for every node made here (restarts keep it). */
-class SimNetwork(startMs: Long = 1_700_000_003_000L, val mode: BroadcastMode = C.BROADCAST_MODE) : Scheduler {
+/** [mode]: U9 BROADCAST_MODE for every node made here (restarts keep it). [seed] drives node keys and forward jitter, so a run repeats exactly. */
+class SimNetwork(startMs: Long = 1_700_000_003_000L, val mode: BroadcastMode = C.BROADCAST_MODE, seed: Long = 1) : Scheduler {
+    val rnd = Random(seed)
     private class Task(val at: Long, val seq: Long, val run: () -> Unit)
     private val queue = PriorityQueue<Task>(compareBy<Task>({ it.at }, { it.seq }))
     private var now = startMs
@@ -91,9 +97,13 @@ class SimNode(private val net: SimNetwork, val name: String) {
     var node = newNode(); private set
     val id get() = node.id.idHex
 
-    private fun newNode() = MeshNode(dir, net, listOf(transport)).also { it.broadcastMode = net.mode; it.offLoop = { r -> r() }; it.addListener { e -> events += e } }
+    private fun newNode() = MeshNode(dir, net, listOf(transport)).also { it.broadcastMode = net.mode; it.rnd = net.rnd; it.offLoop = { r -> r() }; it.addListener { e -> events += e } }
 
     init {
+        // A key from the network's seed (SHA1PRNG is deterministic once seeded before first use), saved where MeshNode.start loads it.
+        val r = SecureRandom.getInstance("SHA1PRNG").apply { setSeed(net.rnd.nextLong()) }
+        val kp = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1"), r) }.generateKeyPair()
+        Identity(kp.private, kp.public.encoded).save(File(dir, "identity.bin"))
         node.start()
         node.setName(name)
     }

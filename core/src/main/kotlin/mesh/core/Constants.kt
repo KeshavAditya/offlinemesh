@@ -36,6 +36,7 @@ object C {
     const val IHAVE_FLUSH_MS = 300L
     const val GRAFT_TIMEOUT_MS = 1_500L
     const val MAX_TREE_IDS = 64
+    const val TREE_OPT_THRESHOLD = 1   // rule 10: swap the tree edge when an IHAVE's path is this many links shorter (+1 for the link itself)
 
     const val BUCKET_SIZE = 30
     const val BUCKET_WINDOW_MS = 10_000L

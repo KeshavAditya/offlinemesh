@@ -39,8 +39,8 @@ sealed interface Frame {
     class SyncWant(val ids: List<ByteArray>) : Frame
     /** Stretch 4: two POSTs by one key for one (epoch, slot) with different msgIds. */
     class BanProof(val a: Envelope, val b: Envelope) : Frame
-    /** U9 tree broadcast: 1 to 64 msgIds each. */
-    class IHave(val ids: List<ByteArray>) : Frame
+    /** U9 tree broadcast: 1 to 64 msgIds each. IHAVE also carries, per id, the announcer's distance in links from the source (0 = its own). */
+    class IHave(val ids: List<ByteArray>, val hops: List<Int>) : Frame { init { require(hops.size == ids.size) } }
     class Graft(val ids: List<ByteArray>) : Frame
     object Prune : Frame
 }
@@ -68,7 +68,7 @@ object Codec {
             is Frame.SyncOffer -> { u8(FrameType.SYNC_OFFER); ids(f.ids) }
             is Frame.SyncWant -> { u8(FrameType.SYNC_WANT); ids(f.ids) }
             is Frame.BanProof -> { u8(FrameType.BAN_PROOF); listOf(f.a, f.b).forEach { val x = encodeEnvelope(it); writeShort(x.size); write(x) } }
-            is Frame.IHave -> { require(f.ids.size in 1..C.MAX_TREE_IDS); u8(FrameType.IHAVE); ids(f.ids) }
+            is Frame.IHave -> { require(f.ids.size in 1..C.MAX_TREE_IDS); u8(FrameType.IHAVE); writeShort(f.ids.size); f.ids.forEachIndexed { i, b -> require(b.size == 8); write(b); u8(f.hops[i].coerceIn(0, 255)) } }
             is Frame.Graft -> { require(f.ids.size in 1..C.MAX_TREE_IDS); u8(FrameType.GRAFT); ids(f.ids) }
             Frame.Prune -> u8(FrameType.PRUNE)
         }
@@ -84,7 +84,7 @@ object Codec {
                 FrameType.SYNC_OFFER -> Frame.SyncOffer(List(u16()) { bytes(8) })
                 FrameType.SYNC_WANT -> Frame.SyncWant(List(u16()) { bytes(8) })
                 FrameType.BAN_PROOF -> Frame.BanProof(proofPost(), proofPost())
-                FrameType.IHAVE -> Frame.IHave(treeIds())
+                FrameType.IHAVE -> u16().also { need(it in 1..C.MAX_TREE_IDS) }.let { n -> val e = List(n) { bytes(8) to u8() }; Frame.IHave(e.map { it.first }, e.map { it.second }) }
                 FrameType.GRAFT -> Frame.Graft(treeIds())
                 FrameType.PRUNE -> Frame.Prune
                 else -> null

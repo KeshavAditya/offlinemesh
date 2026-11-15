@@ -59,11 +59,13 @@ class MeshNode(
     internal val debug = HashSet<DebugFlag>()   // 5.12 hook point
     /** U11 bench only (internal, never set by shipped code): NAIVE forwards every envelope to every link but the one it came on. */
     internal var naiveFlood = false
+    /** Forward jitter; the simulator injects a seeded one so runs repeat exactly. */
+    internal var rnd: Random = Random.Default
     /** U10 DM failover; the bench turns it off for its without-U10 baseline. */
     internal var failover = true
     /** U9 BROADCAST_MODE, per node so tests and the bench can run TREE while shipped builds stay FLOOD. */
     internal var broadcastMode = C.BROADCAST_MODE
-    private val missing = HashMap<String, ArrayDeque<LinkId>>()   // U9: unseen msgId -> links that announced it, oldest first
+    private val missing = HashMap<String, ArrayDeque<Pair<LinkId, Int>>>()   // U9: unseen msgId -> links that announced it with their hops, oldest first
     private var fullSends = 0; private var ihaveIds = 0; private var grafts = 0; private var prunes = 0
 
     /** U9 counters and per-link tree state, for the U1 statistics page. */
@@ -362,7 +364,7 @@ class MeshNode(
             is Frame.SyncWant -> onWant(l, f.ids)
             is Frame.BanProof -> onBanProof(l, f.a, f.b)
             // U9 rule 8: a FLOOD node answers IHAVE like SYNC_OFFER, GRAFT like SYNC_WANT, and ignores PRUNE.
-            is Frame.IHave -> if (treeToken(l)) { if (tree()) onIHave(l, f.ids) else onOffer(l, f.ids) }
+            is Frame.IHave -> if (treeToken(l)) { if (tree()) onIHave(l, f.ids, f.hops) else onOffer(l, f.ids) }
             is Frame.Graft -> if (treeToken(l)) { if (tree()) l.eager = true; onWant(l, f.ids) }
             Frame.Prune -> if (treeToken(l) && tree()) l.eager = false
             null -> penalize(l, C.SCORE_MALFORMED, SecKind.MALFORMED, "unparseable frame", null)
@@ -436,13 +438,16 @@ class MeshNode(
         if (!guard.fresh(e.epoch, epochNow())) return sec(SecKind.STALE, "epoch ${e.epoch}", l, src)
         if (!typeRules(l, e, src, mid, now)) {
             // U9: a signed PRESENCE refused by the 10 s rate rule counts as seen, or every IHAVE for it would GRAFT it again.
-            if (treeOn(e) && e.type == EnvType.PRESENCE) seen[mid] = SeenEntry(l.id, null, e.type, e.ttl).also { it.have += l.id }
+            if (treeOn(e) && e.type == EnvType.PRESENCE) seen[mid] = SeenEntry(l.id, null, e.type, e.ttl, e.hops + 1).also { it.have += l.id }
             return
         }
         if (!asked && !l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
         if (!asked && treeOn(e)) l.eager = true   // Plumtree: the link that pushed the first copy is in the tree
-        missing.remove(mid)
+        val ann = missing.remove(mid)
         accept(e, l, now, replay = false)
+        // The announcers have it, so the forward skips them.
+        val s = seen[mid] ?: return
+        ann?.forEach { s.have += it.first }
     }
 
     private fun typeRules(l: Link, e: Envelope, src: String, mid: String, now: Long): Boolean = when (e.type) {
@@ -486,7 +491,7 @@ class MeshNode(
         val src = hex(e.srcId)
         val dst = if (e.isBroadcast) null else hex(e.dst)
         val mine = src == me
-        seen[mid] = SeenEntry(l?.id, dst, e.type, e.ttl).also { s -> l?.let { s.have += it.id } }
+        seen[mid] = SeenEntry(l?.id, dst, e.type, e.ttl, if (l == null) 0 else e.hops + 1).also { s -> l?.let { s.have += it.id } }
         if (e.type == EnvType.POST || e.type == EnvType.DM) guard.accepted[mid] = e.epoch
         lamport = maxOf(lamport, e.lamport)
         if (l != null) routes.learn(src, l.id, e.hops, now)
@@ -645,7 +650,7 @@ class MeshNode(
     private fun forward(e: Envelope) {
         if (e.ttl < 2) return
         val mid = hex(e.msgId)
-        later(Random.nextLong(C.JITTER_MIN_MS, C.JITTER_MAX_MS + 1)) {
+        later(rnd.nextLong(C.JITTER_MIN_MS, C.JITTER_MAX_MS + 1)) {
             val s = seen[mid] ?: return@later
             broadcast(e, targets(e, s))
         }
@@ -677,7 +682,7 @@ class MeshNode(
         if (l.outQ.isEmpty() && l.outBucket.take(now())) {
             val batch = l.ihaveQ.take(C.MAX_TREE_IDS)
             l.ihaveQ.removeAll(batch.toSet())
-            frame(l, Frame.IHave(batch.map { Crypto.unhex(it) }))
+            frame(l, Frame.IHave(batch.map { Crypto.unhex(it) }, batch.map { seen[it]?.dist ?: 0 }))
             ihaveIds += batch.size
         }
         if (l.ihaveQ.isNotEmpty()) later(C.IHAVE_FLUSH_MS) { flushIHave(l) }
@@ -690,22 +695,18 @@ class MeshNode(
     }
 
     /** Rule 5: unseen ids wait GRAFT_TIMEOUT_MS for the tree to deliver them, then are grafted from the first live announcer. */
-    private fun onIHave(l: Link, ids: List<ByteArray>) {
+    private fun onIHave(l: Link, ids: List<ByteArray>, hops: List<Int>) {
         val fresh = ArrayList<String>()
-        for (mid in ids.map { hex(it) }.distinct()) {
+        val opt = LinkedHashMap<String, Int>()
+        ids.forEachIndexed { i, b -> opt.putIfAbsent(hex(b), hops[i]) }
+        for ((mid, h) in opt) {
             val s = seen[mid]
-            if (s != null) {
-                s.have += l.id
-                // A post that came along a long tree path and dies here while a tree (eager) neighbour lacks it: ask once for a fresher copy
-                // (not PRESENCE: it repeats every 30 s, and regrafting it churns the tree).
-                if (s.type == EnvType.POST && s.ttl < 2 && !s.regraft && links.values.any { live(it) && it.eager && it.id !in s.have }) { s.regraft = true; graft(l, listOf(mid)) }
-                continue
-            }
+            if (s != null) { s.have += l.id; optimise(l, mid, s, h); continue }
             if (guard.accepted.containsKey(mid)) continue
             val q = missing[mid]
-            if (q != null) { if (l.id !in q) q.addLast(l.id); continue }
+            if (q != null) { if (q.none { it.first == l.id }) q.addLast(l.id to h); continue }
             if (missing.size >= MAX_MISSING) continue   // bounds what fake IHAVEs can make this node remember
-            missing[mid] = ArrayDeque(listOf(l.id))
+            missing[mid] = ArrayDeque(listOf(l.id to h))
             fresh += mid
         }
         if (fresh.isNotEmpty()) graftLater(fresh)
@@ -717,14 +718,33 @@ class MeshNode(
         for (mid in ids) {
             val q = missing[mid] ?: continue
             if (seen.containsKey(mid) || guard.accepted.containsKey(mid)) { missing.remove(mid); continue }
-            var l: Link? = null
-            while (l == null && q.isNotEmpty()) l = links[q.removeFirst()]?.takeIf { live(it) }
-            if (l == null) { missing.remove(mid); continue }
+            q.removeAll { links[it.first]?.let { x -> live(x) } != true }
+            // The live announcer nearest the source: its copy has the most ttl left and its link is the shorter tree edge.
+            val best = q.minByOrNull { it.second }
+            if (best == null) { missing.remove(mid); continue }
+            q.remove(best)
+            val l = links.getValue(best.first)
             by.getOrPut(l) { ArrayList() } += mid
             if (q.isEmpty()) missing.remove(mid) else retry += mid   // no answer in time: the next announcer is grafted
         }
         for ((l, m) in by) graft(l, m)
         if (retry.isNotEmpty()) graftLater(retry)
+    }
+
+    /**
+     * Rule 10 (Plumtree tree optimisation): L announces a copy at least TREE_OPT_THRESHOLD links shorter than the one the tree gave us
+     * over E, so swap the tree edge: GRAFT m on L (its fresher copy also reaches the nodes our copy's ttl missed) and PRUNE E.
+     * The tree converges toward shortest paths, so TTL 6 covers far nodes. Announced hops are unsigned; a liar only becomes our
+     * parent, and if it then withholds, the now-lazy E still announces and rule 5 grafts it back.
+     * POST only: PRESENCE comes from every node every 30 s and would re-root the one shared tree toward each node in turn.
+     * Also replaces the old "graft a TTL-starved copy again" rule, which grafted without knowing the announcer was any closer.
+     */
+    private fun optimise(l: Link, mid: String, s: SeenEntry, h: Int) {
+        val e = s.firstLink?.let { links[it] } ?: return
+        if (e === l || !live(l) || s.type != EnvType.POST || s.dist - (h + 1) < C.TREE_OPT_THRESHOLD) return
+        s.firstLink = l.id; s.dist = h + 1
+        graft(l, listOf(mid))
+        if (e.eager) prune(e)
     }
 
     /** [mids] come from one IHAVE, so at most 64. */
@@ -741,6 +761,7 @@ class MeshNode(
     private fun betterCopy(e: Envelope, s: SeenEntry) {
         val c = held(hex(e.msgId))?.takeIf { e.ttl <= it.initTtl } ?: return
         s.ttl = e.ttl
+        s.dist = minOf(s.dist, e.hops + 1)
         forward(c.copy(ttl = e.ttl, hops = e.hops))
     }
 

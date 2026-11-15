@@ -3,6 +3,7 @@
 > **Orchestrator notes (owner decision 2026-11-14 16:20 CT; these win over the plan text below where they differ):**
 > - **Branch:** everything in this file is built on the `v2` branch. It is tested in the simulator, on desktop nodes and on the 4 emulators. It is **not merged to `main` and not installed on real phones** until the owner has run acceptance checks 1 to 6 on the real phones (section 0). No phones are connected right now.
 > - **Frame codes:** `0x14` is already taken by BAN_PROOF (ban-proof gossip, guide stretch 4, built). U9 therefore uses **`0x15` IHAVE, `0x16` GRAFT, `0x17` PRUNE**.
+> - **U9b (2026-11-14):** each IHAVE entry is now `8B msgId` + `u8 hops` (the announcer's distance in links from the source, 0 for its own message), and rule 10 below (Plumtree tree optimisation, threshold 1) is added. The frame table in U9 shows the new body.
 > - **DM plaintext kinds:** `2` GROUP_INVITE and `3` GROUP_TEXT already exist (guide section 13.2, built). The U2 revoke is therefore **kind `4`**. The U7 padded layout (`u8 kind | u16 dataLen | data | padding`) applies to every kind, including the group kinds, whose data is as in 13.2.
 > - **Photo DM with U7:** a JPEG of up to 39,999 bytes pads to 40,960. Allow padded plaintext up to 40,960 bytes and keep the photo DM working. The frame limit (60,000) still holds.
 > - **Panic wipe (U2) and groups:** revoke DMs go to every contact with DM history, which includes group members. A revoke from X deletes the DM conversation with X and X's messages in groups, and removes groups owned by X. The wiping node also drops its own group state.
@@ -284,9 +285,9 @@ New frames (extends guide 5.3; all phones must run the same build):
 
 | Code | Frame | Body |
 |---|---|---|
-| `0x14` | IHAVE | `u16 count` then `count` × 8-byte msgId (64 at most) |
-| `0x15` | GRAFT | `u16 count` then `count` × 8-byte msgId (64 at most) |
-| `0x16` | PRUNE | empty |
+| `0x15` | IHAVE | `u16 count` then `count` × (8-byte msgId, `u8 hops`) (64 at most); `hops` = the announcer's distance in links from the source (0 = its own message, capped at 255) |
+| `0x16` | GRAFT | `u16 count` then `count` × 8-byte msgId (64 at most) |
+| `0x17` | PRUNE | empty |
 
 New constants: `BROADCAST_MODE` = `TREE` or `FLOOD` (default `FLOOD` until the real-phone checks pass in `TREE`), `IHAVE_FLUSH_MS` = 300, `GRAFT_TIMEOUT_MS` = 1,500.
 
@@ -301,8 +302,9 @@ Rules, applied to POST and PRESENCE envelopes only (DMs and ACKs are unchanged):
 7. IHAVE, GRAFT and PRUNE count against the link token bucket. A malformed one is `MALFORMED` against the link, as for any frame.
 8. In `FLOOD` mode a node sends none of these frames. If it receives them: answer IHAVE like a SYNC_OFFER, answer GRAFT by sending the envelopes, ignore PRUNE. Nodes in different modes therefore still interoperate.
 9. Sync every 15 seconds (guide 5.8) is unchanged and remains the last safety net.
+10. **Tree optimisation (Plumtree, SRDS 2007, POST only):** a node holding POST m at distance h, received over link E, that gets an IHAVE for m on another link L with hops h' where h' + 1 < h (threshold 1, picked by measurement over 2), sends GRAFT(m) on L (L becomes `EAGER`; its copy has more ttl left and is relayed to links that lacked it) and PRUNE on E (E becomes `LAZY`). The tree moves toward shortest paths. Not applied to PRESENCE: every node beacons every 30 s and would re-root the one shared tree toward each node in turn. When rule 5 grafts, it picks the live announcer with the smallest hops.
 
-Why this is safe against attack: a link can only prune or graft itself, because links are authenticated; a neighbour that withholds posts is routed around by rule 5; a fake IHAVE gets a GRAFT that is never answered, and costs the faker its own token bucket.
+Why this is safe against attack: a link can only prune or graft itself, because links are authenticated (rule 10 prunes E on L's unsigned hops claim, but a liar only becomes the parent; if it withholds, E still announces and rule 5 grafts E back); a neighbour that withholds posts is routed around by rule 5; a fake IHAVE gets a GRAFT that is never answered, and costs the faker its own token bucket.
 
 Additions to U1: counters `fullSends`, `ihaveIds`, `grafts`, `prunes`; the links table gains a column "Tree" (`eager` or `lazy`).
 

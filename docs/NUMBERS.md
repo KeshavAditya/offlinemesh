@@ -88,18 +88,18 @@ Columns: delivery ratios (posts: copies received / posts x (nodes - 1); DMs: rec
 
 | Topology | Mode | Post delivery | DM delivery | Sends per post | Bytes per delivered post | DM tx per delivered DM | ACK tx per delivered DM | Median ms | p95 ms |
 |---|---|---|---|---|---|---|---|---|---|
-| line of 3 (3 nodes, 2 links) | NAIVE | 1.000 | 1.000 | 2.2 | 224 | 1.57 | 1.23 | 5 | 93 |
-| line of 3 (3 nodes, 2 links) | CURRENT | 1.000 | 1.000 | 2.0 | 207 | 1.23 | 1.23 | 5 | 102 |
-| line of 3 (3 nodes, 2 links) | TREE | 1.000 | 1.000 | 2.0 | 207 | 1.23 | 1.23 | 5 | 69 |
-| 5x5 grid (25 nodes, 40 links) | NAIVE | 0.967 | 0.952 | 51.8 | 464 | 53.66 | 3.28 | 136 | 302 |
-| 5x5 grid (25 nodes, 40 links) | CURRENT | 0.967 | 0.952 | 39.2 | 351 | 3.37 | 3.21 | 141 | 306 |
-| 5x5 grid (25 nodes, 40 links) | TREE | 0.926 | 0.952 | 26.0 | 254 | 3.39 | 3.22 | 257 | 2419 |
-| 30 in a room (30 nodes, 68 links) | NAIVE | 0.989 | 0.993 | 89.2 | 646 | 97.99 | 4.02 | 226 | 4390 |
-| 30 in a room (30 nodes, 68 links) | CURRENT | 0.989 | 0.993 | 66.3 | 480 | 5.26 | 3.44 | 157 | 338 |
-| 30 in a room (30 nodes, 68 links) | TREE | 0.917 | 0.993 | 33.2 | 277 | 5.08 | 3.46 | 264 | 3571 |
-| 50 over a wide area (50 nodes, 109 links) | NAIVE | 0.762 | 0.728 | 101.4 | 564 | 135.91 | 4.27 | 678 | 22653 |
-| 50 over a wide area (50 nodes, 109 links) | CURRENT | 0.831 | 0.780 | 86.4 | 441 | 4.74 | 3.67 | 195 | 360 |
-| 50 over a wide area (50 nodes, 109 links) | TREE | 0.749 | 0.816 | 43.0 | 258 | 4.89 | 3.78 | 289 | 3610 |
+| line of 3 (3 nodes, 2 links) | NAIVE | 1.000 | 1.000 | 2.2 | 225 | 1.57 | 1.23 | 5 | 79 |
+| line of 3 (3 nodes, 2 links) | CURRENT | 1.000 | 1.000 | 2.0 | 207 | 1.23 | 1.23 | 5 | 72 |
+| line of 3 (3 nodes, 2 links) | TREE | 1.000 | 1.000 | 2.0 | 208 | 1.23 | 1.23 | 5 | 72 |
+| 5x5 grid (25 nodes, 40 links) | NAIVE | 0.967 | 0.952 | 51.8 | 464 | 53.66 | 3.28 | 136 | 297 |
+| 5x5 grid (25 nodes, 40 links) | CURRENT | 0.967 | 0.952 | 39.1 | 350 | 3.38 | 3.21 | 140 | 307 |
+| 5x5 grid (25 nodes, 40 links) | TREE | 0.930 | 0.952 | 27.0 | 262 | 3.37 | 3.21 | 232 | 2187 |
+| 30 in a room (30 nodes, 68 links) | NAIVE | 0.983 | 0.993 | 88.5 | 645 | 97.80 | 4.21 | 226 | 3813 |
+| 30 in a room (30 nodes, 68 links) | CURRENT | 0.993 | 0.993 | 66.2 | 478 | 5.17 | 3.44 | 156 | 332 |
+| 30 in a room (30 nodes, 68 links) | TREE | 0.898 | 0.993 | 36.2 | 307 | 5.36 | 3.44 | 242 | 2195 |
+| 50 over a wide area (50 nodes, 109 links) | NAIVE | 0.774 | 0.732 | 102.3 | 560 | 134.31 | 4.31 | 670 | 22819 |
+| 50 over a wide area (50 nodes, 109 links) | CURRENT | 0.831 | 0.786 | 86.5 | 441 | 4.57 | 3.69 | 196 | 363 |
+| 50 over a wide area (50 nodes, 109 links) | TREE | 0.750 | 0.818 | 46.6 | 279 | 4.86 | 3.79 | 293 | 3171 |
 
 ### Failure run: 30 in a room, 10% of nodes on DROP_RELAY
 
@@ -107,7 +107,7 @@ The same room, 3 of 30 nodes switched to DROP_RELAY after PRESENCE settled; DMs 
 
 | Mode | DM delivery | DM tx per delivered DM | Median ms | p95 ms | p99 ms |
 |---|---|---|---|---|---|
-| NAIVE | 0.993 | 90.71 | 180 | 549 | 1478 |
-| CURRENT without U10 | 0.993 | 5.63 | 179 | 440 | 14285 |
-| CURRENT with U10 | 0.993 | 4.91 | 185 | 413 | 5288 |
+| NAIVE | 0.993 | 90.68 | 178 | 732 | 1480 |
+| CURRENT without U10 | 0.993 | 5.45 | 166 | 424 | 14208 |
+| CURRENT with U10 | 0.993 | 5.25 | 170 | 418 | 8342 |
 <!-- END U11 BENCH -->

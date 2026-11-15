@@ -17,14 +17,17 @@ class TreeTest {
 
     @Test fun treeFramesRoundTripAndParseStrictly() {
         val a = ids(64)
-        val ih = Codec.decodeFrame(Codec.encodeFrame(Frame.IHave(a))) as Frame.IHave
+        val ih = Codec.decodeFrame(Codec.encodeFrame(Frame.IHave(a, List(64) { it * 4 }))) as Frame.IHave
         assertTrue(ih.ids.zip(a).all { (x, y) -> x.contentEquals(y) })
+        assertEquals(List(64) { it * 4 }, ih.hops)
+        assertEquals(1 + 2 + 64 * 9, Codec.encodeFrame(Frame.IHave(a, List(64) { 0 })).size, "IHAVE entry = 8 B msgId + u8 hops")
         assertEquals(3, (Codec.decodeFrame(Codec.encodeFrame(Frame.Graft(ids(3)))) as Frame.Graft).ids.size)
         assertEquals(Frame.Prune, Codec.decodeFrame(Codec.encodeFrame(Frame.Prune)))
         fun raw(type: Int, n: Int, idBytes: Int = n * 8) = byteArrayOf(type.toByte(), (n shr 8).toByte(), n.toByte()) + ByteArray(idBytes)
         assertNull(Codec.decodeFrame(raw(FrameType.IHAVE, 65)), "count over 64")
         assertNull(Codec.decodeFrame(raw(FrameType.GRAFT, 0)), "empty graft")
-        assertNull(Codec.decodeFrame(raw(FrameType.IHAVE, 2, 15)), "truncated id")
+        assertNull(Codec.decodeFrame(raw(FrameType.IHAVE, 2, 17)), "truncated entry")
+        assertNull(Codec.decodeFrame(raw(FrameType.IHAVE, 1, 10)), "IHAVE trailing byte")
         assertNull(Codec.decodeFrame(raw(FrameType.GRAFT, 1, 9)), "trailing byte")
         assertNull(Codec.decodeFrame(byteArrayOf(FrameType.PRUNE.toByte(), 0)), "prune with a body")
     }
@@ -70,14 +73,13 @@ class TreeTest {
             fullSends(net, mid)
         }
         net.runFor(20_000)
-        // Not asserted: TTL 6 counts hops along the tree, which is longer than the shortest path, so some far nodes miss a post.
         val got = (0 until 10).sumOf { k -> names.count { n -> net.nodes.getValue(n).added().any { it.text == "late $k" && !it.mine } } }
         assertTrue(net.nodes.values.all { s -> s.added().groupBy { it.text }.values.all { it.size == 1 } }, "duplicate delivery")
         val s = net.nodes.values.map { it.node.treeStats() }
         println("U9 grid 5x5 TREE: full sends per settled post $costs (bound ${25 - 1 + 4}); delivered $got of ${10 * 24}; totals fullSends=${s.sumOf { it.fullSends }} " +
             "ihaveIds=${s.sumOf { it.ihaveIds }} grafts=${s.sumOf { it.grafts }} prunes=${s.sumOf { it.prunes }} eagerLinks=${s.sumOf { t -> t.links.values.count { it == "eager" } } / 2}")
-        // shortcut: 9 of 10, not all: a PRESENCE truncated by TTL 6 on the long tree path is grafted, which can add a cycle for one post.
-        assertTrue(costs.count { it <= 25 - 1 + 4 } >= 9, "settled post cost $costs")
+        assertTrue(costs.all { it <= 25 - 1 + 4 }, "settled post cost $costs")
+        assertEquals(10 * 24, got, "rule 10 pulls the tree to N12's shortest paths, so TTL 6 reaches every node")
         quiet(net)
     }
 
@@ -125,7 +127,7 @@ class TreeTest {
         val net = SimNetwork(mode = BroadcastMode.TREE)
         net.node("A"); net.node("B"); net.link("A", "B"); net.runFor(3_000)
         val fake = Crypto.randomBytes(8)
-        net.inject("B", "A", Codec.encodeFrame(Frame.IHave(listOf(fake))))
+        net.inject("B", "A", Codec.encodeFrame(Frame.IHave(listOf(fake), listOf(0))))
         net.runFor(C.GRAFT_TIMEOUT_MS + 2_000)
         val g = net.sent.filter { it.from == "A" && it.frame[0].toInt() == FrameType.GRAFT }
         assertEquals(1, g.size)
