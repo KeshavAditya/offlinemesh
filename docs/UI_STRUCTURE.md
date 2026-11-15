@@ -8,13 +8,13 @@ How the one-file page (`uiserver/src/main/resources/web/index.html`) is laid out
 Tabs (bottom bar on phones, row under the top bar from 600 px)
 ├─ Chats  (home)   search + New chat; conversations newest first; then "In range, no chat yet"
 │   ├─ New chat          New group (name + members) · list of people in range
-│   └─ Conversation      name, verified badge, route line, hop-path strip; Photo / Message / Send
+│   └─ Conversation      name, verified mark, route line; Photo / Message / Send (I'm safe in groups)
 │       └─ Info          Contact info: Message, fingerprint, Verified, Muted, route
 │                        Group info:   Message, members, Edit members (owner only)
 ├─ Feed            one line saying posts are public; posts; compose bar
 ├─ People          everyone the node knows about, with verified / muted / suspect / revoked
 │   └─ Contact info      (same screen as above)
-└─ Me              name, my fingerprint, my QR, guest PIN and QR (while guest mode is on)
+└─ Me              name, my fingerprint, my QR, Settings (Android app only), guest PIN and QR (while guest mode is on)
     ├─ Security and demo attacks   tamper / drop switches, flood / spoof / replay, event log
     ├─ Network and statistics      links (tree, description), mission profile, statistics
     └─ Panic wipe                  bottom of the screen, behind typing WIPE
@@ -50,12 +50,65 @@ Sources read for this: the Apple HIG pages above (local copy, June 2026), the An
 - **A separate safety-number screen.** Signal needs one because its contact screen is long. Ours is short, so the fingerprint and the Verified switch sit on Contact info, one tap closer.
 - **Contacts hidden behind "New chat" only.** People appear by radio range, not from an address book, so Chats lists them under "In range, no chat yet" and People is a tab of its own (Telegram and Briar do the same).
 - **Split view on wide screens** (HIG: tab bar becomes a sidebar). The laptop page stays one 680 px column; it is a demo console, and one layout is less to test.
-- **Sheets, swipe actions on rows, long-press menus, large collapsing titles, animated transitions.** Each needs gesture code the page does not otherwise have.
+- **Sheets, swipe actions on rows, long-press menus, large collapsing titles.** Each needs gesture code the page does not otherwise have. (A pushed screen does slide in: CSS only, see Modern pass.)
 - **Security buried in settings.** Chat apps hide it; here it is the demo, so it gets a badge and an always-visible strip.
 - **An in-app QR scanner.** Needs camera access, which plain-HTTP Safari does not grant. The other phone's camera app reads the QR text.
 
+## Android bridge (Me > Settings)
+
+The app's WebView fills the screen; the old native switch row is gone. `MainActivity.Bridge` is exposed to the page as `OMNative` (`addJavascriptInterface`; navigation is pinned to `http://127.0.0.1:8080/` and the bridge answers only while that page is loaded):
+
+- `OMNative.state()` returns JSON `{ble, lan, guest, secure, status}`; `status` is the blocker text ("Turn on Bluetooth.") or empty.
+- `OMNative.set(key, on)` for `ble`, `lan`, `guest`, `secure`; `OMNative.open(what)` for `invite`, `qr`, `share`, `bundle`, `keepalive`. Other values are ignored.
+- The app calls the page's `omNative()` after a native-side change, and `omBack()` on system Back (true: a pushed screen was closed; false: leave the app).
+
+The page builds one `li.set-row` per item in `#natRows` (switch rows reuse `label.sw`, tap rows reuse `.chat go`, which draws the chevron) and shows `#nat` only when `window.OMNative` exists, so a desktop browser and the browser guest client never see it. The blocker text shows in the `#conn` bar under the top bar.
+
 ## Follow-ups (not done here)
 
-- The native Android switch row (Bluetooth, Wi-Fi LAN, Guest mode, QR hop, Share app in `MainActivity.kt`) stays native: there is no JS-to-native bridge. With one (`addJavascriptInterface`), these belong under Me.
-- `MainActivity` does not forward the system back button to the WebView. Adding `if (web.canGoBack()) web.goBack()` makes Android back close pushed screens; the page side is already in place.
 - The welcome screen is skipped in iframes (the booth page) and when `navigator.webdriver` is set. A test that drives a normal browser must press Start once or set `localStorage.omWelcome` to the node id.
+
+## Modern pass
+
+Audit of the page as it stood (64,847 bytes on `v2`, 66,651 with the Settings rows), done with the `impeccable` skill (detector plus its audit, distill and quieter passes, Operate mode) and the `emil-design-eng` motion review, before any edit. No PRODUCT.md or DESIGN.md exists, so the owner's brief is the direction.
+
+### What is wrong today
+
+- **Accent everywhere.** Teal carries eleven jobs (avatars, link pill, hop-path pills, tab highlight, verified disc, sender names, links, badges, borders of pinned posts and the guest box, primary buttons, my bubbles), so it marks nothing. Two more state colours (amber, red) each have a tinted background as well.
+- **Boxes instead of hierarchy.** Feed posts are stacked rounded cards; Me, Security and Network are stacks of bordered boxes, two red tinted fieldsets, a grid of nine stat tiles, and log entries with a coloured side stripe (as has the alert strip). The detector flags the tinted compose shadow (glow on dark) and text flush against box borders.
+- **Decoration that says nothing.** Initials avatars all in one tint (the letter repeats the name beside it), the CSS-drawn brand mark, the "1 link" pill with a dot, hop pills joined by lines that repeat the words "1 hop" next to them, `Tag` pills for Muted / Owner / You / Pinned, `›` and `✓ ✓✓ •` glyphs and an emoji standing in for icons, and "A · a3f2 9c01" as a subtitle on every screen.
+- **Placement.** Three left edges on one screen (rows bleed 8 px, boxes inset 12 px, text at 16 px); chat rows are three lines tall; the Security screen shrinks its text below 13 px to fit the tiles; the contact screen is centred while every other screen is left-aligned; the bundle export link is a 24 px target; the map labels overlap.
+- **Type.** Eleven sizes and weights 500/600/650/700/750 with no clear steps.
+- **Motion.** None for navigation, and the switch animates `left` (layout) instead of a transform.
+
+| Before | After | Why |
+| --- | --- | --- |
+| Screens swap with no transition | Pushed screen: `opacity` + `translateX(12px)`, 180 ms, `cubic-bezier(.23,1,.32,1)`; tabs and Back stay instant | Push is occasional and spatial; tabs are high-frequency, so no animation |
+| `transition: background-color, color, border-color .15s` on every button | `:active` changes at once; `transform: scale(.97)` with a 120 ms ease-out release | Press feedback must be immediate |
+| Switch thumb animates `left` | `transform: translateX()` 150 ms ease-out | Transform and opacity only |
+| No reduced-motion rule | Movement sits inside `prefers-reduced-motion: no-preference`; colour changes stay | Fewer and gentler, not broken |
+| New message: nothing | Nothing (lists are rebuilt on every event) | No animation on high-frequency updates |
+
+### Removed
+
+Avatars and the brand mark; every pill and tag (state becomes plain words); hop-path pills (the route is a line of text: "You → Carlos → Bea"); card borders, boxes, tinted fieldsets, side stripes, stat tiles (counters become a two-column list); amber and both tints; the compose shadow; glyph and emoji icons (the verified mark and chevrons are drawn in CSS, receipts use words, "I'm safe" replaces the emoji on screen while the signed text on the wire is unchanged); the per-screen identity subtitle; the People intro line; the third line of chat rows; the hand-rolled modal for the welcome screen (now `<dialog>`).
+
+### Kept
+
+Every screen and feature in the sitemap; the bottom tab bar with icon and label; bubbles with mine in the accent; unread badges; the verified mark; red text for suspect / revoked / late roll call; the security strip and the Me badge; search beside New chat; the custom switch (Settings rows need one); the map; typed confirmation for the wipe; `window.OM_BACKEND`, the JSON protocol, `OMNative`, and the ids and classes `webbackend.js` uses (`box`, `row`, `pri`, `mut`, `mono`, `qr`, `#profile` and its two neighbours, the `fieldset` around `#tamper`, `#guest`).
+
+### Direction
+
+1. A calm, native-feeling messenger: system font, neutral surfaces, the existing teal as the only accent, used for primary buttons, my bubbles, the active tab, badges and the verified mark.
+2. Hierarchy from four type sizes (13 / 16 / 17 / 22), two weights (400 / 600) and a 4 / 8 / 12 / 16 / 24 spacing scale; plain rows with hairline dividers; one left edge at 16 px.
+3. One filled button per screen, always at the right end of the row it acts on (New chat, Send, Post) or full width under a heading (Message, Start); everything else is quiet.
+4. State in words, errors in red next to the thing that failed, every target 44 px or more, a 640 px centred column on wide screens.
+5. Motion only where it explains: a 180 ms push, an immediate press; less code and fewer bytes than before.
+
+### Result
+
+- Page size: 64,847 bytes on `v2` (66,651 with the Settings rows) to 58,529. The style block went from 16,640 to 11,165 bytes (184 rule lines to 124); the script gained only the slide-in flag, `said()` and `meta()`.
+- Platform features in place of code: `<dialog>` for the welcome screen (modal, focus trap and inert background come with it), `accent-color` for checkboxes, `env(safe-area-inset-*)`, `overflow-x: clip`, `prefers-reduced-motion`. No CSS nesting and no `:has()` (Safari 16 lacks nesting; neither was needed).
+- Checked in headless Chromium against the fake node at 390 px light and dark, 320 px and 1280 px, twelve screens each: no horizontal overflow, no control under 44 px, no page errors. Text contrast is 5.3:1 or better in both themes (worked out from the colour tokens, not measured on screen). A scripted run covers welcome, New chat, a DM with its receipt, contact info and the Verified switch, Back, a post, "I'm safe", the attack console, reduced motion, and the browser guest client (`webbackend.js`). Screenshots: `.playwright-mcp/ui-modern/` in the main project folder (`before-*`, `after-*`, `sheet-*`).
+- The detector's one remaining finding is the QR `<img>` without a `src` in the markup; the script sets it, and hides the image when the backend has no QR.
+- Not checked: the Android WebView and iPhone Safari (no emulator or phone was used). Look first at the `<dialog>` welcome screen, the compose bar above the keyboard, and the safe-area padding of the tab bar.
