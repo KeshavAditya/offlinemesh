@@ -246,7 +246,7 @@ fieldset .btns button { flex: 1; background: var(--bg); }
     <input type="text" id="myName" maxlength="32" autocomplete="nickname"> <button onclick="val('myName') ? send({t:'name',name:val('myName')}) : $('myName').focus()">Save name</button>
   </div>
   <ul class="box menu list">
-    <li><button class="chat" onclick="push('security')"><span class="main"><b>Security and demo attacks</b><small id="meSec"></small></span><span class="n" id="n-sec"></span><span class="chev" aria-hidden="true">›</span></button></li>
+    <li><button class="chat" onclick="push('security')"><span class="main"><b id="meSecT"></b><small id="meSec"></small></span><span class="n" id="n-sec"></span><span class="chev" aria-hidden="true">›</span></button></li>
     <li><button class="chat" onclick="push('net')"><span class="main"><b>Network and statistics</b><small id="meNet"></small></span><span class="chev" aria-hidden="true">›</span></button></li>
   </ul>
   <h2>My fingerprint</h2>
@@ -721,7 +721,9 @@ function renderMe() {
   if (qr && $('myQr').getAttribute('src') !== qr) $('myQr').src = qr;
   if (document.activeElement !== $('myName')) $('myName').value = S.self.name;
   const n = S.security.length, nl = S.links.filter(l => l.authed).length;
-  $('meSec').textContent = (n ? n + (n === 1 ? ' event' : ' events') + ' in the log' : 'Nothing caught yet') + ' · tamper, drop, flood, spoof, replay';
+  const demo = !$('tamper').closest('fieldset').hidden;   // the browser client (a leaf) hides the attack console
+  $('meSecT').textContent = demo ? 'Security and demo attacks' : 'Security log';
+  $('meSec').textContent = (n ? n + (n === 1 ? ' event' : ' events') + ' in the log' : 'Nothing caught yet') + (demo ? ' · tamper, drop, flood, spoof, replay' : '');
   $('meNet').textContent = (nl ? nl + (nl === 1 ? ' link' : ' links') : 'no links') + ' · ' + (S.profile || 'STANDARD') + ' profile';
 }
 
