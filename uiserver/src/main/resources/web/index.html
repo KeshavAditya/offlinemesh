@@ -32,7 +32,7 @@ h1 { margin: 0; display: flex; align-items: center; font-size: 18px; font-weight
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .6; }
 .pill.on { background: var(--tint); border-color: var(--acc); color: var(--acc); }
 .pill.on::before { opacity: 1; }
-#conn { background: var(--amb); color: #000; font-size: 13px; font-weight: 600; text-align: center; padding: 2px; }
+#conn { background: var(--amb); color: var(--bg); font-size: 13px; font-weight: 600; text-align: center; padding: 2px; }
 /* Newest unseen security event, one tap from any screen */
 #alert { display: block; width: 100%; color: var(--fg); border: 0; border-left: 4px solid var(--amb); border-radius: 0; background: var(--sur); text-align: left; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
 #alert.bad { border-left-color: var(--red); background: var(--redt); }
@@ -67,7 +67,7 @@ button:active, .btn:active { background: var(--line); }
 button:disabled { opacity: .45; cursor: default; }
 button.pri { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
 button.pri:active { background: var(--fg); border-color: var(--fg); }
-button.bad { background: var(--red); border-color: var(--red); color: #fff; }
+button.bad { background: var(--red); border-color: var(--red); color: var(--bg); }
 input[type=text], select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
 ::placeholder { color: var(--mut); opacity: 1; }
 select { width: auto; }
@@ -95,6 +95,8 @@ ul { list-style: none; padding: 0; margin: 0; }
 .post { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin: 8px 0; }
 .post .body { flex: 1; min-width: 0; }
 .post .txt { margin: 2px 0 4px; }
+.post .pin { flex: none; align-self: flex-start; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.post.pinned { border-color: var(--acc); }
 .meta { display: block; color: var(--mut); font-size: 12px; margin-top: 2px; }
 /* Compose bar */
 .compose { position: fixed; bottom: var(--nb); left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; z-index: 1; background: var(--bg); padding: 8px 16px; border-top: 1px solid var(--line); box-shadow: 0 -4px 12px rgba(10, 40, 35, .06); }
@@ -174,6 +176,12 @@ legend { font-weight: 700; padding: 0 8px; color: var(--red); background: var(--
 fieldset p { margin: 4px 0 12px; }
 fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 fieldset .btns button { flex: 1; background: var(--bg); }
+fieldset .btns button[aria-pressed=true] { background: var(--red); border-color: var(--red); color: var(--bg); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.tiles li { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; line-height: 1.3; }
+.tiles b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+.tiles li.hit { border-color: var(--red); background: var(--redt); }
+.tiles li.hit b { color: var(--red); }
 .ev { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; border-left: 3px solid var(--amb); padding: 8px 12px; margin: 8px 0; font-size: 14px; overflow-wrap: anywhere; background: var(--sur); border-radius: 0 8px 8px 0; }
 .ev.bad { border-left-color: var(--red); }
 .ev b { font-weight: 700; font-size: 13px; letter-spacing: .01em; }
@@ -224,14 +232,14 @@ fieldset .btns button { flex: 1; background: var(--bg); }
 </section>
 
 <section id="feed">
-  <p class="mut note">Public: anyone in range can read posts here. Use Chats for private messages.</p>
+  <label class="sw"><input type="checkbox" id="vOnly" onchange="setVOnly(this.checked)"> <span>Verified only <small>you and contacts whose fingerprint you checked</small></span></label>
   <ul id="posts"></ul>
   <div class="compose">
     <div class="row">
-      <input type="text" id="postText" placeholder="Post to everyone nearby" aria-label="Post text" data-max="1000" data-btn="postBtn" data-count="postCount">
+      <input type="text" id="postText" placeholder="Post to everyone nearby" aria-label="Post text" aria-describedby="pubNote" data-max="1000" data-btn="postBtn" data-count="postCount">
       <button id="postBtn" class="pri" disabled onclick="sendPost()">Post</button>
     </div>
-    <span id="postCount" class="mut"></span> <span id="postErr" class="err" role="alert"></span>
+    <small id="pubNote">Public posts are readable by anyone in range.</small> <span id="postCount" class="mut"></span> <span id="postErr" class="err" role="alert"></span>
   </div>
 </section>
 
@@ -253,6 +261,7 @@ fieldset .btns button { flex: 1; background: var(--bg); }
   <div class="you">
     <div>
       <div id="fp" class="fpbox mono"></div>
+      <button id="fpCopy" onclick="copyFp()">Copy fingerprint</button>
       <p class="mut">Names can be copied, this code cannot. To be verified, show this screen: the other person checks the code against what their phone lists for you.</p>
     </div>
     <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
@@ -283,7 +292,7 @@ fieldset .btns button { flex: 1; background: var(--bg); }
   <ul id="msgs" class="msgs" aria-live="polite"></ul>
   <div class="compose">
     <div class="row">
-      <label id="photoBtn" class="btn" title="Send a photo" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.lastChild.click()}">Photo<input type="file" accept="image/*" hidden onchange="photo(this)"></label>
+      <button id="photoBtn" title="Send a photo" onclick="$('photoIn').click()">Photo</button><input type="file" id="photoIn" accept="image/*" aria-label="Photo to send" hidden onchange="photo(this)">
       <input type="text" id="dmText" placeholder="Message" aria-label="Message text" data-max="39999" data-btn="dmBtn" data-count="dmCount">
       <button id="dmBtn" class="pri" disabled onclick="sendDm()">Send</button>
     </div>
@@ -320,14 +329,19 @@ fieldset .btns button { flex: 1; background: var(--bg); }
   <fieldset>
     <legend>Demo attacks</legend>
     <p class="mut">For demos only. These misbehave on purpose so the other nodes can catch it.</p>
-    <label class="sw"><input type="checkbox" id="tamper" onchange="send({t:'debug',flag:'tamper',on:this.checked})"> Tamper while relaying</label><br>
-    <label class="sw"><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})"> Drop while relaying</label>
+    <p class="mut">Flood: four posts in three slots. Spoof: a post under another contact's key. Replay: resend a stored message. Tamper: change posts while relaying (on until pressed again). Watch the counters on the other phones.</p>
     <div class="btns">
       <button onclick="send({t:'attack',kind:'flood'})">Flood</button>
       <button onclick="send({t:'attack',kind:'spoof'})">Spoof</button>
       <button onclick="send({t:'attack',kind:'replay'})">Replay</button>
+      <button id="tamper" aria-pressed="false" onclick="send({t:'debug',flag:'tamper',on:!S.debug.tamper})">Tamper</button>
     </div>
+    <label class="sw"><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})"> Drop while relaying</label>
   </fieldset>
+  <h2>Blocked by this phone <small>since start</small></h2>
+  <ul id="blocked" class="tiles"></ul>
+  <h2>Banned and cut-off peers <small id="nBan"></small></h2>
+  <ul id="bans" class="box"></ul>
   <h2>Security log <small id="nSec"></small></h2>
   <ul id="sec"></ul>
 </section>
@@ -401,7 +415,8 @@ const val = id => $(id).value.trim();
 const fp = id => (id.match(/.{1,4}/g) || []).join(' ');
 const bytes = s => new TextEncoder().encode(s).length;
 const hhmm = ms => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-function cap(s, n) { s = s == null ? '' : String(s); if (s.length <= n) return s; const a = [...s]; return a.length > n ? a.slice(0, n).join('') + '…' : s; }
+// Bidi overrides and isolates are dropped, so a name cannot flip the text around it (U+202E makes "evil" read "live").
+function cap(s, n) { s = s == null ? '' : String(s).replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ''); if (s.length <= n) return s; const a = [...s]; return a.length > n ? a.slice(0, n).join('') + '…' : s; }
 const contact = id => S && S.contacts.find(c => c.id === id);
 const others = () => S.contacts.filter(c => c.id !== S.self.id);
 function name(id) {
@@ -564,7 +579,7 @@ function apply(ev) {
     if (ev.group.members.includes(S.self.id)) S.groups.push(ev.group);   // left out of the list: live state goes, history stays
   } else if (ev.t === 'net') { S.contacts = ev.contacts; S.links = ev.links; }
   else if (ev.t === 'stats') S.stats = ev.stats;
-  else if (ev.t === 'sec') { S.security.push(ev.event); if (cur !== 'security') unread.security++; }
+  else if (ev.t === 'sec') { S.security.push(ev.event); if (S.stats && S.stats.drops) S.stats.drops[ev.event.kind] = (S.stats.drops[ev.event.kind] || 0) + 1; if (cur !== 'security') unread.security++; }
 }
 
 function badge(id, n) { $(id).textContent = n > 0 ? (n > 99 ? '99+' : n) : ''; }
@@ -596,17 +611,36 @@ function render() {
   if (keep) toBottom();
 }
 
+// Verified-only filter and pins (row 10, UI only): both kept in this browser's localStorage.
+let pins = [];
+try { pins = JSON.parse(localStorage.omPins || '[]'); $('vOnly').checked = localStorage.omVOnly === '1'; } catch (e) {}
+if (!Array.isArray(pins)) pins = [];
+const trusted = m => m.mine || !!(contact(m.from) || {}).verified;
+function setVOnly(on) { try { localStorage.omVOnly = on ? '1' : '0'; } catch (e) {} render(); }
+function pin(id) {
+  pins = pins.includes(id) ? pins.filter(x => x !== id) : [...pins, id].slice(-50);
+  try { localStorage.omPins = JSON.stringify(pins); } catch (e) {}
+  render();
+}
+
 function renderFeed() {
   const posts = $('posts'); posts.replaceChildren();
-  const list = [...S.feed].sort(byOrder).slice(-MAX);
-  if (!list.length) posts.appendChild(el('li', 'No posts yet. Say hello to everyone nearby.', 'empty'));
+  const vOnly = $('vOnly').checked;
+  const all = [...S.feed].filter(m => !vOnly || trusted(m)).sort(byOrder).slice(-MAX);
+  const top = all.filter(m => !m.mine && trusted(m) && pins.includes(m.id));   // a pin counts only while its sender stays verified
+  const list = [...top, ...all.filter(m => !top.includes(m))];
+  if (!list.length) posts.appendChild(el('li', vOnly ? 'No posts from verified contacts yet. Verify someone on their contact screen.' : 'No posts yet. Say hello to everyone nearby.', 'empty'));
   for (const m of list) {
     const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);  // 5.13: signer first, so guest text cannot pose as a sender
-    const who = el('div', name(m.from), 'who');
+    const who = el('div', name(m.from), 'who'), pinned = top.includes(m);
+    if ((contact(m.from) || {}).verified) who.appendChild(vf());
     if (g) who.appendChild(el('span', 'guest of ' + name(m.from) + ': ' + cap(g[1], 32), 'tag'));
-    posts.appendChild(add(el('li', null, 'post'), av(g ? g[1] : name(m.from), m.mine ? 'me' : ''),
+    if (pinned) who.appendChild(el('span', 'Pinned', 'tag'));
+    let pb = '';
+    if (!m.mine && trusted(m)) { pb = el('button', pinned ? 'Unpin' : 'Pin', 'pin'); pb.setAttribute('aria-pressed', pinned); pb.onclick = () => pin(m.id); }
+    posts.appendChild(add(el('li', null, 'post' + (pinned ? ' pinned' : '')), av(g ? g[1] : name(m.from), m.mine ? 'me' : ''),
       add(el('div', null, 'body'), who, el('div', cap(g ? g[2] : m.text, 1000), 'txt'),
-        el('span', hhmm(m.tsMs) + (m.mine ? (status(m) ? ' · ' + status(m) : '') : ' · ' + route(m)), 'meta'))));
+        el('span', hhmm(m.tsMs) + (m.mine ? (status(m) ? ' · ' + status(m) : '') : ' · ' + route(m)), 'meta')), pb));
   }
 }
 
@@ -714,6 +748,17 @@ function renderInfo() {
   if (own && !$('gView').open) picker('gMem', mem);   // rebuilt only while closed, so events do not undo ticks
 }
 
+// Plain-HTTP pages (the LAN guest) have no clipboard API: then select the text and try the old copy command.
+function copyFp() {
+  const b = $('fpCopy'), done = t => { b.textContent = t; setTimeout(() => b.textContent = 'Copy fingerprint', 2000); };
+  const pick = () => {
+    const r = document.createRange(); r.selectNodeContents($('fp')); getSelection().removeAllRanges(); getSelection().addRange(r);
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    done(ok ? 'Copied' : 'Selected, copy it');
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(fp(S.self.id)).then(() => done('Copied'), pick); else pick();
+}
+
 function renderMe() {
   $('fp').textContent = fp(S.self.id);
   const qr = backend.qr('omesh:' + S.self.id);
@@ -754,8 +799,32 @@ function renderSecurity() {
       el('b', e.kind), el('small', new Date(e.tsMs).toLocaleTimeString()),
       el('span', cap(e.detail, 300) + (e.src ? ' src=' + name(e.src) : '') + (e.link ? ' link=' + e.link : ''))));
   }
-  $('tamper').checked = S.debug.tamper;
+  $('tamper').setAttribute('aria-pressed', !!S.debug.tamper);
   $('drop').checked = S.debug.drop;
+  renderBlocked();
+}
+// What each counter means; the kinds are SecKind names from stats.drops (ROUTE_FAILED and PEER_REVOKED are not blocks).
+const BLOCKED = [['BAD_SIGNATURE', 'Bad signature (spoof, tamper)'], ['RATE_EQUIVOCATION', 'Double post, sender banned (flood)'],
+  ['LINK_FLOOD', 'Over the link rate limit'], ['BAD_POW', 'Missing proof of work'], ['STALE', 'Too old (stale replay)'],
+  ['MALFORMED', 'Malformed'], ['NAME_IMPERSONATION', 'Copied a verified name'], ['LINK_CLOSED', 'Links closed']];
+function renderBlocked() {
+  const d = (S.stats && S.stats.drops) || {}, dup = (S.stats && S.stats.duplicatesDropped) || 0;
+  $('blocked').replaceChildren(...[...BLOCKED.map(([k, t]) => [d[k] || 0, t]), [dup, 'Duplicates dropped (replays and normal echoes)']]
+    .map(([n, t]) => add(el('li', null, n ? 'hit' : ''), el('b', String(n)), el('small', t))));
+  // Bans are not in the protocol, so read them off the log: a ban lasts 10 min (BAN_DURATION_MS), a refused peer 60 s (REFUSE_MS).
+  const now = Date.now(), until = {};
+  for (const e of S.security) {
+    const t = e.kind === 'RATE_EQUIVOCATION' && /banned 10 min/.test(e.detail) ? ['Banned', 600000]
+      : e.kind === 'LINK_CLOSED' && /^link score/.test(e.detail) ? ['Link cut', 60000] : null;
+    if (!t || !e.src || e.tsMs + t[1] <= now) continue;
+    const k = t[0] + e.src;
+    until[k] = { what: t[0], id: e.src, end: Math.max(e.tsMs + t[1], (until[k] || {}).end || 0) };
+  }
+  const bans = Object.values(until).sort((a, b) => b.end - a.end);
+  count('nBan', bans.length);
+  $('bans').replaceChildren(...bans.length ? bans.map(b => add(el('li', null, 'rowc'), add(el('div', null, 'main'), el('b', name(b.id)), ' ',
+    el('span', fp(b.id), 'mono'), el('br'), el('small', b.what + ' until ' + hhmm(b.end)))))
+    : [el('li', 'No one banned. A peer that floods or forges is listed here.', 'rowc mut')]);
 }
 
 // 5.13: while guest mode is on, show each join URL as a QR plus the PIN. Polled, so a rotated PIN shows up within 3 s.
@@ -780,7 +849,7 @@ function guest() {
 setInterval(guest, 3000); guest();
 
 backend.onState(up => $('conn').hidden = up);
-backend.onEvent(ev => { apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'net') renderStats(); });   // stats every 2 s: do not rebuild the switches
+backend.onEvent(ev => { apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'net') renderStats(); else if (cur === 'security') renderBlocked(); });   // stats every 2 s: do not rebuild the switches
 show(tab);
 backend.connect();
 </script>
