@@ -10,6 +10,8 @@ class ArgsTest {
         val a = parseArgs(arrayOf("--data", "d", "--ui-port", "8081", "--listen", "9001", "--peer", "127.0.0.1:9002", "--peer", "h:9003", "--no-discovery"))
         assertEquals(8081, a.uiPort); assertEquals(9001, a.listen)
         assertEquals(listOf("127.0.0.1:9002", "h:9003"), a.peers); assertFalse(a.discovery)
+        assertEquals(null, a.guestPort)
+        assertEquals(8090, parseArgs(arrayOf("--data", "d", "--ui-port", "1", "--listen", "2", "--guest-port", "8090")).guestPort)
     }
 
     @Test fun rejectsBad() {

@@ -61,6 +61,17 @@ Same browser tabs, same script below. Tell judges it is TCP on one laptop instea
   Open `http://127.0.0.1:8091/` (A) and `:8094/` (D). Wait until A's Network tab shows D at 2 hops (a few seconds). Tried on the laptop: A's route to D went via B; with Drop on B, A's DM reached D via C in about 5 s and A logged `ROUTE_FAILED`.
 - **`docs/NUMBERS.md`** open in a laptop tab, scrolled to the forwarding benchmark (step 7).
 
+### Booth setup
+
+- **Poster:** `docs/poster.pdf` (A2 landscape, one page; prints to A3 with "fit to page"). To change it, edit `docs/poster.html` (numbers come only from `docs/NUMBERS.md`) and re-export: open it in Chrome or Edge, Print, Save as PDF, margins None, background graphics on.
+- **Three screens on the laptop:** `scripts/booth.sh` forwards the phones and opens `scripts/booth.html`, which shows the three node UIs side by side, labelled A, B relay, C.
+  ```
+  scripts/booth.sh <serial-of-A> <serial-of-B> <serial-of-C>   # phones in role order -> 8081, 8082, 8083
+  scripts/booth.sh                                              # all phones in adb order (forward-ui.sh)
+  scripts/booth.sh 8181 8182 8183                               # ports only, e.g. UI_BASE=8181 scripts/run-3-desktop.sh
+  ```
+  Each label links to that node's full page. Press F11 in the browser for full screen.
+
 ## The script (TDS: Privacy and Security)
 
 Organised by the three verbs of the prompt. Steps 1 to 6 are real actions on the phones (or the 3 desktop nodes in the fallback). **Steps 7 and 8 run on the laptop**: step 7 is the simulator benchmark table, step 8 is four desktop nodes. Say so when you get there.
