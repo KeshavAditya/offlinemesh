@@ -54,7 +54,7 @@ class InviteDialog(private val a: Activity, private val enableGuest: () -> Unit)
             addView(qrs)
         }
         AlertDialog.Builder(a).setTitle("Invite guests").setView(ScrollView(a).apply { addView(body) })
-            .setNegativeButton("Close", null).show()
+            .setNegativeButton("Close", null).show().also { a.secure(it.window) }
         lohs?.let { render(it) } ?: run { refreshButton(); status.text = "Start a hotspot here, or type the one you already run." }
     }
 
