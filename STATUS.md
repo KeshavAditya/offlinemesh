@@ -90,3 +90,4 @@
 [C] [00:57] done: guest items ADVANCES_2 #8/#2/#14/#13: guest port closes TLS hello at once (front socket peek, real guest IP kept; curl https ~0.2 s), guest reconnects on wake (dead link hidden 22 s -> authed 46 ms after visible), hidden-tab title '(n) OfflineMesh' + vibrate for DM/group, one tab per key with 'Use here' (host keeps 1 link); uiserver tests, meshcore 8/8, interop 11/11 green
 [C] [01:12] done: guest port connection caps (24/IP, 96 total, over-cap closed at once), first-byte timeout 30->5 s, 120 s idle timeout both directions after splice; uiserver tests + interop green
 [C] [01:17] done: guest proxy review fixes: peers entry kept until both directions end, unmapped calls 403 (no 127.0.0.1 fallback), MAX_CONNS 96->256, 10 s pre-reply deadline; GuestTlsTest +2
+[C] [01:14] done: merged ui-modern into v2 (manifest: Theme.OfflineMesh.NoActionBar + adjustResize + configChanges); gradle build, meshcore 8/8, interop, desktop e2e 1-7 pass
