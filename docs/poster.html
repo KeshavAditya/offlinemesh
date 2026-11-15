@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OfflineMesh Poster</title>
+<!-- Booth poster. Self-contained (no external requests). Print: browser Print to PDF, A2 landscape, margins none, background graphics on.
+     Every number here is copied from docs/NUMBERS.md; change them there first. -->
+<style>
+  @page { size: 594mm 420mm; /* A2 landscape; Chrome has no A2 keyword */ margin: 0; }
+  :root {
+    --paper: #f7f4ec;
+    --ink: #13161b;
+    --muted: #4a4f58;
+    --rule: #d9d3c4;
+    --accent: #d9481c;
+    --accent-soft: #fbe3d8;
+    --blue: #1f4e8c;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .sheet {
+    width: 594mm; height: 420mm; padding: 19.8mm 22.6mm 17.0mm;
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 11.3mm;
+    overflow: hidden; margin: 0 auto;
+  }
+  @media screen { body { padding: 16px 0; } .sheet { box-shadow: 0 2px 18px rgba(0,0,0,.12); } }
+
+  header { display: grid; grid-template-columns: auto 1fr; gap: 14mm; align-items: center; border-bottom: 1.7mm solid var(--ink); padding-bottom: 7.1mm; }
+  h1 { font-size: 115.2pt; line-height: .9; font-weight: 800; letter-spacing: -3.0pt; }
+  h1 span { color: var(--accent); }
+  .pitch { font-size: 33pt; font-weight: 600; line-height: 1.15; }
+  
+  main { display: grid; grid-template-columns: 135.7mm 1fr 147.1mm; gap: 12.7mm; min-height: 0; }
+  h2 { font-size: 28.8pt; font-weight: 800; text-transform: uppercase; letter-spacing: 1.8pt; color: var(--accent); margin-bottom: 4.2mm; }
+  p, li { font-size: 20.4pt; line-height: 1.35; }
+  ul { list-style: none; }
+  li { padding-left: 9.9mm; position: relative; margin-bottom: 3.7mm; }
+  li::before { content: ""; position: absolute; left: 0; top: .5em; width: 4.2mm; height: 4.2mm; background: var(--accent); border-radius: 50%; }
+  li b, p b { font-weight: 700; }
+  .col { display: flex; flex-direction: column; gap: 9.9mm; min-height: 0; }
+
+  .problem p { font-size: 22.8pt; }
+  .problem .big { font-size: 30.0pt; font-weight: 700; line-height: 1.2; margin-bottom: 4.2mm; }
+
+  .how { background: var(--card); border: 0.7mm solid var(--rule); border-radius: 5.7mm; padding: 8.5mm 9.9mm; display: flex; flex-direction: column; }
+  .how svg { width: 100%; flex: 1 1 0; min-height: 0; }
+  .how ol { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 2.8mm 11.3mm; margin-top: 4.2mm; counter-reset: s; }
+  .how ol li { padding-left: 14.1mm; font-size: 18.6pt; margin: 0; }
+  .how ol li::before { counter-increment: s; content: counter(s); width: 9.9mm; height: 9.9mm; top: .1em; border-radius: 50%; background: var(--ink); color: #fff; font-size: 14.4pt; font-weight: 700; display: grid; place-items: center; }
+
+  .nums { display: grid; grid-template-columns: 1fr 1fr; gap: 5.7mm; }
+  .num { background: var(--card); border: 0.7mm solid var(--rule); border-radius: 4.2mm; padding: 4.9mm 5.7mm; }
+  .num strong { display: block; font-size: 40.8pt; font-weight: 800; line-height: 1; color: var(--blue); letter-spacing: -0.6pt; }
+  .num span { display: block; font-size: 15.0pt; line-height: 1.3; margin-top: 2.1mm; color: var(--ink); }
+  .num.wide { grid-column: span 2; }
+  .num.wide strong { font-size: 36.0pt; }
+  .src { font-size: 13.2pt; color: var(--muted); margin-top: 2.8mm; line-height: 1.35; }
+
+  footer { display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 9.9mm; align-items: stretch; background: var(--ink); color: #fff; border-radius: 5.7mm; padding: 8.5mm 11.3mm; }
+  footer h2 { color: #fff; font-size: 40.8pt; margin: 0; align-self: center; letter-spacing: 1.2pt; }
+  .step { display: grid; grid-template-columns: 18.4mm 1fr; gap: 5.7mm; align-items: start; }
+  .step i { font-style: normal; width: 18.4mm; height: 18.4mm; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-size: 26.4pt; font-weight: 800; }
+  .step b { display: block; font-size: 24.0pt; margin-bottom: 1.4mm; }
+  .step p { font-size: 17.4pt; line-height: 1.3; color: #dfe3ea; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <h1>Offline<span>Mesh</span></h1>
+    <p class="pitch">Chat with the people around you when there is no signal: phone to phone, no internet, no towers, no servers.</p>
+  </header>
+
+  <main>
+    <div class="col">
+      <section class="problem">
+        <h2>The problem</h2>
+        <p class="big">Phones go silent exactly when people need them most.</p>
+        <p>At protests, after disasters and at packed festivals, towers go down or jam. The person you need may be 200&nbsp;m away and still out of reach.</p>
+      </section>
+      <section>
+        <h2>Safe by design</h2>
+        <ul>
+          <li><b>Signed messages.</b> No one can fake or alter a post.</li>
+          <li><b>Private DMs.</b> End-to-end encrypted. Relays cannot read them.</li>
+          <li><b>Proof of work.</b> Every message costs a little computing, so spam is expensive.</li>
+          <li><b>Flood bans.</b> Break the rate limit and your key is banned.</li>
+          <li><b>Padding.</b> Hides how long a message is.</li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="how">
+      <h2>How it works</h2>
+      <svg viewBox="0 0 760 400" role="img" aria-label="Phone A sends over Bluetooth to phone B, the relay. B passes it over Wi-Fi to a laptop. A browser guest joins B's hotspot.">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#13161b"/></marker>
+        </defs>
+        <!-- links -->
+        <line x1="128" y1="150" x2="312" y2="150" stroke="#1f4e8c" stroke-width="5" stroke-dasharray="12 9" marker-end="url(#arr)"/>
+        <text x="220" y="128" text-anchor="middle" font-size="24" font-weight="700" fill="#1f4e8c">Bluetooth LE</text>
+        <text x="220" y="184" text-anchor="middle" font-size="17" fill="#4a4f58">no internet needed</text>
+        <line x1="448" y1="150" x2="608" y2="150" stroke="#d9481c" stroke-width="5" marker-end="url(#arr)"/>
+        <text x="528" y="128" text-anchor="middle" font-size="24" font-weight="700" fill="#d9481c">Wi-Fi</text>
+        <text x="528" y="184" text-anchor="middle" font-size="17" fill="#4a4f58">local network only</text>
+        <line x1="380" y1="246" x2="380" y2="300" stroke="#d9481c" stroke-width="5" stroke-dasharray="4 8" stroke-linecap="round" marker-start="url(#arr)"/>
+        <text x="396" y="284" font-size="17" fill="#4a4f58">joins B's hotspot</text>
+
+        <!-- phone A -->
+        <rect x="40" y="64" width="86" height="172" rx="16" fill="#fff" stroke="#13161b" stroke-width="4"/>
+        <rect x="52" y="86" width="62" height="118" rx="4" fill="#fbe3d8"/>
+        <rect x="58" y="98" width="44" height="10" rx="5" fill="#d9481c"/>
+        <rect x="58" y="116" width="34" height="10" rx="5" fill="#13161b" opacity=".35"/>
+        <text x="83" y="270" text-anchor="middle" font-size="26" font-weight="800">Phone A</text>
+        <text x="83" y="294" text-anchor="middle" font-size="17" fill="#4a4f58">sender</text>
+
+        <!-- phone B -->
+        <rect x="320" y="56" width="120" height="188" rx="18" fill="#fff" stroke="#13161b" stroke-width="4"/>
+        <rect x="334" y="80" width="92" height="130" rx="4" fill="#dce6f4"/>
+        <path d="M352 140 a28 28 0 0 1 56 0" fill="none" stroke="#1f4e8c" stroke-width="5"/>
+        <path d="M364 140 a16 16 0 0 1 32 0" fill="none" stroke="#1f4e8c" stroke-width="5"/>
+        <circle cx="380" cy="140" r="5" fill="#1f4e8c"/>
+        <text x="380" y="40" text-anchor="middle" font-size="26" font-weight="800">Phone B</text>
+        <text x="380" y="232" text-anchor="middle" font-size="15" fill="#4a4f58">relay + hotspot</text>
+
+        <!-- laptop -->
+        <rect x="616" y="92" width="120" height="80" rx="6" fill="#fff" stroke="#13161b" stroke-width="4"/>
+        <rect x="628" y="104" width="96" height="56" fill="#fbe3d8"/>
+        <path d="M600 172 h152 l-12 16 h-128 z" fill="#13161b"/>
+        <text x="676" y="226" text-anchor="middle" font-size="26" font-weight="800">Laptop</text>
+        <text x="676" y="250" text-anchor="middle" font-size="17" fill="#4a4f58">a node too</text>
+
+        <!-- browser guest -->
+        <rect x="336" y="306" width="88" height="56" rx="8" fill="#fff" stroke="#13161b" stroke-width="4"/>
+        <circle cx="352" cy="320" r="4" fill="#d9481c"/><circle cx="364" cy="320" r="4" fill="#13161b" opacity=".35"/>
+        <line x1="346" y1="334" x2="412" y2="334" stroke="#13161b" stroke-width="2" opacity=".35"/>
+        <text x="440" y="330" font-size="26" font-weight="800">Browser guest</text>
+        <text x="440" y="354" font-size="17" fill="#4a4f58">any phone, no app needed</text>
+      </svg>
+      <ol>
+        <li>Every phone links to the phones near it and passes messages on.</li>
+        <li>Posts reach everyone within 6 hops; DMs take one learned path.</li>
+        <li>If a relay drops a DM, the sender sees no receipt and reroutes.</li>
+        <li>A phone that comes back in range catches up on what it missed.</li>
+      </ol>
+    </section>
+
+    <div class="col">
+      <section>
+        <h2>Measured</h2>
+        <div class="nums">
+          <div class="num wide"><strong>5.17 vs 97.80</strong><span>radio sends per delivered DM, 30 phones in a room: our routing vs plain flooding (simulator)</span></div>
+          <div class="num"><strong>~1</strong><span>send per link for a public post: 40 links cost 40 to 42 (simulator)</span></div>
+          <div class="num"><strong>6&ndash;9 ms</strong><span>proof of work per post on a laptop core</span></div>
+          <div class="num"><strong>8 / 8</strong><span>end-to-end checks pass on 4 Android emulators over Bluetooth</span></div>
+          <div class="num"><strong>108</strong><span>automated tests pass, 19 of them attack tests</span></div>
+          <div class="num"><strong>&lt; 1 s</strong><span>to relink a Bluetooth link after it drops (emulators)</span></div>
+          <div class="num"><strong>&le; 20 s</strong><span>for a missed post to arrive after reconnecting</span></div>
+        </div>
+        <p class="src">From docs/NUMBERS.md. Simulator runs use the real app code in virtual time. Phone timings not measured yet.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <h2>Try it</h2>
+    <div class="step"><i>1</i><div><b>Join our hotspot</b><p>Connect your phone's Wi-Fi to the hotspot on our relay phone. No internet involved.</p></div></div>
+    <div class="step"><i>2</i><div><b>Open the page</b><p>Scan the QR code on the relay phone, or open the address shown under it, in any browser.</p></div></div>
+    <div class="step"><i>3</i><div><b>Or get the app</b><p>Android: ask us to share the app with you offline, phone to phone. Then you are a full node.</p></div></div>
+  </footer>
+</div>
+</body>
+</html>
