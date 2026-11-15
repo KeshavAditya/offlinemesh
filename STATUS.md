@@ -62,3 +62,4 @@
 [qa] [22:15] done: booth prep: docs/poster.html + poster.pdf (A2 landscape, one page, numbers from NUMBERS.md), scripts/booth.sh + booth.html (3 node UIs side by side; tested on 3 desktop nodes 8181-8183), DEMO.md 'Booth setup'
 [mesh-ui] [22:16] done: web transport, browsers join as mesh nodes via ws://host:8090/mesh?pin= (1 binary msg = 1 frame, cap 16, 403 bad PIN); web links exempt from maxLinks; desktop --guest-port N
 [agent-B] [22:22] done: Share app button (dialog with signing-cert SHA-256, then share sheet with OfflineMesh.apk via FileProvider); release APK on meshA: share sheet + Quick Share shown, fingerprint 38:1A:..:13:A9 matches apksigner; QR hop show/scan OK under R8, no crash
+[mesh-ui] [22:37] done: web/meshnode.js browser leaf node (HELLO, presence, posts, DMs+ACK, groups, sync, revoke, reconnect; UiServer events/cmds) + node uiserver/src/test/js/webnode-interop.mjs vs 2 desktop nodes: 11/11 PASS
