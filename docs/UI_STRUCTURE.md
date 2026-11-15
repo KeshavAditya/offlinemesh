@@ -8,7 +8,7 @@ How the one-file page (`uiserver/src/main/resources/web/index.html`) is laid out
 Tabs (bottom bar on phones, row under the top bar from 600 px)
 ├─ Chats  (home)   search + New chat; conversations newest first; then "In range, no chat yet"
 │   ├─ New chat          New group (name + members) · list of people in range
-│   └─ Conversation      name, verified badge, route line, hop-path strip; Photo / Message / Send
+│   └─ Conversation      name, verified mark, route line; Photo / Message / Send (I'm safe in groups)
 │       └─ Info          Contact info: Message, fingerprint, Verified, Muted, route
 │                        Group info:   Message, members, Edit members (owner only)
 ├─ Feed            one line saying posts are public; posts; compose bar
@@ -50,7 +50,7 @@ Sources read for this: the Apple HIG pages above (local copy, June 2026), the An
 - **A separate safety-number screen.** Signal needs one because its contact screen is long. Ours is short, so the fingerprint and the Verified switch sit on Contact info, one tap closer.
 - **Contacts hidden behind "New chat" only.** People appear by radio range, not from an address book, so Chats lists them under "In range, no chat yet" and People is a tab of its own (Telegram and Briar do the same).
 - **Split view on wide screens** (HIG: tab bar becomes a sidebar). The laptop page stays one 680 px column; it is a demo console, and one layout is less to test.
-- **Sheets, swipe actions on rows, long-press menus, large collapsing titles, animated transitions.** Each needs gesture code the page does not otherwise have.
+- **Sheets, swipe actions on rows, long-press menus, large collapsing titles.** Each needs gesture code the page does not otherwise have. (A pushed screen does slide in: CSS only, see Modern pass.)
 - **Security buried in settings.** Chat apps hide it; here it is the demo, so it gets a badge and an always-visible strip.
 - **An in-app QR scanner.** Needs camera access, which plain-HTTP Safari does not grant. The other phone's camera app reads the QR text.
 
@@ -62,7 +62,7 @@ The app's WebView fills the screen; the old native switch row is gone. `MainActi
 - `OMNative.set(key, on)` for `ble`, `lan`, `guest`, `secure`; `OMNative.open(what)` for `invite`, `qr`, `share`, `bundle`, `keepalive`. Other values are ignored.
 - The app calls the page's `omNative()` after a native-side change, and `omBack()` on system Back (true: a pushed screen was closed; false: leave the app).
 
-The page builds one `li.set-row` per item in `#natRows` (switch rows reuse `label.sw`, tap rows reuse `.chat` plus a chevron) and shows `#nat` only when `window.OMNative` exists, so a desktop browser and the browser guest client never see it. The blocker text shows in the `#conn` bar under the top bar.
+The page builds one `li.set-row` per item in `#natRows` (switch rows reuse `label.sw`, tap rows reuse `.chat go`, which draws the chevron) and shows `#nat` only when `window.OMNative` exists, so a desktop browser and the browser guest client never see it. The blocker text shows in the `#conn` bar under the top bar.
 
 ## Follow-ups (not done here)
 
@@ -104,3 +104,11 @@ Every screen and feature in the sitemap; the bottom tab bar with icon and label;
 3. One filled button per screen, always at the right end of the row it acts on (New chat, Send, Post) or full width under a heading (Message, Start); everything else is quiet.
 4. State in words, errors in red next to the thing that failed, every target 44 px or more, a 640 px centred column on wide screens.
 5. Motion only where it explains: a 180 ms push, an immediate press; less code and fewer bytes than before.
+
+### Result
+
+- Page size: 64,847 bytes on `v2` (66,651 with the Settings rows) to 58,529. The style block went from 16,640 to 11,165 bytes (184 rule lines to 124); the script gained only the slide-in flag, `said()` and `meta()`.
+- Platform features in place of code: `<dialog>` for the welcome screen (modal, focus trap and inert background come with it), `accent-color` for checkboxes, `env(safe-area-inset-*)`, `overflow-x: clip`, `prefers-reduced-motion`. No CSS nesting and no `:has()` (Safari 16 lacks nesting; neither was needed).
+- Checked in headless Chromium against the fake node at 390 px light and dark, 320 px and 1280 px, twelve screens each: no horizontal overflow, no control under 44 px, no page errors. Text contrast is 5.3:1 or better in both themes (worked out from the colour tokens, not measured on screen). A scripted run covers welcome, New chat, a DM with its receipt, contact info and the Verified switch, Back, a post, "I'm safe", the attack console, reduced motion, and the browser guest client (`webbackend.js`). Screenshots: `.playwright-mcp/ui-modern/` in the main project folder (`before-*`, `after-*`, `sheet-*`).
+- The detector's one remaining finding is the QR `<img>` without a `src` in the markup; the script sets it, and hides the image when the backend has no QR.
+- Not checked: the Android WebView and iPhone Safari (no emulator or phone was used). Look first at the `<dialog>` welcome screen, the compose bar above the keyboard, and the safe-area padding of the tab bar.

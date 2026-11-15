@@ -6,226 +6,162 @@
 <title>OfflineMesh</title>
 <link rel="icon" href="data:,">
 <style>
-:root { --bg: #fff; --fg: #16201e; --mut: #5a6866; --line: #dbe3e1; --sur: #f1f5f4; --acc: #0a7566; --tint: #e2f1ee; --accfg: #fff; --red: #b3372b; --redt: #fbefed; --amb: #a46200; --nb: 0px; color-scheme: light dark; }
+/* One accent (--acc): primary buttons, my bubbles, the active tab, badges, the verified mark. Red is for danger and errors only.
+   Type: 13 / 16 / 17 / 22 px, weights 400 and 600. Spacing: 4 / 8 / 12 / 16 / 24. docs/UI_STRUCTURE.md, "Modern pass". */
+:root { --bg: #fff; --fg: #121a18; --mut: #5b6765; --line: #e2e8e6; --sur: #f1f4f3; --acc: #0a7566; --accfg: #fff; --red: #b3261e; --nb: 0px; --e: cubic-bezier(.23, 1, .32, 1); color-scheme: light dark; accent-color: var(--acc); }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #0e1413; --fg: #e4ebe9; --mut: #93a29f; --line: #28332f; --sur: #172120; --acc: #45c3ae; --tint: #12332e; --accfg: #03201b; --red: #f07a6d; --redt: #2b1816; --amb: #e7a347; }
+  :root { --bg: #0f1514; --fg: #e6ecea; --mut: #96a4a1; --line: #27312f; --sur: #1a2321; --acc: #4cc2ae; --accfg: #04201b; --red: #f2857a; }
 }
 * { box-sizing: border-box; }
-html { scroll-padding: 140px 0 calc(var(--nb) + 96px); }
-body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); -webkit-tap-highlight-color: transparent; }
-.wrap { max-width: 680px; margin: 0 auto; padding: 0 16px; }
-/* Top bar: brand mark on the four tabs, a back button on pushed screens */
-header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
-.top { display: flex; align-items: center; gap: 12px; min-height: 64px; }
-#back { flex: none; width: 44px; padding: 0 0 4px; margin: 0 -8px 0 -12px; border-color: transparent; background: none; color: var(--acc); font-size: 32px; line-height: 1; }
-.mark { display: block; flex: none; position: relative; width: 24px; height: 24px; }
-.mark i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--acc); }
-.mark i:nth-child(1) { left: 1px; bottom: 3px; } .mark i:nth-child(2) { right: 1px; bottom: 3px; } .mark i:nth-child(3) { left: 8px; top: 3px; }
-.mark i:nth-child(3)::before, .mark i:nth-child(3)::after { content: ""; position: absolute; top: 6px; left: 3px; width: 2px; height: 12px; background: var(--acc); transform-origin: top; transform: rotate(32deg); }
-.mark i:nth-child(3)::after { transform: rotate(-32deg); }
-.mark i:nth-child(1)::after { content: ""; position: absolute; left: 4px; top: 3px; width: 14px; height: 2px; background: var(--acc); }
-.id { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
-h1 { margin: 0; display: flex; align-items: center; font-size: 18px; font-weight: 750; letter-spacing: -.02em; }
-#title, #sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#sub { color: var(--mut); font-size: 13px; }
-.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); white-space: nowrap; }
-.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .6; }
-.pill.on { background: var(--tint); border-color: var(--acc); color: var(--acc); }
-.pill.on::before { opacity: 1; }
-#conn { background: var(--amb); color: var(--bg); font-size: 13px; font-weight: 600; text-align: center; padding: 2px; }
+html { scroll-padding: 120px 0 calc(var(--nb) + 96px); -webkit-text-size-adjust: 100%; }
+body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); -webkit-tap-highlight-color: transparent; }
+.wrap { max-width: 680px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
+/* Top bar: title, a back button on pushed screens, one slot on the right (links in range, or Info in a conversation) */
+header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top); }
+.top { display: flex; align-items: center; gap: 8px; min-height: 56px; }
+#back { flex: none; width: 44px; margin-left: -12px; padding: 0; background: none; }
+#back::before, .go::after, summary::after { content: ""; flex: none; width: 9px; height: 9px; margin: 0 4px; border: solid var(--mut); border-width: 2px 2px 0 0; transform: rotate(45deg); }
+#back::before { border-color: var(--fg); transform: rotate(-135deg); }
+.id { flex: 1; min-width: 0; }
+h1 { margin: 0; display: flex; align-items: center; font-size: 17px; font-weight: 600; line-height: 1.3; }
+#title, #sub, .line > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#nlinks { white-space: nowrap; }
+#chatWarn { padding-bottom: 8px; }
+#conn { background: var(--fg); color: var(--bg); font-size: 13px; font-weight: 600; text-align: center; padding: 4px 16px; }
 /* Newest unseen security event, one tap from any screen */
-#alert { display: block; width: 100%; color: var(--fg); border: 0; border-left: 4px solid var(--amb); border-radius: 0; background: var(--sur); text-align: left; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
-#alert.bad { border-left-color: var(--red); background: var(--redt); }
-#alert b { margin-right: 8px; font-size: 13px; }
-#alert.bad b { color: var(--red); }
-/* Tabs: a row under the top bar on wide screens, a bottom bar with icons on phones */
-nav { display: flex; gap: 4px; }
-nav button { flex: 1; position: relative; min-height: 48px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--mut); font-weight: 600; font-size: 15px; }
-nav svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-nav button[aria-current] { color: var(--acc); border-bottom-color: var(--acc); }
-nav button:active { background: var(--sur); }
-.n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 10px; background: var(--acc); color: var(--accfg); font-size: 12px; line-height: 20px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
-.n:empty { display: none; }
+#alert { display: block; width: 100%; border: 0; line-height: 44px; padding: 0 max(16px, calc(50% - 324px)); border-radius: 0; text-align: left; font-size: 13px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+#alert b { margin-right: 8px; }
+.bad > b, .bad td + td { color: var(--red); }
+/* Tabs: a row under the top bar on wide screens, a bottom bar on phones */
+nav { display: flex; }
+nav button { flex: 1; position: relative; min-height: 48px; border-radius: 0; background: none; color: var(--mut); }
+nav svg { flex: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+nav [aria-current] { color: var(--acc); box-shadow: inset 0 -2px; }
+.n { flex: none; min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--acc); color: var(--accfg); font-size: 13px; line-height: 20px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (max-width: 599px) {
-  :root { --nb: calc(64px + env(safe-area-inset-bottom)); }
+  :root { --nb: calc(56px + env(safe-area-inset-bottom)); }
   body { padding-bottom: var(--nb); }
-  nav { position: fixed; left: 0; right: 0; bottom: 0; height: var(--nb); padding-bottom: env(safe-area-inset-bottom); background: var(--bg); border-top: 1px solid var(--line); gap: 0; }
-  nav button { flex-direction: column; gap: 2px; padding: 0; border: 0; font-size: 12px; }
-  nav svg { width: 56px; height: 28px; padding: 2px 16px; border-radius: 14px; }
-  nav button[aria-current] svg { background: var(--tint); }
-  nav .n { position: absolute; top: 4px; left: calc(50% + 6px); margin: 0; }
-  body.deep { --nb: 0px; }   /* an open conversation takes the whole phone screen: its compose bar replaces the tabs */
-  body.deep nav { display: none; }
-  body.deep .compose { padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; height: var(--nb); padding-bottom: env(safe-area-inset-bottom); background: var(--bg); border-top: 1px solid var(--line); }
+  nav button, nav [aria-current] { flex-direction: column; gap: 2px; padding: 0; font-size: 13px; box-shadow: none; }
+  nav .n { position: absolute; top: 4px; left: calc(50% + 4px); }
+  .deep { --nb: 0px; }   /* an open conversation takes the whole phone screen: its compose bar replaces the tabs */
+  .deep nav { display: none; }
+  .deep .compose { padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
 }
+main { overflow-x: clip; }
 section { display: none; padding: 8px 0 24px; }
-section.on { display: block; }
-h2 { font-size: 16px; font-weight: 700; margin: 24px 0 8px; display: flex; align-items: baseline; gap: 8px; }
-h2 small { font-weight: 500; }
-button, .btn { font: inherit; font-weight: 600; white-space: nowrap; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--sur); color: var(--fg); cursor: pointer; transition: background-color .15s, color .15s, border-color .15s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-button:active, .btn:active { background: var(--line); }
-button:disabled { opacity: .45; cursor: default; }
-button.pri { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
-button.pri:active { background: var(--fg); border-color: var(--fg); }
-button.bad { background: var(--red); border-color: var(--red); color: var(--bg); }
-input[type=text], input[type=number], select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+.on { display: block; }
+section > :first-child { margin-top: 8px; }
+h2, .lb, legend, .sub { display: block; margin: 24px 0 8px; padding: 0; font-size: 13px; font-weight: 600; color: var(--mut); }
+.big { margin-bottom: 0; font-size: 22px; line-height: 1.25; color: var(--fg); overflow-wrap: anywhere; }
+p { margin: 8px 0; }
+a { color: inherit; display: inline-flex; align-items: center; min-height: 44px; }
+button, .btn { font: inherit; font-weight: 600; white-space: nowrap; min-height: 44px; padding: 0 16px; border: 1px solid transparent; border-radius: 12px; background: var(--sur); color: var(--fg); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+button:active { opacity: .6; }
+button:disabled { opacity: .4; }
+.pri { background: var(--acc); color: var(--accfg); }
+.danger, .btns [aria-pressed=true] { background: var(--red); color: var(--bg); }
+input[type=text], input[type=number], select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid transparent; border-radius: 12px; background: var(--sur); color: var(--fg); caret-color: var(--acc); width: 100%; min-width: 0; }
 ::placeholder { color: var(--mut); opacity: 1; }
-select { width: auto; }
-:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
-input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--acc); outline-offset: -1px; border-color: transparent; }
-ul { list-style: none; padding: 0; margin: 0; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
 .mut, small { color: var(--mut); font-size: 13px; }
-.lb { display: block; font-size: 13px; font-weight: 600; color: var(--mut); margin-bottom: 4px; }
-.mono { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; font-size: 13px; letter-spacing: .02em; }
-.av { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--tint); color: var(--acc); font-weight: 700; font-size: 16px; }
-.av.g { border-radius: 12px; }
-.av.me { background: var(--acc); color: var(--accfg); }
-.av.big { width: 72px; height: 72px; font-size: 28px; }
-.av.big.g { border-radius: 20px; }
-.who { font-weight: 650; font-size: 15px; }
-.vf { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; background: var(--acc); color: var(--accfg); font-size: 11px; font-weight: 700; letter-spacing: 0; vertical-align: 2px; }
-.tag { font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 8px; background: var(--sur); border: 1px solid var(--line); color: var(--mut); margin-left: 6px; }
+small { display: block; }
+h2 small { display: inline; margin-left: 4px; font-weight: 400; }
+.mono { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.fpbox { font-size: 16px; word-spacing: .2em; margin: 0 0 8px; }
+.vf { flex: none; display: inline-block; width: 6px; height: 11px; margin: 0 3px 1px 8px; border: solid var(--acc); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.tag { color: var(--mut); font-size: 13px; font-weight: 400; }
+.tag::before { content: " · "; }
 .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
 .row { display: flex; gap: 8px; align-items: center; }
-.err { color: var(--red); font-size: 13px; font-weight: 500; margin: 0; }
-.err:empty { display: none; }
+.row + ul, .row + small, select + table, details { margin-top: 8px; }
+.err { display: block; color: var(--red); font-size: 13px; margin: 0; }
+.err:empty, .n:empty, #sub:empty { display: none; }
 .empty { color: var(--mut); padding: 48px 16px; text-align: center; }
-.note { margin: 8px 0; }
-/* Feed */
-.post { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin: 8px 0; }
-.post .body { flex: 1; min-width: 0; }
-.post .txt { margin: 2px 0 4px; }
-.post .pin { flex: none; align-self: flex-start; min-height: 32px; padding: 0 12px; font-size: 13px; }
-.post.pinned { border-color: var(--acc); }
-.meta { display: block; color: var(--mut); font-size: 12px; margin-top: 2px; }
-/* Compose bar */
-.compose { position: fixed; bottom: var(--nb); left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; z-index: 1; background: var(--bg); padding: 8px 16px; border-top: 1px solid var(--line); box-shadow: 0 -4px 12px rgba(10, 40, 35, .06); }
-.compose input[type=text] { border-radius: 22px; padding: 0 16px; background: var(--sur); border-color: transparent; }
-.compose button { border-radius: 22px; }
-.compose .mut:empty { display: none; }
-#feed, #convo { padding-bottom: 112px; }
-/* Rows that open something: chats, people, settings */
-.chat { display: flex; align-items: center; text-align: left; white-space: normal; gap: 12px; padding: 12px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: 12px; background: none; min-height: 72px; font-weight: 400; }
-.chat:active { background: var(--sur); }
-.list li + li .chat { border-top: 1px solid var(--line); border-radius: 0; }
-.chat .main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.chat .line { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.chat .prev { color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat small { display: block; }
-.chev { flex: none; color: var(--mut); font-size: 22px; line-height: 1; }
-.sub { padding: 16px 0 4px; font-size: 13px; font-weight: 600; color: var(--mut); }
-.menu { margin-top: 16px; }
-.menu .chat { margin: 0; width: 100%; padding: 8px 4px; min-height: 60px; }
-.form { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 0 0 8px; background: var(--sur); }
-.form input[type=text] { background: var(--bg); }
-.pick label { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
-.pick input { width: 20px; height: 20px; margin: 0; accent-color: var(--acc); }
-.pick:empty::before { content: "No one in range to add yet."; color: var(--mut); font-size: 13px; display: block; padding: 8px 0; }
-/* The way a message travels: the strip under a conversation's name and on the contact screen */
-.path { margin: 0 0 8px; display: flex; align-items: center; flex-wrap: wrap; row-gap: 4px; font-size: 12px; font-weight: 600; color: var(--mut); }
-.path .hn { padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
-.path .hn.me { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
-.path .hn.end { border-color: var(--acc); color: var(--acc); }
-#topo { display: block; width: 100%; max-width: 400px; margin: 0 auto; overflow: visible; }
-#topo line { stroke: var(--acc); stroke-width: 2; }
-#topo line.far { stroke: var(--mut); stroke-dasharray: 4 4; }
-#topo .ring { fill: none; stroke: var(--line); }
-#topo .node { fill: var(--bg); stroke: var(--acc); stroke-width: 2; }
-#topo .node.me { fill: var(--acc); }
-#topo text { fill: var(--fg); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; font-size: 14px; font-weight: 500; text-anchor: middle; }
-#topo text.h { fill: var(--acc); font-size: 12px; font-weight: 700; }
-.path .hl { width: 20px; border-top: 2px solid var(--acc); }
-.path.none .hl { border-top-style: dashed; border-color: var(--mut); }
-#chatWarn { padding-bottom: 8px; }
-details { margin-top: 8px; }
-summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--acc); }
-.msgs { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; }
-.msgs li { max-width: 80%; align-self: flex-start; margin-bottom: 8px; }
-.msgs li.mine { align-self: flex-end; text-align: right; }
-.msgs li.empty { max-width: none; align-self: center; }
-.msgs .who { font-size: 13px; color: var(--acc); margin: 0 0 2px 12px; }
-.bub { display: inline-block; text-align: left; padding: 8px 14px; border-radius: 18px 18px 18px 6px; background: var(--sur); border: 1px solid var(--line); }
-.mine .bub { background: var(--acc); border-color: var(--acc); color: var(--accfg); border-radius: 18px 18px 6px 18px; }
-.bub img { display: block; max-width: 100%; border-radius: 12px; margin: 2px -6px; }
-.msgs .meta { margin: 2px 12px 0; }
-/* Contact and group info */
-.hero { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 0 8px; text-align: center; }
-.hero h2 { margin: 8px 0 0; font-size: 20px; align-items: center; gap: 0; overflow-wrap: anywhere; }
-.hero button { margin-top: 12px; min-width: 160px; }
-/* Me */
-.you { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-.you > div { flex: 1 1 260px; min-width: 0; }
-.qr { display: block; width: 176px; height: 176px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
-.fpbox .mono, .fpbox.mono { font-size: 15px; }
-.fpbox { line-height: 1.6; word-spacing: .2em; margin: 0 0 8px; }
-.rowc { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.rowc:last-child { border-bottom: 0; }
-.rowc .main { flex: 1; min-width: 170px; }
-.box { border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; }
-label.sw { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; cursor: pointer; }
-.box label.sw { display: flex; flex-direction: row-reverse; justify-content: space-between; gap: 16px; min-height: 60px; font-size: 15px; border-bottom: 1px solid var(--line); }
-.box label.sw:last-child { border-bottom: 0; }
-.sw small { display: block; }
-.sw input { appearance: none; -webkit-appearance: none; flex: none; width: 40px; height: 24px; margin: 0; border-radius: 12px; background: var(--mut); position: relative; cursor: pointer; transition: background-color .15s; }
-.sw input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); }
-.sw input:checked { background: var(--acc); }
-.sw input:checked::after { left: 19px; }
-/* Me > Settings (Android app only): one .set-row per native switch or screen */
-.set-row + .set-row { border-top: 1px solid var(--line); }
-.set-row .chat { min-height: 60px; padding: 8px; border-radius: 0; font-size: 15px; }
-.guest { border: 1px solid var(--acc); border-radius: 12px; padding: 12px; margin-top: 16px; }
-.guest h2 { margin-top: 0; }
-.guest b.mono { font-size: 22px; letter-spacing: .15em; }
-table.kv { border-collapse: collapse; width: 100%; font-size: 14px; }
-.kv td { padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.kv tr:last-child td { border-bottom: 0; }
-.kv td + td { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-.kv:empty { display: none; }
-/* Security and danger zones */
-fieldset { border: 1px solid var(--red); border-radius: 12px; padding: 4px 16px 16px; margin: 24px 0 8px; background: var(--redt); min-width: 0; }
-legend { font-weight: 700; padding: 0 8px; color: var(--red); background: var(--bg); border-radius: 6px; }
-fieldset p { margin: 4px 0 12px; }
-fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-fieldset .btns button { flex: 1; background: var(--bg); }
-fieldset .btns button[aria-pressed=true] { background: var(--red); border-color: var(--red); color: var(--bg); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
-.tiles li { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; line-height: 1.3; }
-.tiles b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
-.tiles li.hit { border-color: var(--red); background: var(--redt); }
-.tiles li.hit b { color: var(--red); }
-.ev { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; border-left: 3px solid var(--amb); padding: 8px 12px; margin: 8px 0; font-size: 14px; overflow-wrap: anywhere; background: var(--sur); border-radius: 0 8px 8px 0; }
-.ev.bad { border-left-color: var(--red); }
-.ev b { font-weight: 700; font-size: 13px; letter-spacing: .01em; }
-.ev.bad b { color: var(--red); }
+/* Lists: plain rows, a hairline between them */
+ul { list-style: none; padding: 0; margin: 0; }
+li + li, .sw + .sw, .sw + ul, tr + tr td { border-top: 1px solid var(--line); }
+.sub, .sub + li, .msgs li { border: 0; }
+/* Rows that open something: chats, people, settings. The press highlight runs edge to edge, the text keeps the 16 px edge. */
+.chat { display: flex; text-align: left; white-space: normal; gap: 12px; width: calc(100% + 32px); min-height: 60px; margin: 0 -16px; padding: 8px 16px; border: 0; border-radius: 0; background: none; font-weight: 400; }
+.chat:active { opacity: 1; background: var(--sur); }
+@media (hover: hover) { .chat:hover { background: var(--sur); } }
+.main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.prev { color: var(--mut); }
+.rowc, .post, .ev { padding: 10px 0; overflow-wrap: anywhere; }
+.post { display: flex; gap: 12px; align-items: flex-start; }
+.ev { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; }
+.ev b { font-size: 13px; }
 .ev span { grid-column: 1 / -1; }
+.form > * + * { margin-top: 8px; }
+.pick label { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.pick input { width: 20px; height: 20px; margin: 0; }
+.pick:empty::before { content: "No one in range to add yet."; color: var(--mut); font-size: 13px; }
+summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-weight: 600; }
+/* Switch rows: label on the left, switch on the right */
+.sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; gap: 16px; min-height: 60px; padding: 8px 0; cursor: pointer; }
+.sw input { appearance: none; -webkit-appearance: none; flex: none; width: 44px; height: 26px; margin: 0; border-radius: 13px; background: var(--mut); position: relative; cursor: pointer; }
+.sw input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); }
+.sw input:checked { background: var(--acc); }
+.sw input:checked::after { transform: translateX(18px); }
+/* Messages and the compose bar */
+.msgs { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.msgs li { max-width: 80%; align-self: flex-start; }
+.msgs .mine { align-self: flex-end; text-align: right; }
+.msgs .empty { max-width: none; align-self: center; }
+.msgs small { margin: 2px 4px; }
+.bub { display: inline-block; text-align: left; padding: 8px 12px; border-radius: 18px 18px 18px 4px; background: var(--sur); }
+.mine .bub { background: var(--acc); color: var(--accfg); border-radius: 18px 18px 4px 18px; }
+.bub img { display: block; max-width: 100%; border-radius: 12px; margin: 4px -4px; }
+.compose { position: fixed; bottom: var(--nb); left: 0; right: 0; max-width: 680px; margin: 0 auto; z-index: 1; background: var(--bg); padding: 8px 16px; border-top: 1px solid var(--line); }
+#feed, #convo { padding-bottom: 112px; }
+#iMsg, dialog button { width: 100%; margin-top: 16px; }
+.qr { display: block; width: 176px; height: 176px; background: #fff; border-radius: 12px; margin: 8px 0; }
+table { border-collapse: collapse; width: 100%; }
+td { padding: 8px 0; overflow-wrap: anywhere; }
+td + td { padding-left: 16px; text-align: right; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
+fieldset { border: 0; padding: 0; margin: 24px 0 0; min-width: 0; }
+legend { margin-top: 0; }
+.btns { display: flex; gap: 8px; margin: 12px 0 4px; }
+.btns button { flex: 1; padding: 0; }
+/* Mesh map */
+#topo { display: block; width: 100%; max-width: 400px; margin: 0 auto; overflow: visible; }
+#topo line { stroke: var(--fg); stroke-width: 1.5; }
+#topo .far { stroke: var(--mut); stroke-dasharray: 4 4; }
+#topo .ring { fill: none; stroke: var(--line); }
+#topo .node { fill: var(--bg); stroke: var(--fg); stroke-width: 1.5; }
+#topo .me { fill: var(--acc); stroke: var(--acc); }
+#topo text { fill: var(--fg); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; font-size: 13px; text-anchor: middle; }
 /* First run */
-#welcome { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; overflow: auto; background: var(--bg); padding: 48px 0 24px; }
-#welcome form { max-width: 420px; }
-#welcome h1 { font-size: 28px; margin: 12px 0; }
-#welcome p { margin: 0 0 12px; }
-#welcome .lb { margin-top: 24px; }
-#welcome button { width: 100%; margin-top: 12px; }
-.btn[hidden], [hidden] { display: none !important; }
+dialog { width: 100%; height: 100%; max-width: none; max-height: none; padding: 48px 0 24px; border: 0; background: var(--bg); color: var(--fg); }
+dialog h1 { font-size: 28px; margin-bottom: 12px; }
+/* Motion: a pushed screen slides in, a press gives way at once; tabs, Back and new messages do not animate. */
+@media (prefers-reduced-motion: no-preference) {
+  button { transition: transform .12s var(--e); }
+  button:not(.chat):active { transform: scale(.97); }
+  .sw input::after { transition: transform .15s var(--e); }
+  .in > :not(.compose) { animation: in .18s var(--e); }
+}
+@keyframes in { from { opacity: 0; transform: translateX(12px); } }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header>
   <div class="wrap">
     <div class="top">
-      <button id="back" onclick="back()" aria-label="Back" hidden>‹</button>
-      <span id="mark" class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span id="chatAv" class="av" aria-hidden="true" hidden></span>
-      <div class="id"><h1><span id="title">OfflineMesh</span><span id="chatVf" class="vf" role="img" aria-label="verified" hidden>✓</span></h1><span id="sub"></span></div>
+      <button id="back" onclick="back()" aria-label="Back" hidden></button>
+      <div class="id"><h1><span id="title">OfflineMesh</span><span id="chatVf" class="vf" role="img" aria-label="verified" hidden></span></h1><small id="sub"></small></div>
       <button id="infoBtn" onclick="info()" hidden>Info</button>
-      <span id="nlinks" class="pill" role="status">no links</span>
+      <small id="nlinks" role="status"></small>
     </div>
-    <div id="chatPath" class="path" aria-hidden="true" hidden></div>
     <p id="chatWarn" class="err"></p>
     <nav aria-label="Sections">
       <button data-s="chats" onclick="show('chats')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z"/></svg>Chats<span class="n" id="n-chats"></span></button>
-      <button data-s="feed" onclick="show('feed')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M7.5 7.500a6.4 6.4 0 0 0 0 9M16.5 7.500a6.4 6.4 0 0 1 0 9M4.5 4.500a10.6 10.6 0 0 0 0 15M19.5 4.500a10.6 10.6 0 0 1 0 15"/></svg>Feed<span class="n" id="n-feed"></span></button>
-      <button data-s="people" onclick="show('people')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.800a3.5 3.5 0 0 1 0 6.400M18 14.300c2.1.8 3.5 2.8 3.5 5.7"/></svg>People</button>
-      <button data-s="me" onclick="show('me')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20.500c0-4 3.6-6.5 8-6.500s8 2.5 8 6.5"/></svg>Me<span class="n" id="n-me"></span></button>
+      <button data-s="feed" onclick="show('feed')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.5 4.5a10.6 10.6 0 0 0 0 15M19.5 4.5a10.6 10.6 0 0 1 0 15"/></svg>Feed<span class="n" id="n-feed"></span></button>
+      <button data-s="people" onclick="show('people')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.3c2.1.8 3.5 2.8 3.5 5.7"/></svg>People</button>
+      <button data-s="me" onclick="show('me')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20.5c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>Me<span class="n" id="n-me"></span></button>
     </nav>
   </div>
   <div id="conn" role="status" hidden></div>
@@ -239,76 +175,70 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
     <input type="text" id="q" placeholder="Search" aria-label="Search chats and people" enterkeyhint="search" autocomplete="off" oninput="render()">
     <button class="pri" onclick="push('newchat')">New chat</button>
   </div>
-  <ul id="convos" class="list"></ul>
+  <ul id="convos"></ul>
 </section>
 
 <section id="feed">
-  <label class="sw"><input type="checkbox" id="vOnly" onchange="setVOnly(this.checked)"> <span>Verified only <small>you and contacts whose fingerprint you checked</small></span></label>
+  <label class="sw"><input type="checkbox" id="vOnly" onchange="setVOnly(this.checked)"><span>Verified only<small>You and contacts whose fingerprint you checked</small></span></label>
   <ul id="posts"></ul>
   <div class="compose">
     <div class="row">
       <input type="text" id="postText" placeholder="Post to everyone nearby" aria-label="Post text" aria-describedby="pubNote" data-max="1000" data-btn="postBtn" data-count="postCount">
       <button id="postBtn" class="pri" disabled onclick="sendPost()">Post</button>
     </div>
-    <small id="pubNote">Public posts are readable by anyone in range.</small> <span id="postCount" class="mut"></span> <span id="postErr" class="err" role="alert"></span>
+    <small id="pubNote">Public posts are readable by anyone in range.</small><small id="postCount"></small><span id="postErr" class="err" role="alert"></span>
   </div>
 </section>
 
 <section id="people">
-  <p class="mut note">Phones in range show up here on their own. Open one to verify it or send a message.</p>
-  <ul id="contacts" class="list"></ul>
+  <ul id="contacts"></ul>
 </section>
 
 <section id="me">
   <label class="lb" for="myName">Name</label>
   <div class="row">
-    <input type="text" id="myName" maxlength="32" autocomplete="nickname"> <button onclick="val('myName') ? send({t:'name',name:val('myName')}) : $('myName').focus()">Save name</button>
+    <input type="text" id="myName" maxlength="32" autocomplete="nickname"><button onclick="val('myName') ? send({t:'name',name:val('myName')}) : $('myName').focus()">Save</button>
   </div>
-  <ul class="box menu list">
-    <li><button class="chat" onclick="push('security')"><span class="main"><b id="meSecT"></b><small id="meSec"></small></span><span class="n" id="n-sec"></span><span class="chev" aria-hidden="true">›</span></button></li>
-    <li><button class="chat" onclick="push('net')"><span class="main"><b>Network and statistics</b><small id="meNet"></small></span><span class="chev" aria-hidden="true">›</span></button></li>
+  <ul>
+    <li><button class="chat go" onclick="push('security')"><span class="main"><b id="meSecT"></b><small id="meSec"></small></span><span class="n" id="n-sec"></span></button></li>
+    <li><button class="chat go" onclick="push('net')"><span class="main"><b>Network and statistics</b><small id="meNet"></small></span></button></li>
   </ul>
   <h2>My fingerprint</h2>
-  <div class="you">
-    <div>
-      <div id="fp" class="fpbox mono"></div>
-      <button id="fpCopy" onclick="copyFp()">Copy fingerprint</button>
-      <p class="mut">Names can be copied, this code cannot. To be verified, show this screen: the other person checks the code against what their phone lists for you.</p>
-    </div>
-    <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
-    <img id="myQr" class="qr" width="176" height="176" alt="QR code of my fingerprint">
-  </div>
+  <div id="fp" class="fpbox mono"></div>
+  <button id="fpCopy" onclick="copyFp()">Copy fingerprint</button>
+  <p class="mut">Names can be copied, this code cannot. To be verified, show this screen: the other person checks the code against what their phone lists for you.</p>
+  <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
+  <img id="myQr" class="qr" width="176" height="176" alt="QR code of my fingerprint">
   <!-- Android app only (NAT in the script): the switches and screens that live in native code. Hidden in a browser. -->
   <div id="nat" hidden>
     <h2>Settings</h2>
-    <ul id="natRows" class="box"></ul>
+    <ul id="natRows"></ul>
   </div>
   <div id="guest"></div>
   <div id="bundle" hidden>
     <h2>Carry messages by hand</h2>
     <p class="mut">Export a file of messages here, carry it to a phone that is out of range, and import it there.</p>
-    <div class="row"><a href="/api/bundle" download>Export messages (bundle)</a>
+    <div class="row"><a class="btn" href="/api/bundle" download>Export bundle</a>
       <button onclick="$('bundleIn').click()">Import bundle</button><input type="file" id="bundleIn" hidden onchange="importBundle(this)"></div>
     <p id="bundleMsg" role="status"></p>
   </div>
   <fieldset>
-    <legend>Panic wipe</legend>
+    <legend style="color:var(--red)">Panic wipe</legend>
     <p class="mut">Tells contacts to delete your conversations, erases this phone's identity and messages, and starts again with a new ID.</p>
     <div class="row"><input type="text" id="wipeText" placeholder="Type WIPE" aria-label="Type WIPE to confirm" autocomplete="off">
-      <button id="wipeBtn" class="bad" onclick="val('wipeText') === 'WIPE' ? send({t:'panic',confirm:'WIPE'}, 'wipeText') : $('wipeText').focus()">Panic wipe</button></div>
+      <button id="wipeBtn" class="danger" onclick="val('wipeText') === 'WIPE' ? send({t:'panic',confirm:'WIPE'}, 'wipeText') : $('wipeText').focus()">Panic wipe</button></div>
   </fieldset>
 </section>
 
 <!-- Pushed screens: opened from a tab, closed with Back -->
 <section id="newchat">
-  <button id="newGroupBtn" class="chat" aria-expanded="false" onclick="toggleGroupForm()"><span class="av g" aria-hidden="true">+</span><span class="main"><b>New group</b><small>Name it and pick the members</small></span></button>
+  <button id="newGroupBtn" class="chat" aria-expanded="false" onclick="toggleGroupForm()"><span class="main"><b>New group</b><small>Name it and pick the members</small></span></button>
   <div id="newGroup" class="form" hidden>
-    <input type="text" id="gName" placeholder="Group name" maxlength="32" aria-label="Group name">
+    <div class="row"><input type="text" id="gName" placeholder="Group name" maxlength="32" aria-label="Group name"><button id="gCreate" class="pri" onclick="newGroup()">Create</button></div>
     <div id="gPick" class="pick" role="group" aria-label="Members"></div>
-    <div class="row"><button id="gCreate" class="pri" onclick="newGroup()">Create group</button><button onclick="toggleGroupForm(false)">Cancel</button></div>
   </div>
-  <div class="sub">Message someone in range</div>
-  <ul id="pickList" class="list"></ul>
+  <h2>Message someone in range</h2>
+  <ul id="pickList"></ul>
 </section>
 
 <section id="convo">
@@ -320,32 +250,29 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
       <input type="text" id="dmText" placeholder="Message" aria-label="Message text" data-max="39999" data-btn="dmBtn" data-count="dmCount">
       <button id="dmBtn" class="pri" disabled onclick="sendDm()">Send</button>
     </div>
-    <span id="dmCount" class="mut"></span> <span id="dmErr" class="err" role="alert"></span>
+    <small id="dmCount"></small><span id="dmErr" class="err" role="alert"></span>
   </div>
 </section>
 
 <section id="info">
-  <div class="hero">
-    <span id="iAv" class="av big" aria-hidden="true"></span>
-    <h2 id="iName"></h2>
-    <small id="iSub"></small>
-    <p id="iWarn" class="err"></p>
-    <button id="iMsg" class="pri" onclick="message()">Message</button>
-  </div>
+  <h2 id="iName" class="big"></h2>
+  <small id="iSub"></small>
+  <p id="iWarn" class="err"></p>
+  <button id="iMsg" class="pri" onclick="message()">Message</button>
   <div id="iContact">
     <h2>Verify</h2>
     <p class="mut">Names can be copied. Scan the QR on their Me screen or read the fingerprint off their phone; if it matches the one below, switch on Verified.</p>
     <div id="iFp" class="fpbox mono"></div>
-    <div id="iSw" class="box"></div>
+    <div id="iSw"></div>
     <h2>Route</h2>
-    <div id="iPath" class="path" aria-hidden="true"></div>
+    <div id="iPath"></div>
     <small id="iRoute"></small>
   </div>
   <div id="iGroup">
     <h2>Members <small id="iCount"></small></h2>
     <p id="iLate" class="err" role="alert"></p>
-    <ul id="iMembers" class="box"></ul>
-    <label class="row" style="margin-top:8px"><small>Alert after</small> <input type="number" id="safeN" min="1" max="1440" style="width:6em" onchange="setSafeN(this.value)"> <small>minutes without an "I'm safe"</small></label>
+    <ul id="iMembers"></ul>
+    <label class="row" style="margin-top:8px"><small class="main">Minutes without an "I'm safe" before the alert</small><input type="number" id="safeN" min="1" max="1440" style="width:5em" onchange="setSafeN(this.value)"></label>
     <details id="gView" hidden><summary>Edit members</summary><div id="gMem" class="pick" role="group" aria-label="Members"></div>
       <button id="gSave" class="pri" onclick="saveMembers()">Save members</button></details>
   </div>
@@ -354,20 +281,19 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
 <section id="security">
   <fieldset>
     <legend>Demo attacks</legend>
-    <p class="mut">For demos only. These misbehave on purpose so the other nodes can catch it.</p>
-    <p class="mut">Flood: four posts in three slots. Spoof: a post under another contact's key. Replay: resend a stored message. Tamper: change posts while relaying (on until pressed again). Watch the counters on the other phones.</p>
+    <p class="mut">For demos: each one misbehaves on purpose so the other phones catch it. Flood: four posts in three slots. Spoof: a post under another contact's key. Replay: resend a stored message. Tamper: change posts while relaying, on until pressed again.</p>
     <div class="btns">
       <button onclick="send({t:'attack',kind:'flood'})">Flood</button>
       <button onclick="send({t:'attack',kind:'spoof'})">Spoof</button>
       <button onclick="send({t:'attack',kind:'replay'})">Replay</button>
       <button id="tamper" aria-pressed="false" onclick="send({t:'debug',flag:'tamper',on:!S.debug.tamper})">Tamper</button>
     </div>
-    <label class="sw"><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})"> Drop while relaying</label>
+    <label class="sw"><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})">Drop while relaying</label>
   </fieldset>
-  <h2>Blocked by this phone <small>since start</small></h2>
-  <ul id="blocked" class="tiles"></ul>
+  <h2>Blocked by this phone since start</h2>
+  <table id="blocked"></table>
   <h2>Banned and cut-off peers <small id="nBan"></small></h2>
-  <ul id="bans" class="box"></ul>
+  <ul id="bans"></ul>
   <h2>Security log <small id="nSec"></small></h2>
   <ul id="sec"></ul>
 </section>
@@ -381,15 +307,15 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
   <select id="profile" aria-label="Mission profile" onchange="send({t:'profile',name:this.value})">
     <option>STANDARD</option><option>CROWD</option><option>TUNNEL</option><option>SPARSE</option>
   </select>
-  <div class="box" style="margin-top:8px"><table id="profVals" class="kv"></table></div>
+  <table id="profVals"></table>
   <h2>Statistics</h2>
-  <div class="box"><table id="stats" class="kv"></table></div>
+  <table id="stats"></table>
 </section>
 </main>
 
-<div id="welcome" role="dialog" aria-modal="true" aria-labelledby="wTitle" hidden>
-  <form class="wrap" onsubmit="start(); return false">
-    <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+<!-- First run. Closing it any way (Start, Escape) counts as seen. -->
+<dialog id="welcome" aria-labelledby="wTitle" onclose="start()">
+  <form class="wrap" method="dialog">
     <h1 id="wTitle">OfflineMesh</h1>
     <p>Messages hop from phone to phone over Bluetooth and Wi-Fi. No internet, no account.</p>
     <p>Chats are encrypted end to end. Posts in Feed are public to everyone in range.</p>
@@ -400,7 +326,7 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
     <p class="mut">Names can be copied, this code cannot. People compare it in person to be sure it is you.</p>
     <button class="pri">Start</button>
   </form>
-</div>
+</dialog>
 
 <script>
 // The only code that talks to the node. Another backend (an in-browser node) plugs in by setting window.OM_BACKEND
@@ -444,15 +370,16 @@ const backend = window.OM_BACKEND || httpBackend();
 let S = null, tab = 'chats', stack = [], cur = 'chats', open = null;   // cur: the visible section; open: {kind: 'dm'|'group', id} of the conversation or info screen on top
 const unread = { feed: 0, security: 0 }, dmUnread = {};
 const MAX = 200;                                   // render at most the last 200 items of any list (A52s WebView)
-const BAD = ['BAD_SIGNATURE', 'BANNED', 'RATE_EQUIVOCATION', 'NAME_IMPERSONATION'];   // the rest (ROUTE_FAILED, PEER_REVOKED, ...) amber
+const BAD = ['BAD_SIGNATURE', 'BANNED', 'RATE_EQUIVOCATION', 'NAME_IMPERSONATION'];   // the rest (ROUTE_FAILED, PEER_REVOKED, ...) are not attacks
 const TITLE = { chats: 'OfflineMesh', feed: 'Feed', people: 'People', me: 'Me', newchat: 'New chat', security: 'Security', net: 'Network' };
+const SAFE = '✅ SAFE';                        // the signed text of an "I'm safe" check-in; shown as words, see said()
 const $ = id => document.getElementById(id);
 const val = id => $(id).value.trim();
 const fp = id => (id.match(/.{1,4}/g) || []).join(' ');
 const bytes = s => new TextEncoder().encode(s).length;
 const hhmm = ms => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 // Bidi overrides and isolates are dropped, so a name cannot flip the text around it (U+202E makes "evil" read "live").
-function cap(s, n) { s = s == null ? '' : String(s).replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ''); if (s.length <= n) return s; const a = [...s]; return a.length > n ? a.slice(0, n).join('') + '…' : s; }
+function cap(s, n) { s = s == null ? '' : String(s).replace(/[‎‏‪-‮⁦-⁩]/g, ''); if (s.length <= n) return s; const a = [...s]; return a.length > n ? a.slice(0, n).join('') + '…' : s; }
 const contact = id => S && S.contacts.find(c => c.id === id);
 const others = () => S.contacts.filter(c => c.id !== S.self.id);
 function name(id) {
@@ -468,26 +395,29 @@ const uk = (kind, id) => kind + ':' + id;            // unread key: a group id m
 const isOpen = (kind, id) => cur === 'convo' && open.kind === kind && open.id === id;
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 function add(p, ...kids) { for (const k of kids) p.appendChild(typeof k === 'string' ? document.createTextNode(k) : k); return p; }
-function av(label, cls) { const a = el('span', ([...(label || '?').trim()][0] || '?').toUpperCase(), 'av' + (cls ? ' ' + cls : '')); a.setAttribute('aria-hidden', 'true'); return a; }
-function vf() { const s = el('span', '✓', 'vf'); s.setAttribute('role', 'img'); s.setAttribute('aria-label', 'verified'); return s; }
-const chev = () => { const s = el('span', '›', 'chev'); s.setAttribute('aria-hidden', 'true'); return s; };
+function vf() { const s = el('span', null, 'vf'); s.setAttribute('role', 'img'); s.setAttribute('aria-label', 'verified'); return s; }
 function route(m) { return m.hops == null ? 'no route yet' : m.hops + (m.hops === 1 ? ' hop' : ' hops') + (m.via && m.hops > 1 ? ' via ' + name(m.via) : ''); }
 function status(m) {
-  if (m.group) return m.total ? 'Delivered to ' + m.delivered + ' of ' + m.total : 'Sent ✓';
+  if (m.group) return m.total ? 'Delivered to ' + m.delivered + ' of ' + m.total : 'Sent';
   if (m.rerouteVia) return (m.status === 'DELIVERED' ? 'Delivered' : 'Sent') + ', rerouted via ' + name(m.rerouteVia);   // U10
-  if (m.status === 'DELIVERED') return 'Delivered ✓✓ · ' + route(m);
-  return { QUEUED: 'Queued •', SENT: 'Sent ✓' }[m.status] || '';
+  if (m.status === 'DELIVERED') return 'Delivered · ' + route(m);
+  return { QUEUED: 'Queued', SENT: 'Sent' }[m.status] || '';
 }
+// The grey line under a message: time, then my receipt or the way theirs came.
+const meta = m => [hhmm(m.tsMs), m.mine ? status(m) : route(m)].filter(x => x).join(' · ');
+// What a message says, as text: a photo, an "I'm safe" check-in (with its note), or the text itself.
+const said = m => m.img ? 'Photo' : typeof m.text === 'string' && m.text.startsWith(SAFE) ? 'I\'m safe' + (m.text.length > SAFE.length ? ':' + m.text.slice(SAFE.length) : '') : m.text;
+const linksText = () => { const n = S.links.filter(l => l.authed).length; return n ? n + (n === 1 ? ' link' : ' links') : 'No links'; };
 const byOrder = (a, b) => a.lamport - b.lamport || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const atBottom = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
 const toBottom = () => scrollTo(0, document.documentElement.scrollHeight);
 const count = (id, n) => $(id).textContent = n ? String(n) : '';
 
 // Navigation. Pushed screens also go into the browser history, so the phone's back gesture closes them.
-function nav() {
+function nav(fwd) {   // fwd: a screen was pushed, so it slides in; tabs and Back swap at once
   const t = stack[stack.length - 1];
   cur = t ? t.s : tab; open = t && t.id ? t : null;
-  for (const s of document.querySelectorAll('section')) s.className = s.id === cur ? 'on' : '';
+  for (const s of document.querySelectorAll('section')) s.className = s.id !== cur ? '' : fwd ? 'on in' : 'on';
   for (const b of document.querySelectorAll('nav button')) b.dataset.s === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current');
   document.body.classList.toggle('deep', cur === 'convo');
   if (cur in unread) unread[cur] = 0;
@@ -500,7 +430,7 @@ function push(s, kind, id, replace) {
   if (replace) stack.pop();
   stack.push({ s, kind, id });
   if (replace) mark(); else try { history.pushState({ n: stack.length }, ''); } catch (e) {}
-  nav();
+  nav(true);
 }
 function back() { history.state && history.state.n === stack.length ? history.back() : (stack.pop(), nav()); }   // our history entry: let popstate close it
 function omBack() { return !!stack.length && (back(), true); }   // Android system Back (MainActivity): false means leave the app
@@ -514,14 +444,12 @@ function toggleGroupForm(on = $('newGroup').hidden) { $('newGroup').hidden = !on
 // First run (and after a wipe): pick a name, see the fingerprint. Not in automated browsers or the booth's iframes.
 function welcome() {
   let seen; try { seen = localStorage.omWelcome; } catch (e) { return; }
-  if (seen === S.self.id || navigator.webdriver || self !== top || !$('welcome').hidden) return;
+  if (seen === S.self.id || navigator.webdriver || self !== top || $('welcome').open) return;
   $('wName').value = S.self.name; $('wFp').textContent = fp(S.self.id);
-  hello(true); $('wName').select();
+  $('welcome').showModal(); $('wName').select();
 }
-function hello(on) { $('welcome').hidden = !on; document.querySelector('header').inert = document.querySelector('main').inert = on; }
 function start() {
   try { localStorage.omWelcome = S.self.id; } catch (e) {}
-  hello(false);
   if (val('wName') && val('wName') !== S.self.name) send({ t: 'name', name: val('wName') });
 }
 
@@ -625,19 +553,13 @@ function badge(id, n) { $(id).textContent = n > 0 ? (n > 99 ? '99+' : n) : ''; }
 function render() {
   if (!S) return;
   const convo = cur === 'convo', gq = open && open.kind === 'group', g = gq && grp(open.id), c = open && !gq && contact(open.id) || {};
-  const title = !open ? '' : gq ? gname(open.id) : name(open.id);
-  $('back').hidden = !stack.length; $('mark').hidden = !!stack.length;
-  $('title').textContent = convo ? title : cur === 'info' ? (gq ? 'Group info' : 'Contact info') : TITLE[cur];
+  $('back').hidden = !stack.length;
+  $('title').textContent = convo ? (gq ? gname(open.id) : name(open.id)) : cur === 'info' ? (gq ? 'Group info' : 'Contact info') : TITLE[cur];
   $('chatVf').hidden = !(convo && c.verified);
-  $('sub').textContent = !convo ? cap(S.self.name, 32) + ' · ' + fp(S.self.id.slice(0, 8))
-    : gq ? (g ? g.members.length + ' members' : 'you left this group') : route(c) + (c.verified ? ' · verified' : ' · not verified');
-  $('chatAv').hidden = !convo; $('chatAv').textContent = av(title).textContent; $('chatAv').className = 'av' + (gq ? ' g' : '');
+  $('sub').textContent = !convo ? '' : gq ? (g ? g.members.length + ' members' : 'You left this group') : route(c) + (c.verified ? ' · verified' : ' · not verified');
   $('infoBtn').hidden = !convo; $('nlinks').hidden = convo;
-  $('chatPath').hidden = !convo || gq; if (convo && !gq) path('chatPath', c, open.id);
   $('chatWarn').textContent = !convo ? '' : gq ? late(g) : flags(c);
-  const nl = S.links.filter(l => l.authed).length;
-  $('nlinks').textContent = nl ? nl + (nl === 1 ? ' link' : ' links') : 'no links';
-  $('nlinks').classList.toggle('on', nl > 0);
+  $('nlinks').textContent = linksText();
   badge('n-feed', unread.feed); badge('n-me', unread.security); badge('n-sec', unread.security);
   badge('n-chats', Object.values(dmUnread).reduce((a, b) => a + b, 0));
   const ev = unread.security && S.security[S.security.length - 1], al = $('alert');
@@ -669,15 +591,13 @@ function renderFeed() {
   if (!list.length) posts.appendChild(el('li', vOnly ? 'No posts from verified contacts yet. Verify someone on their contact screen.' : 'No posts yet. Say hello to everyone nearby.', 'empty'));
   for (const m of list) {
     const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);  // 5.13: signer first, so guest text cannot pose as a sender
-    const who = el('div', name(m.from), 'who'), pinned = top.includes(m);
+    const who = el('b', name(m.from)), pinned = top.includes(m);
     if ((contact(m.from) || {}).verified) who.appendChild(vf());
     if (g) who.appendChild(el('span', 'guest of ' + name(m.from) + ': ' + cap(g[1], 32), 'tag'));
     if (pinned) who.appendChild(el('span', 'Pinned', 'tag'));
     let pb = '';
-    if (!m.mine && trusted(m)) { pb = el('button', pinned ? 'Unpin' : 'Pin', 'pin'); pb.setAttribute('aria-pressed', pinned); pb.onclick = () => pin(m.id); }
-    posts.appendChild(add(el('li', null, 'post' + (pinned ? ' pinned' : '')), av(g ? g[1] : name(m.from), m.mine ? 'me' : ''),
-      add(el('div', null, 'body'), who, el('div', cap(g ? g[2] : m.text, 1000), 'txt'),
-        el('span', hhmm(m.tsMs) + (m.mine ? (status(m) ? ' · ' + status(m) : '') : ' · ' + route(m)), 'meta')), pb));
+    if (!m.mine && trusted(m)) { pb = el('button', pinned ? 'Unpin' : 'Pin'); pb.setAttribute('aria-pressed', pinned); pb.onclick = () => pin(m.id); }
+    posts.appendChild(add(el('li', null, 'post'), add(el('div', null, 'main'), who, el('div', cap(g ? g[2] : m.text, 1000), 'txt'), el('small', meta(m))), pb));
   }
 }
 
@@ -694,27 +614,26 @@ function renderChats() {
   if (!rows.length) ul.appendChild(el('li', q ? 'No chat or person matches "' + cap(q, 32) + '".' : 'No one in range yet. Chats start once another phone running OfflineMesh is nearby.', 'empty'));
   let fresh = false;
   for (const r of rows.slice(0, MAX)) {
-    const gq = r.kind === 'group', c = !gq && contact(r.id) || {}, b = el('button', null, 'chat'), g = gq && grp(r.id);
+    const gq = r.kind === 'group', c = !gq && contact(r.id) || {}, b = el('button', null, 'chat'), g = gq && grp(r.id), m = r.last;
     if (when(r) < 0 && !fresh) { fresh = true; ul.appendChild(el('li', 'In range, no chat yet', 'sub')); }
     b.onclick = () => openChat(r.kind, r.id);
-    const who = !r.last ? '' : r.last.mine ? 'You: ' : gq ? name(r.last.from) + ': ' : '';
-    const prev = r.last ? who + (r.last.img ? 'Photo' : cap(r.last.text, 80)) : gq ? 'No messages yet' : 'Tap to say hello';
-    const k = uk(r.kind, r.id), n = el('span', dmUnread[k] ? String(dmUnread[k]) : '', 'n'), nm = el('b', r.title);
+    // Second line: the last message, or (no message yet) how far away the person is
+    const prev = m ? (m.mine ? 'You: ' : gq ? name(m.from) + ': ' : '') + cap(said(m), 80) : !gq ? route(c) : g ? g.members.length + ' members' : 'You left this group';
+    const nm = el('b', r.title);
     if (c.verified) nm.appendChild(vf());
-    add(b, av(r.title, gq ? 'g' : ''), add(el('span', null, 'main'),
-      add(el('span', null, 'line'), nm, el('small', r.last ? hhmm(r.last.tsMs) : '')),
-      add(el('span', null, 'line'), el('span', prev, 'prev'), n),
-      el('small', !gq ? route(c) : g ? g.members.length + ' members' : 'you left this group')));
+    add(b, add(el('span', null, 'main'),
+      add(el('span', null, 'line'), nm, el('small', m ? hhmm(m.tsMs) : '')),
+      add(el('span', null, 'line'), el('span', prev, 'prev'), el('span', dmUnread[uk(r.kind, r.id)] ? String(dmUnread[uk(r.kind, r.id)]) : '', 'n'))));
     ul.appendChild(add(el('li'), b));
   }
 }
 
 // One person as a row that opens something (People tab, New chat).
 function person(c, go) {
-  const b = el('button', null, 'chat'), nm = el('b', name(c.id)); b.onclick = go;
+  const b = el('button', null, 'chat go'), nm = el('b', name(c.id)); b.onclick = go;
   if (c.verified) nm.appendChild(vf());
-  return add(el('li'), add(b, av(name(c.id)), add(el('span', null, 'main'), nm, c.muted ? el('span', 'Muted', 'tag') : '',
-    el('small', route(c) + ' · ' + (c.linked ? 'linked' : 'not linked')), el('span', flags(c), 'err')), chev()));
+  if (c.muted) nm.appendChild(el('span', 'Muted', 'tag'));
+  return add(el('li'), add(b, add(el('span', null, 'main'), nm, el('small', route(c) + ' · ' + (c.linked ? 'linked' : 'not linked')), el('span', flags(c), 'err'))));
 }
 function people(id, go) {
   const list = others();
@@ -728,13 +647,11 @@ function renderNew() {
 }
 
 // The way a DM travels: You, the first relay (when known), any further relays, then the contact.
-function path(div, c, id) {
+function path(c, id) {
   const stops = ['You'];
   if (c.hops == null) stops.push('?');
   else { if (c.hops > 1) stops.push(c.via ? name(c.via) : '…'); if (c.hops > 2) stops.push('+' + (c.hops - 2)); }
-  stops.push(name(id));
-  const d = $(div); d.replaceChildren(); d.classList.toggle('none', c.hops == null);
-  stops.forEach((s, i) => { if (i) d.appendChild(el('span', null, 'hl')); d.appendChild(el('span', s, 'hn' + (i ? i === stops.length - 1 ? ' end' : '' : ' me'))); });
+  return [...stops, name(id)].join(' → ');
 }
 
 function renderConvo() {
@@ -748,17 +665,15 @@ function renderConvo() {
     const bub = el('div', null, 'bub');
     // "/9j/" is base64 for FF D8 FF: show only real JPEGs, and only via a data: URL (no innerHTML)
     if (m.img && m.img.startsWith('/9j/')) { const im = el('img'); im.src = 'data:image/jpeg;base64,' + m.img; im.alt = 'photo'; bub.appendChild(im); }
-    else bub.appendChild(el('span', cap(m.text, 40000), 'txt'));
+    else bub.appendChild(el('span', cap(said(m), 40000), 'txt'));
     const li = el('li', null, m.mine ? 'mine' : '');
-    if (gq && !m.mine) li.appendChild(el('div', name(m.from), 'who'));
-    ul.appendChild(add(li, bub,
-      el('span', hhmm(m.tsMs) + ' · ' + (m.mine ? status(m) : route(m)), 'meta')));
+    if (gq && !m.mine) li.appendChild(el('small', name(m.from)));
+    ul.appendChild(add(li, bub, el('small', meta(m))));
   }
 }
 
 // "I'm safe" roll call (ADVANCES row 9): a normal group message that starts with SAFE. Each is signed by its sender,
 // so the roster keys on the verified sender, never on the text: nobody can check in for someone else.
-const SAFE = '\u2705 SAFE';
 const sendSafe = () => open && send({ t: 'gmsg', group: open.id, text: (SAFE + ' ' + val('dmText')).trim() }, 'dmText', 'dmErr');
 let safeN = {};
 try { safeN = JSON.parse(localStorage.omSafeN || '{}') || {}; } catch (e) {}
@@ -795,9 +710,8 @@ function sw(label, hint, checked, onchange) {
 
 // Contact info (verify, mute, route) or group info (members; the owner edits them).
 function renderInfo() {
-  const id = open.id, gq = open.kind === 'group', g = gq && grp(id), c = !gq && contact(id) || {}, title = gq ? gname(id) : name(id);
-  $('iAv').textContent = av(title).textContent; $('iAv').className = 'av big' + (gq ? ' g' : '');
-  $('iName').replaceChildren(title, ...c.verified ? [vf()] : []);
+  const id = open.id, gq = open.kind === 'group', g = gq && grp(id), c = !gq && contact(id) || {};
+  $('iName').replaceChildren(gq ? gname(id) : name(id), ...c.verified ? [vf()] : []);
   $('iSub').textContent = gq ? (g ? 'Group · ' + g.members.length + ' members' : 'You left this group') : route(c) + ' · ' + (c.linked ? 'linked' : 'not linked');
   $('iWarn').textContent = flags(c);
   $('iContact').hidden = gq; $('iGroup').hidden = !gq;
@@ -806,16 +720,15 @@ function renderInfo() {
     $('iSw').replaceChildren(
       sw('Verified', 'I compared the fingerprint in person', !!c.verified, on => send({ t: 'verify', id, on })),
       sw('Muted', 'Ignore this phone\'s direct link, so messages relay through others', !!c.muted, on => send({ t: 'mute', id, on })));
-    path('iPath', c, id); $('iRoute').textContent = route(c);
+    $('iPath').textContent = path(c, id); $('iRoute').textContent = route(c);
     return;
   }
   const own = g && g.owner === S.self.id, mem = g ? g.members : [], rc = rollCall(id), cut = Date.now() - lateMin(id) * 60000;
   count('iCount', mem.length);
   $('iLate').textContent = late(g);
   if (document.activeElement !== $('safeN')) $('safeN').value = lateMin(id);
-  $('iMembers').replaceChildren(...mem.map(m => add(el('li', null, 'rowc'), av(name(m), m === S.self.id ? 'me' : ''),
-    add(el('div', null, 'main'), el('b', name(m)), m === S.self.id ? el('span', 'You', 'tag') : '', m === g.owner ? el('span', 'Owner', 'tag') : '', el('br'),
-      el('small', rc.last[m] ? 'safe at ' + hhmm(rc.last[m]) : rc.first ? 'no "I\'m safe" yet' : '', rc.first && (rc.last[m] || rc.first) < cut ? 'err' : '')))));
+  $('iMembers').replaceChildren(...mem.map(m => add(el('li', null, 'rowc'), el('b', name(m)), m === S.self.id ? el('span', 'You', 'tag') : '', m === g.owner ? el('span', 'Owner', 'tag') : '',
+    el('small', rc.last[m] ? 'safe at ' + hhmm(rc.last[m]) : rc.first ? 'no "I\'m safe" yet' : '', rc.first && (rc.last[m] || rc.first) < cut ? 'err' : ''))));
   $('gView').hidden = !own;
   if (own && !$('gView').open) picker('gMem', mem);   // rebuilt only while closed, so events do not undo ticks
 }
@@ -837,20 +750,18 @@ function renderMe() {
   $('myQr').hidden = !qr;
   if (qr && $('myQr').getAttribute('src') !== qr) $('myQr').src = qr;
   if (document.activeElement !== $('myName')) $('myName').value = S.self.name;
-  const n = S.security.length, nl = S.links.filter(l => l.authed).length;
-  const demo = !$('tamper').closest('fieldset').hidden;   // the browser client (a leaf) hides the attack console
-  $('meSecT').textContent = demo ? 'Security and demo attacks' : 'Security log';
-  $('meSec').textContent = (n ? n + (n === 1 ? ' event' : ' events') + ' in the log' : 'Nothing caught yet') + (demo ? ' · tamper, drop, flood, spoof, replay' : '');
-  $('meNet').textContent = (nl ? nl + (nl === 1 ? ' link' : ' links') : 'no links') + ' · ' + (S.profile || 'STANDARD') + ' profile';
+  const n = S.security.length;
+  $('meSecT').textContent = $('tamper').closest('fieldset').hidden ? 'Security log' : 'Security and demo attacks';   // the browser client (a leaf) hides the attack console
+  $('meSec').textContent = n ? n + (n === 1 ? ' event' : ' events') + ' in the log' : 'Nothing caught yet';
+  $('meNet').textContent = linksText() + ' · ' + (S.profile || 'STANDARD') + ' profile';
 }
 
 function renderNet() {
   const lt = $('links'); lt.replaceChildren(); count('nLinks', S.links.length);
   if (!S.links.length) lt.appendChild(el('li', 'No links. Nearby phones connect on their own.', 'empty'));
   for (const l of S.links.slice(0, MAX)) {
-    lt.appendChild(add(el('li', null, 'rowc'), add(el('div', null, 'main'),
-      el('b', l.peer ? name(l.peer) : l.link), ' ', el('span', l.peer ? fp(l.peer) : '', 'mono'), el('br'),
-      el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting') + (l.tree ? ' · tree ' + l.tree : '')), l.desc ? el('br') : '', l.desc ? el('small', cap(l.desc, 200)) : '')));
+    lt.appendChild(add(el('li', null, 'rowc'), el('b', l.peer ? name(l.peer) : l.link), el('small', l.peer ? fp(l.peer) : '', 'mono'),
+      el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting') + (l.tree ? ' · tree ' + l.tree : '')), l.desc ? el('small', cap(l.desc, 200)) : ''));
   }
   renderTopo();
   if (document.activeElement !== $('profile')) $('profile').value = S.profile || 'STANDARD';
@@ -882,17 +793,18 @@ function renderTopo() {
   for (const [id, p] of pos) {
     const me = id === S.self.id;
     kids.push(mk('circle', { cx: p.x, cy: p.y, r: 12, class: 'node' + (me ? ' me' : '') }));
-    if (!me) kids.push(mk('text', { x: p.x, y: p.y + 4, class: 'h' }, String(hop.get(id))));
+    if (!me) kids.push(mk('text', { x: p.x, y: p.y + 4.5 }, String(hop.get(id))));
     kids.push(mk('text', { x: p.x, y: p.y + 30 }, me ? 'You' : cap(name(id), 16)));
   }
   $('topo').replaceChildren(...kids);
   const none = [...hop.values()].filter(h => h == null).length;
   $('nMap').textContent = (pos.size - 1) + ' reachable' + (none ? ' · ' + none + ' no route' : '');
 }
-// Two-column table of key → value; drops{kind:n} becomes one row per kind seen so far (core lists every kind).
+// Two-column list of key → value; drops{kind:n} becomes one row per kind seen so far (core lists every kind).
+const tr = (k, v, cls) => add(el('tr', null, cls), el('td', k), el('td', String(v)));
 function kv(id, o) {
   $(id).replaceChildren(...Object.entries(o).flatMap(([k, v]) => v && typeof v === 'object' ? Object.entries(v).filter(e => e[1]).map(([d, n]) => [k + ' ' + d, n]) : [[k, v]])
-    .map(([k, v]) => add(el('tr'), el('td', k), el('td', typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v)))));
+    .map(([k, v]) => tr(k, typeof v === 'boolean' ? (v ? 'on' : 'off') : v)));
 }
 const renderStats = () => kv('stats', S.stats || {});
 
@@ -915,7 +827,7 @@ const BLOCKED = [['BAD_SIGNATURE', 'Bad signature (spoof, tamper)'], ['RATE_EQUI
 function renderBlocked() {
   const d = (S.stats && S.stats.drops) || {}, dup = (S.stats && S.stats.duplicatesDropped) || 0;
   $('blocked').replaceChildren(...[...BLOCKED.map(([k, t]) => [d[k] || 0, t]), [dup, 'Duplicates dropped (replays and normal echoes)']]
-    .map(([n, t]) => add(el('li', null, n ? 'hit' : ''), el('b', String(n)), el('small', t))));
+    .map(([n, t]) => tr(t, n, n ? 'bad' : '')));
   // Bans are not in the protocol, so read them off the log: a ban lasts 10 min (BAN_DURATION_MS), a refused peer 60 s (REFUSE_MS).
   const now = Date.now(), until = {};
   for (const e of S.security) {
@@ -927,8 +839,7 @@ function renderBlocked() {
   }
   const bans = Object.values(until).sort((a, b) => b.end - a.end);
   count('nBan', bans.length);
-  $('bans').replaceChildren(...bans.length ? bans.map(b => add(el('li', null, 'rowc'), add(el('div', null, 'main'), el('b', name(b.id)), ' ',
-    el('span', fp(b.id), 'mono'), el('br'), el('small', b.what + ' until ' + hhmm(b.end)))))
+  $('bans').replaceChildren(...bans.length ? bans.map(b => add(el('li', null, 'rowc'), el('b', name(b.id)), el('small', fp(b.id), 'mono'), el('small', b.what + ' until ' + hhmm(b.end))))
     : [el('li', 'No one banned. A peer that floods or forges is listed here.', 'rowc mut')]);
 }
 
@@ -939,15 +850,13 @@ function guest() {
     const key = JSON.stringify(g);
     if (key === guestKey) return;
     guestKey = key;
-    const d = $('guest'); d.replaceChildren(); d.className = g ? 'guest' : '';
+    const d = $('guest'); d.replaceChildren();
     if (!g) return;
-    d.appendChild(el('h2', 'Guest access'));
-    d.appendChild(el('p', 'Phones without the app join from their browser by scanning a code below.', 'mut'));
-    d.appendChild(add(el('p', 'PIN '), el('b', g.pin, 'mono')));
+    add(d, el('h2', 'Guest access'), el('p', 'Phones without the app join from their browser by scanning a code below.', 'mut'), add(el('p', 'PIN '), el('b', g.pin, 'mono big')));
     for (const u of g.urls) {
       const im = el('img', null, 'qr'); im.width = im.height = 176; im.alt = 'QR code of ' + u;
       im.src = backend.qr(u);
-      d.appendChild(im); d.appendChild(el('p', u, 'mono'));
+      add(d, im, el('small', u, 'mono'));
     }
   }).catch(() => {});
 }
@@ -967,7 +876,7 @@ if (NAT) {
     ...[['ble', 'Bluetooth'], ['lan', 'Wi-Fi LAN'], ['guest', 'Guest mode'], ['secure', 'Block screenshots']]
       .map(([k, t]) => { const l = sw(t, '', false, on => NAT.set(k, on)); l.firstChild.name = k; return add(el('li', null, 'set-row'), l); }),
     ...[['invite', 'Invite guests'], ['qr', 'QR hop'], ['share', 'Share app'], ['bundle', 'Bundle'], ['keepalive', 'Keep alive']]
-      .map(([k, t]) => { const b = el('button', null, 'chat'); b.onclick = () => NAT.open(k); return add(el('li', null, 'set-row'), add(b, el('span', t, 'main'), chev())); }));
+      .map(([k, t]) => { const b = el('button', null, 'chat go'); b.onclick = () => NAT.open(k); return add(el('li', null, 'set-row'), add(b, el('span', t, 'main'))); }));
   $('nat').hidden = false; omNative();
 }
 
