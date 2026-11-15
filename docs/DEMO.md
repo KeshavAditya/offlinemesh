@@ -7,13 +7,15 @@ Have the fallback (desktop) ready in a second terminal and the fallback video op
 
 ## Before the judges arrive (10 minutes)
 
+**Before every demo session: `scripts/deploy-all.sh --fresh`.** A dry run of `e2e.sh` leaves A banned on B for 10 minutes (its Flood check) and leaves its muted pairs muted (mutes are saved across restarts) until someone unmutes them. `--fresh` wipes app data: new identities, no bans, no mutes. Then redo step 4 below and B verifies A again.
+
 ### Path 1: real phones
 
 1. All three phones: airplane mode on, Bluetooth on, mobile data off, Wi-Fi off.
 2. Plug all three into the laptop, then:
    ```
    ./gradlew :app:assembleRelease   # R8-shrunk, ~2.4 MB
-   scripts/deploy-all.sh          # install, grant permissions, Bluetooth on, launch
+   scripts/deploy-all.sh --fresh  # install, wipe app data, grant permissions, Bluetooth on, launch
    scripts/forward-ui.sh          # prints "<serial> -> http://127.0.0.1:808N/"
    ```
    `forward-ui.sh` numbers phones in `adb devices` order, not by role. Read its output. If the order is wrong, forward by hand:
@@ -23,8 +25,8 @@ Have the fallback (desktop) ready in a second terminal and the fallback video op
    adb -s <serial-of-C> forward tcp:8083 tcp:8080
    ```
 3. Open `http://127.0.0.1:8081/`, `:8082/`, `:8083/` side by side in the laptop browser for the projector.
-4. Force two hops. On A: People tab, open C, switch on **Muted**. On C: People tab, open A, switch on **Muted**. (All phones on a desk are in range; muting is done in software. Say so.)
-5. Dry run once: `scripts/e2e.sh 8081 8082 8083` must print PASS for items 1 to 7 (7 is the group check). It bans A on B for 10 minutes at the end, so run it at least 10 minutes before the demo, or restart the apps after it.
+4. Force two hops. On A: People tab, tap C (its Info screen), switch on **Muted**. On C: People tab, tap A, switch on **Muted**. (All phones on a desk are in range; muting is done in software. Say so.)
+5. Dry run once: `scripts/e2e.sh 8081 8082 8083` must print PASS for items 1 to 7 (7 is the group check). It bans A on B for 10 minutes and leaves pairs muted, so run `scripts/deploy-all.sh --fresh` after it (see the bold line at the top of this section).
 
 ### Path 2: emulators (practice only)
 
@@ -75,9 +77,14 @@ Same browser tabs, same script below. Tell judges it is TCP on one laptop instea
 
 ## The script (TDS: Privacy and Security)
 
-Where things are (map in `docs/UI_STRUCTURE.md`): the **Security screen** is Me tab, *Security and demo attacks* (two taps); a new event also shows as a strip under the top bar on every screen, and tapping it opens the log. **Statistics** and links are Me tab, *Network and statistics*. **Muted** and **Verified** are People tab, open the person.
+Where things are (map in `docs/UI_STRUCTURE.md`):
+- **Attack console** (the Security screen): Me tab, *Security and demo attacks*. Buttons **Flood**, **Spoof**, **Replay**, **Tamper** (Tamper stays on, highlighted, until pressed again), the **Drop while relaying** switch, then *Blocked by this phone since start* (one counter per reason) and *Banned and cut-off peers*. A new event also shows as a strip under the top bar on every screen; tapping it opens the log.
+- **Mesh map**, links and statistics: Me tab, *Network and statistics*. The map is at the top: you in the middle, one ring per hop.
+- **Settings** (Android app only): Me tab, *Settings* section. Switches **Bluetooth**, **Wi-Fi LAN**, **Guest mode**, **Block screenshots**; rows **Invite guests**, **QR hop**, **Share app**, **Bundle**, **Keep alive**.
+- **Muted** and **Verified**: People tab, tap the person (or **Info** in a conversation).
+- **Roll call**: the **I'm safe** button in a group conversation; the group's **Info** lists each member's last "safe at" time and the minutes before the alert.
 
-Before each judge: A has no ban on B (restart the apps if a Flood ran in the last 10 minutes), Tamper is off on B, all three Security screens are open in the laptop tabs.
+Before each judge: A has no ban on B (bans are stored, so a restart does not clear one: wait out the 10 minutes, or `deploy-all.sh --fresh` and redo the prep), Tamper is off on B, all three Security screens are open in the laptop tabs.
 
 ### The 60-second core (always)
 
@@ -86,8 +93,8 @@ Before each judge: A has no ban on B (restart the apps if a Flood ran in the las
 | 0:00 | Holds up the three phones in airplane mode. | "Three phones, airplane mode, no internet, no server. The middle one is a stranger relaying for the other two." |
 | 0:08 | A: Chats, pick C, send "meet at the gym". Point at C receiving it and A's status "Delivered, 2 hops via B". | "A's message hopped through B to C, and C's signed receipt came back the same way." |
 | 0:20 | B: Chats (no A-to-C conversation), then Me, Network and statistics: `relayed` went up. | "B carried it but cannot read it. It is encrypted end to end and padded, so a one-letter and a fifty-letter message look the same size." |
-| 0:30 | B: Security screen, tick **Tamper while relaying**. A sends C "second message". Point at C's Security screen: `BAD_SIGNATURE` against the link to B. Untick Tamper. | "Now B turns hostile and flips a bit in everything it forwards. C catches it and blames B's link, not A, because anyone can put A's name on a forgery." |
-| 0:45 | A: Security screen, press **Flood**. Point at B: `RATE_EQUIVOCATION ... banned 10 min`, and C's feed shows only three posts. | "A tries to spam: four posts where the limit is three. Two signed posts for one slot is proof anyone can check, so B bans A's key." |
+| 0:30 | B: Security screen, press **Tamper** (it stays highlighted). A sends C "second message". Point at C's Security screen: *Bad signature (spoof, tamper)* goes up, and the log shows `BAD_SIGNATURE` against the link to B. Press Tamper again to turn it off. | "Now B turns hostile and flips a bit in everything it forwards. C catches it and blames B's link, not A, because anyone can put A's name on a forgery." |
+| 0:45 | A: Security screen, press **Flood**. Point at B: *Double post, sender banned (flood)* goes up and A is under *Banned and cut-off peers* (`RATE_EQUIVOCATION ... banned 10 min` in the log); C's feed shows only three posts. | "A tries to spam: four posts where the limit is three. Two signed posts for one slot is proof anyone can check, so B bans A's key." |
 | 0:58 | | "Protect, detect, mitigate: all three, live, on phones with no network." |
 
 After Flood, B drops everything signed by A's key for 10 minutes. Nothing in the second minute needs A to send through B.
@@ -97,8 +104,10 @@ After Flood, B drops everything signed by A's key for 10 minutes. Nothing in the
 | Length | Driver does | Speaker says (exact lines) |
 |---|---|---|
 | 15 s | **Impersonation.** C changes its name to A's name. Point at B: C's row says "same name as a verified contact", `NAME_IMPERSONATION` in B's Security screen. Change it back. | "Names can be copied, keys cannot. B verified A in person, so it warns. It does not ban, because sharing a name is not proof." |
-| 20 s | **Browser guest.** B: **Invite guests**. The iPhone scans QR 1 (joins B's Wi-Fi), then QR 2 (opens the page with the PIN), and sends C a DM. C replies. | "The iPhone has no app. The page gives it its own key, so it signs and decrypts its own messages. It trusts B for the code, and we say so in our threat model." |
+| 20 s | **Browser guest.** B: Me, Settings, **Invite guests**. The iPhone scans QR 1 (joins B's Wi-Fi), then QR 2 (opens the page with the PIN), and sends C a DM. C replies. | "The iPhone has no app. The page gives it its own key, so it signs and decrypts its own messages. It trusts B for the code, and we say so in our threat model." |
 | 15 s | **Panic wipe.** C: Me tab, Panic wipe, type `WIPE`. Point at B: the conversation with C is gone, `PEER_REVOKED` logged; C has a new ID. | "If your phone is about to be taken, one word wipes it and asks your contacts to delete their copies. It is a request, not a guarantee." |
+| 15 s | **"I'm safe" roll call.** Prep: on A, Chats, **New chat**, **New group**, name it, pick B and C, **Create**. C presses **I'm safe** in the group. Point at A: the check-in arrives with its hop path; A's group **Info** shows C "safe at" a time and who has not checked in. | "After a disaster you mostly need to know who is OK. One tap, signed by each person, and the group sees who has not checked in yet." |
+| 10 s | **Mesh map.** A: Me, *Network and statistics*. A in the middle, B on the first ring, C on the second. | "This is what A sees: who it can reach, and how many hops away." |
 | 15 s | **Numbers slide** (below) or `docs/NUMBERS.md`, 30-in-a-room rows. | "In our simulator, running our real code with 30 phones in a room, a direct message costs about 5 transmissions; plain flooding costs about 98." |
 | 15 s | **Failover**, laptop diamond (see prep): tick **Drop while relaying** on the node A's route to D uses; A DMs D; after about 5 s "Delivered ... via" the other node and `ROUTE_FAILED` on A. | "These are four desktop nodes running the same code over TCP. A relay drops the message, the receipt never comes, A resends on a backup route." |
 | 10 s | Nothing to tap. Always end with this. | "What we don't stop: one person making many identities, and relays seeing who talks to whom. There's no forward secrecy, and nobody has audited it. It's all in THREATS.md." |
@@ -143,7 +152,7 @@ One slide. Every figure is copied from `docs/NUMBERS.md`; the label says where i
 | A **59,990-byte** frame over Bluetooth L2CAP in **4 to 6 s** | emulator |
 | One Bluetooth DM between two real phones: **560 ms**; **6 of 7** checks passed (the 7th failed when the OPPO's battery saving stopped the app) | real phone |
 | A post's proof of work: **6 to 9 ms** on one laptop core | laptop |
-| **146** automated tests; **14** of them reproduce published attacks on other mesh apps (T1-T8, T11) | tests |
+| **157** automated tests; **14** of them reproduce published attacks on other mesh apps (T1-T8, T11) | tests |
 
 Do not add phone PoW times or Bluetooth range: they have not been measured.
 
@@ -165,9 +174,9 @@ Use `127.0.0.1`, not `localhost` (on this laptop `localhost` can reach another s
 
 ## Optional extras (only if time is left)
 
-- **Guest join** (prep for the second-minute guest step): on B tap **Invite guests**. It starts a local-only hotspot (or type B's own hotspot password: 16 or more random characters, not the guest PIN) and shows QR 1, the Wi-Fi join code, and QR 2, `http://<B's IP>:8090/?pin=...`, with guest mode switched on. The iPhone camera scans QR 1, then QR 2, and opens the full web client in Safari with its own key. `http://<B's hotspot IP>:8090/lite` is the old read-only page, whose posts show as "guest of B". The Me tab of the web client also offers the APK download with its SHA-256.
+- **Guest join** (prep for the second-minute guest step): on B, Me tab, Settings, tap **Invite guests**. It starts a local-only hotspot (or type B's own hotspot password: 16 or more random characters, not the guest PIN) and shows QR 1, the Wi-Fi join code, and QR 2, `http://<B's IP>:8090/?pin=...`, with guest mode switched on. The iPhone camera scans QR 1, then QR 2, and opens the full web client in Safari with its own key. `http://<B's hotspot IP>:8090/lite` is the old read-only page, whose posts show as "guest of B". The Me tab of the web client also offers the APK download with its SHA-256.
 - **Photo DM:** A sends C a photo (downscaled to under 40 KB, one frame).
-- **Catch-up after reconnect:** turn Bluetooth off on C, A posts "C, are you there?", turn Bluetooth back on. The post appears on C within about 20 s. Without touching the phone:
+- **Catch-up after reconnect:** turn Bluetooth off on C (Me, Settings, **Bluetooth**), A posts "C, are you there?", turn Bluetooth back on. The post appears on C within about 20 s. Without touching the phone:
   ```
   adb -s <serial-of-C> shell cmd bluetooth_manager disable
   adb -s <serial-of-C> shell cmd bluetooth_manager enable
