@@ -117,6 +117,12 @@ summary { min-height: 44px; display: flex; align-items: center; justify-content:
 .bub img { display: block; max-width: 100%; border-radius: 12px; margin: 4px -4px; }
 .compose { position: fixed; bottom: var(--nb); left: 0; right: 0; max-width: 680px; margin: 0 auto; z-index: 1; background: var(--bg); padding: 8px 16px; border-top: 1px solid var(--line); }
 #feed, #convo { padding-bottom: 112px; }
+@media (max-width: 359px) {   /* narrow phone: a group's three buttons leave no room for the text box, so it takes its own row */
+  #convo.grp { padding-bottom: 164px; }
+  .grp .compose .row { flex-wrap: wrap; }
+  .grp #dmText { order: -1; }
+  .grp #dmBtn { margin-left: auto; }
+}
 #iMsg, dialog button { width: 100%; margin-top: 16px; }
 .qr { display: block; width: 176px; height: 176px; background: #fff; border-radius: 12px; margin: 8px 0; }
 table { border-collapse: collapse; width: 100%; }
@@ -657,7 +663,7 @@ function path(c, id) {
 
 function renderConvo() {
   const id = open.id, gq = open.kind === 'group', g = gq && grp(id);
-  $('safeBtn').hidden = !g; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes (13.2)
+  $('safeBtn').hidden = !g; $('convo').classList.toggle('grp', !!g); $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes (13.2)
   document.querySelector('#convo .compose').hidden = gq && !g;
   const ul = $('msgs'); ul.replaceChildren();
   const list = [...((gq ? S.gdms : S.dms)[id] || [])].sort(byOrder).slice(-MAX);
