@@ -130,7 +130,7 @@ class MeshService : Service() {
     /** Guest mode (5.13): a separate 0.0.0.0:8090 server for hotspot browsers; each start gets a fresh PIN guard. */
     private fun setGuest(want: Boolean) {
         if (want && guest == null) {
-            val g = GuestServer(node, GUEST_PORT, web)
+            val g = GuestServer(node, GUEST_PORT, web, java.io.File(applicationInfo.sourceDir))
             try { g.start(); guest = g; Log.i(TAG, "guest listening 0.0.0.0:$GUEST_PORT") }
             catch (e: Exception) { Log.e(TAG, "guest server failed: $e"); runCatching { g.stop() } }
         } else if (!want && guest != null) {

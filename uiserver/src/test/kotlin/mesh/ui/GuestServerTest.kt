@@ -56,6 +56,36 @@ class GuestServerTest {
 
     private var pin = ""
 
+    @Test fun webClientAssetsAndApk() {
+        val apk = kotlin.io.path.createTempFile(suffix = ".apk").toFile().apply { writeText("abc"); deleteOnExit() }
+        val port = ServerSocket(0).use { it.localPort }
+        val s = GuestServer(node, port, PinGuard().also { pin = it.pin }, WebTransport(), apk).apply { start() }
+        try {
+            val page = req(port, "/").body()
+            assertTrue("/webbackend.js" in page && "OM_BACKEND" in page, "full client at /")
+            // SHA-256("abc")
+            assertTrue("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" in page, "APK hash in page")
+            assertTrue("/api/feed" in req(port, "/lite").body(), "read-only page at /lite")
+            for (f in listOf("webbackend.js", "meshnode.js", "meshcore.js", "noble.js")) {
+                val r = req(port, "/$f")
+                assertEquals(200, r.statusCode(), f)
+                assertTrue(r.headers().firstValue("Content-Type").get().startsWith("text/javascript"), f)
+            }
+            val a = req(port, "/app.apk")
+            assertEquals("abc", a.body())
+            assertEquals("application/vnd.android.package-archive", a.headers().firstValue("Content-Type").get())
+            assertTrue("OfflineMesh.apk" in a.headers().firstValue("Content-Disposition").get())
+            assertEquals(200, req(port, "/api/qr?text=x").statusCode())
+            assertEquals(403, req(port, "/api/feed").statusCode())   // mesh data stays behind the PIN
+        } finally { s.stop() }
+        val port2 = ServerSocket(0).use { it.localPort }
+        val s2 = GuestServer(node, port2, PinGuard(), WebTransport()).apply { start() }
+        try {
+            assertEquals(404, req(port2, "/app.apk").statusCode())
+            assertTrue("window.OM_APK = null" in req(port2, "/").body())
+        } finally { s2.stop() }
+    }
+
     @Test fun pinGuard() {
         var rotated: String? = null
         var t = 0L

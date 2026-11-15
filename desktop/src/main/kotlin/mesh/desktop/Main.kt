@@ -10,13 +10,13 @@ import mesh.ui.WebTransport
 import java.io.File
 import kotlin.system.exitProcess
 
-const val USAGE = "usage: desktop --data <dir> --ui-port <n> --listen <n> [--peer host:port]... [--no-discovery] [--guest-port <n>]"
+const val USAGE = "usage: desktop --data <dir> --ui-port <n> --listen <n> [--peer host:port]... [--no-discovery] [--guest-port <n>] [--apk <file>]"
 
-class Args(val data: File, val uiPort: Int, val listen: Int, val peers: List<String>, val discovery: Boolean, val guestPort: Int? = null)
+class Args(val data: File, val uiPort: Int, val listen: Int, val peers: List<String>, val discovery: Boolean, val guestPort: Int? = null, val apk: File? = null)
 
 fun parseArgs(a: Array<String>): Args {
     var data: File? = null; var ui: Int? = null; var listen: Int? = null
-    val peers = mutableListOf<String>(); var discovery = true; var guest: Int? = null
+    val peers = mutableListOf<String>(); var discovery = true; var guest: Int? = null; var apk: File? = null
     var i = 0
     fun value(): String = a.getOrNull(++i) ?: throw IllegalArgumentException("${a[i - 1]} needs a value")
     fun port(): Int = value().toIntOrNull()?.takeIf { it in 1..65535 } ?: throw IllegalArgumentException("bad port: ${a[i]}")
@@ -30,6 +30,7 @@ fun parseArgs(a: Array<String>): Args {
             }
             "--no-discovery" -> discovery = false
             "--guest-port" -> guest = port()
+            "--apk" -> apk = File(value()).also { require(it.isFile) { "no such file: $it" } }
             else -> throw IllegalArgumentException("unknown argument: ${a[i]}")
         }
         i++
@@ -38,7 +39,7 @@ fun parseArgs(a: Array<String>): Args {
         data ?: throw IllegalArgumentException("--data is required"),
         ui ?: throw IllegalArgumentException("--ui-port is required"),
         listen ?: throw IllegalArgumentException("--listen is required"),
-        peers, discovery, guest,
+        peers, discovery, guest, apk,
     )
 }
 
@@ -50,7 +51,7 @@ fun main(argv: Array<String>) {
     val lan = LanTransport(args.listen, args.peers, if (args.discovery) identity.nodeId.copyOf(4) else null)
     val web = WebTransport()
     val node = MeshNode(args.data, ExecutorScheduler(), listOf(lan, web))
-    val guest = args.guestPort?.let { GuestServer(node, it, web) }
+    val guest = args.guestPort?.let { GuestServer(node, it, web, args.apk) }
     val ui = UiServer(node, args.uiPort) { guest }
     node.start()
     ui.start()

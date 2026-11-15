@@ -162,7 +162,7 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
     }.toString()
 }
 
-private const val MAX_QR_TEXT = 200
+internal const val MAX_QR_TEXT = 200
 
 /** QR code of [text] as a black-on-white SVG, with the 4-module quiet zone scanners need. */
 internal fun qrSvg(text: String): String {
