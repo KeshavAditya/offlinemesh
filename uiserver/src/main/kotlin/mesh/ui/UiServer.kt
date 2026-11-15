@@ -44,6 +44,8 @@ interface UiNode {
     fun addListener(l: (MeshEvent) -> Unit)
     fun exec(c: Cmd)
     fun stats(): Stats = snapshot().stats
+    fun exportEnvelope(msgIdHex: String): ByteArray? = null   // U6
+    fun importEnvelope(bytes: ByteArray): Boolean = false
 }
 
 fun MeshNode.asUiNode(): UiNode = object : UiNode {
@@ -51,6 +53,8 @@ fun MeshNode.asUiNode(): UiNode = object : UiNode {
     override fun addListener(l: (MeshEvent) -> Unit) = this@asUiNode.addListener(l)
     override fun exec(c: Cmd) = this@asUiNode.exec(c)
     override fun stats() = this@asUiNode.stats()
+    override fun exportEnvelope(msgIdHex: String) = this@asUiNode.exportEnvelope(msgIdHex)
+    override fun importEnvelope(bytes: ByteArray) = this@asUiNode.importEnvelope(bytes)
 }
 
 /**
@@ -90,6 +94,17 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
                     }
                     node.exec(cmd)
                     call.respondText("""{"ok":true}""", ContentType.Application.Json)
+                }
+                // U6 QR hop: export is base64 of the envelope bytes; import takes the same and answers {"ok":bool}.
+                get("/api/export") {
+                    val b = node.exportEnvelope(call.request.queryParameters["id"].orEmpty())
+                        ?: return@get call.respondText("not found", status = HttpStatusCode.NotFound)
+                    call.respondText(java.util.Base64.getEncoder().encodeToString(b), ContentType.Text.Plain)
+                }
+                post("/api/import") {
+                    val b = try { java.util.Base64.getDecoder().decode(call.receiveText().trim()) } catch (e: IllegalArgumentException) { null }
+                    val ok = b != null && b.size <= 4096 && node.importEnvelope(b)
+                    call.respondText("""{"ok":$ok}""", ContentType.Application.Json)
                 }
                 get("/api/qr") {
                     val text = call.request.queryParameters["text"].orEmpty()

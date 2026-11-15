@@ -13,6 +13,7 @@ import kotlin.random.Random
 /** JPEG starts with FF D8 FF; checked on send and again on receive before a photo DM is shown. */
 fun isJpeg(b: ByteArray) = b.size >= 3 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() && b[2] == 0xFF.toByte()
 private const val PHOTO = "(photo)"
+private const val QR_LINK = "qr"   // U6 pseudo-link id, shown on its security events
 
 /**
  * Sections 5.5 to 5.11. Every state change runs as a task on [scheduler] (one thread), wrapped in [lock]
@@ -57,6 +58,15 @@ class MeshNode(
     private val fanout = HashMap<String, String>()          // own fan-out DM msgId -> group message id, until its ACK
     private val logPubs = HashMap<String, ByteArray>()      // start-up only: keys seen in messages.log, to reopen own DMs
     private val seen = Seen()
+    // U6: pseudo-link for QR imports. Authenticated, never muted, never in [links] (so live() is false: nothing is sent to it,
+    // forward() never targets it), no score or route; its own 30-per-10 s bucket stays on (scans are human-paced).
+    private val qr by lazy { Link(QR_LINK, object : Transport {
+        override val name = "qr"
+        override fun start(listener: TransportListener) {}
+        override fun stop() {}
+        override fun send(link: LinkId, frame: ByteArray) = false
+        override fun close(link: LinkId) {}
+    }, "qr", now()).apply { authed = true } }
     private var routes = Routes()
     private var guard = Guard()
     private lateinit var store: Store
@@ -131,6 +141,27 @@ class MeshNode(
     /** Stretch 2: one JPEG in one DM (plaintext kind 1), no chunking. Dropped if not JPEG or over MAX_DM_PLAINTEXT. */
     fun sendDmImage(to: String, jpeg: ByteArray) {
         if (isJpeg(jpeg)) sealDm(to, byteArrayOf(1) + jpeg, PHOTO, Base64.getEncoder().encodeToString(jpeg))
+    }
+
+    /** U6: the stored POST or DM as ENVELOPE-frame payload bytes, for one QR code; null if unknown or over QR_MAX_BYTES. */
+    fun exportEnvelope(msgIdHex: String): ByteArray? = synchronized(lock) {
+        store.envs[msgIdHex.lowercase()]?.env?.takeIf { it.type == EnvType.POST || it.type == EnvType.DM }
+            ?.let(Codec::encodeEnvelope)?.takeIf { it.size <= C.QR_MAX_BYTES }
+    }
+
+    /**
+     * U6: a scanned envelope through the full 5.6 ingress on the pseudo-link `qr`; true if accepted (first copy, all checks passed).
+     * Runs under the loop lock like [snapshot] rather than posting and waiting, so it cannot deadlock a virtual-time scheduler
+     * or a caller already on the loop.
+     */
+    fun importEnvelope(bytes: ByteArray): Boolean = synchronized(lock) {
+        if (!running) return false
+        val e = Codec.decodeEnvelope(bytes)?.takeIf { it.type == EnvType.POST || it.type == EnvType.DM }
+            ?: return false.also { sec(SecKind.MALFORMED, "qr: not a POST or DM envelope", qr, null) }
+        val mid = hex(e.msgId)
+        if (guard.accepted.containsKey(mid)) { dupes++; return false }
+        try { ingress(qr, e) } catch (x: Exception) { System.err.println("OfflineMesh: qr import failed"); x.printStackTrace(); return false }
+        guard.accepted.containsKey(mid)
     }
 
     /**
@@ -487,6 +518,7 @@ class MeshNode(
 
     private fun penalize(l: Link, delta: Int, kind: SecKind?, detail: String, src: String?) {
         if (kind != null) sec(kind, detail, l, src) else drops.merge(SecKind.MALFORMED.name, 1, Int::plus)   // unlogged sanity failure
+        if (l === qr) return   // U6: logged, nothing to penalise
         l.score += delta
         if (l.score < 0 && links[l.id] === l) {
             l.peer?.let { guard.refused[it] = now() + C.REFUSE_MS }
@@ -501,7 +533,7 @@ class MeshNode(
         val asked = l.wanted.remove(mid)   // before any early return, so dropped envelopes cannot fill the 512 cap for good
         // U10: duplicates teach backup routes (same msgId means same signed core, so src is genuine).
         seen[mid]?.let {
-            it.have += l.id; routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false)
+            it.have += l.id; if (l !== qr) routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false)
             if (!asked && treeOn(e)) prune(l)   // U9 rule 3
             if (asked && treeOn(e) && e.ttl > it.ttl) betterCopy(e, it)
             // A failover resend of a DM I ACKed: the same ACK bytes back on this link; old-path relays drop it as a dupe.
@@ -576,7 +608,7 @@ class MeshNode(
         seen[mid] = SeenEntry(l?.id, dst, e.type, e.ttl, if (l == null) 0 else e.hops + 1).also { s -> l?.let { s.have += it.id } }
         if (e.type == EnvType.POST || e.type == EnvType.DM) guard.accepted[mid] = e.epoch
         lamport = maxOf(lamport, e.lamport)
-        if (l != null) routes.learn(src, l.id, e.hops, now)
+        if (l != null && l !== qr) routes.learn(src, l.id, e.hops, now)   // U6: no route back through a QR scan
         val shownHops = if (mine) 0 else e.hops + 1
         when (e.type) {
             EnvType.PRESENCE -> { onPresence(e, src, now); forward(e) }
