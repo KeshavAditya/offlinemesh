@@ -46,7 +46,7 @@ Where things were tested is in "How far this is tested" below. In short: the sim
 | Carry a message past a jammed radio | A short envelope (500 bytes or less) can be shown as a QR code on one phone and scanned on another (Android "QR hop" screen). The import runs the full ingress pipeline, so signature and proof of work are still checked. | U6 |
 | Track a phone by what it broadcasts | The Bluetooth scan response and the LAN UDP discovery beacon each carry a 4-byte tag drawn at random each time that transport starts, not the node ID. Identity is proven only inside the link (`HELLO_AUTH`). See the limits below. | plan 8 |
 | Read or plant files through the guest web server | The guest server answers only its fixed pages, scripts and the APK. Path traversal, odd paths, `POST` to the APK and `Range` headers never return another file, and pages never write mesh data as HTML (T8). | 5.13 |
-| Hand someone a malicious copy of the app | The "Share app" dialog shows the app's signing-certificate SHA-256 to compare between phones; the guest page shows the APK file's SHA-256 next to the download. See the limits below: the download is plain HTTP and a fake app can print any fingerprint. | offline sharing |
+| Hand someone a malicious copy of the app | On first run the app shows its APK file SHA-256 and signing-certificate SHA-256 once, to compare with the sharer's "Share app" dialog; the guest page shows the file's SHA-256 next to the download. See the limits below: the download is plain HTTP and a fake app can print any fingerprint. | offline sharing |
 
 Proof of work is a small extra cost per message. It is not the main defence.
 
@@ -140,10 +140,10 @@ We say these out loud. They are not hidden.
 ### Offline app sharing
 
 - **First install is only as safe as the hotspot and the fingerprint check.** The guest page offers `/app.apk` over plain HTTP. Anyone who can tamper with hotspot traffic can swap the file, and the SHA-256 shown next to it comes from the same server.
-- **A fake app can print any fingerprint.** The "Share app" dialog shows the signing-certificate SHA-256 on the sharer's phone. Reading the same dialog on the new phone catches a corrupted or carelessly swapped file, not a careful attacker: a malicious app can show the genuine number. The strong check is an independent tool, for example `apksigner verify --print-certs` or `sha256sum` on a computer you trust.
-- **Two different hashes.** The guest page shows the hash of the APK file. The "Share app" dialog shows the hash of the signing certificate. Compare like with like.
+- **A fake app can print any fingerprint.** The sharer's "Share app" dialog shows the signing-certificate SHA-256, and the new app shows its file and certificate SHA-256 once on first run. Comparing them catches a corrupted or carelessly swapped file, not a careful attacker: a malicious app can show the genuine numbers. The strong check is an independent tool, for example `apksigner verify --print-certs` or `sha256sum` on a computer you trust.
+- **Two different hashes.** The guest page shows the hash of the APK file. The "Share app" dialog shows the hash of the signing certificate. The first-run screen shows both. Compare like with like.
 - **Debug signing key.** The demo release APK is signed with the build laptop's debug key, not a release key.
-- **Hotspot password.** The app does not start a hotspot; the host uses the phone's own hotspot setting. Use 16 or more random characters. Briar's audit found an 8-character hotspot password crackable in about 15 days on one cloud GPU. The guest PIN is not the Wi-Fi password.
+- **Hotspot password.** "Invite guests" either starts Android's local-only hotspot (the system picks the name and password and the app shows them as QR 1) or uses the phone's own hotspot, whose password the host types in and gets a warning if it is under 16 characters. On the emulator the system-chosen password was 15 characters, below that guidance, and the app cannot change it. Briar's audit found an 8-character hotspot password crackable in about 15 days on one cloud GPU. The guest PIN is not the Wi-Fi password.
 - **Developer verification.** From 2027 Android plans to require registered developers for sideloaded apps. Whether that check works offline at install time is not known.
 
 ### Built this way on purpose
