@@ -67,3 +67,40 @@ The page builds one `li.set-row` per item in `#natRows` (switch rows reuse `labe
 ## Follow-ups (not done here)
 
 - The welcome screen is skipped in iframes (the booth page) and when `navigator.webdriver` is set. A test that drives a normal browser must press Start once or set `localStorage.omWelcome` to the node id.
+
+## Modern pass
+
+Audit of the page as it stood (64,847 bytes on `v2`, 66,651 with the Settings rows), done with the `impeccable` skill (detector plus its audit, distill and quieter passes, Operate mode) and the `emil-design-eng` motion review, before any edit. No PRODUCT.md or DESIGN.md exists, so the owner's brief is the direction.
+
+### What is wrong today
+
+- **Accent everywhere.** Teal carries eleven jobs (avatars, link pill, hop-path pills, tab highlight, verified disc, sender names, links, badges, borders of pinned posts and the guest box, primary buttons, my bubbles), so it marks nothing. Two more state colours (amber, red) each have a tinted background as well.
+- **Boxes instead of hierarchy.** Feed posts are stacked rounded cards; Me, Security and Network are stacks of bordered boxes, two red tinted fieldsets, a grid of nine stat tiles, and log entries with a coloured side stripe (as has the alert strip). The detector flags the tinted compose shadow (glow on dark) and text flush against box borders.
+- **Decoration that says nothing.** Initials avatars all in one tint (the letter repeats the name beside it), the CSS-drawn brand mark, the "1 link" pill with a dot, hop pills joined by lines that repeat the words "1 hop" next to them, `Tag` pills for Muted / Owner / You / Pinned, `›` and `✓ ✓✓ •` glyphs and an emoji standing in for icons, and "A · a3f2 9c01" as a subtitle on every screen.
+- **Placement.** Three left edges on one screen (rows bleed 8 px, boxes inset 12 px, text at 16 px); chat rows are three lines tall; the Security screen shrinks its text below 13 px to fit the tiles; the contact screen is centred while every other screen is left-aligned; the bundle export link is a 24 px target; the map labels overlap.
+- **Type.** Eleven sizes and weights 500/600/650/700/750 with no clear steps.
+- **Motion.** None for navigation, and the switch animates `left` (layout) instead of a transform.
+
+| Before | After | Why |
+| --- | --- | --- |
+| Screens swap with no transition | Pushed screen: `opacity` + `translateX(12px)`, 180 ms, `cubic-bezier(.23,1,.32,1)`; tabs and Back stay instant | Push is occasional and spatial; tabs are high-frequency, so no animation |
+| `transition: background-color, color, border-color .15s` on every button | `:active` changes at once; `transform: scale(.97)` with a 120 ms ease-out release | Press feedback must be immediate |
+| Switch thumb animates `left` | `transform: translateX()` 150 ms ease-out | Transform and opacity only |
+| No reduced-motion rule | Movement sits inside `prefers-reduced-motion: no-preference`; colour changes stay | Fewer and gentler, not broken |
+| New message: nothing | Nothing (lists are rebuilt on every event) | No animation on high-frequency updates |
+
+### Removed
+
+Avatars and the brand mark; every pill and tag (state becomes plain words); hop-path pills (the route is a line of text: "You → Carlos → Bea"); card borders, boxes, tinted fieldsets, side stripes, stat tiles (counters become a two-column list); amber and both tints; the compose shadow; glyph and emoji icons (the verified mark and chevrons are drawn in CSS, receipts use words, "I'm safe" replaces the emoji on screen while the signed text on the wire is unchanged); the per-screen identity subtitle; the People intro line; the third line of chat rows; the hand-rolled modal for the welcome screen (now `<dialog>`).
+
+### Kept
+
+Every screen and feature in the sitemap; the bottom tab bar with icon and label; bubbles with mine in the accent; unread badges; the verified mark; red text for suspect / revoked / late roll call; the security strip and the Me badge; search beside New chat; the custom switch (Settings rows need one); the map; typed confirmation for the wipe; `window.OM_BACKEND`, the JSON protocol, `OMNative`, and the ids and classes `webbackend.js` uses (`box`, `row`, `pri`, `mut`, `mono`, `qr`, `#profile` and its two neighbours, the `fieldset` around `#tamper`, `#guest`).
+
+### Direction
+
+1. A calm, native-feeling messenger: system font, neutral surfaces, the existing teal as the only accent, used for primary buttons, my bubbles, the active tab, badges and the verified mark.
+2. Hierarchy from four type sizes (13 / 16 / 17 / 22), two weights (400 / 600) and a 4 / 8 / 12 / 16 / 24 spacing scale; plain rows with hairline dividers; one left edge at 16 px.
+3. One filled button per screen, always at the right end of the row it acts on (New chat, Send, Post) or full width under a heading (Message, Start); everything else is quiet.
+4. State in words, errors in red next to the thing that failed, every target 44 px or more, a 640 px centred column on wide screens.
+5. Motion only where it explains: a 180 ms push, an immediate press; less code and fewer bytes than before.
