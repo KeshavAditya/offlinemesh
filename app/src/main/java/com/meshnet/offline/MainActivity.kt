@@ -7,32 +7,37 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import android.view.Window
 import android.view.WindowManager.LayoutParams.FLAG_SECURE
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
-import android.widget.Button
-import android.widget.HorizontalScrollView
+import android.webkit.WebViewClient
 import android.widget.LinearLayout
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import mesh.core.C
+import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
-/** Settings row (transport switches + status) above a WebView of the node's UI on 127.0.0.1:8080. */
+/** A full-screen WebView of the node's UI on 127.0.0.1:8080. The page's Me > Settings rows reach native code through [Bridge]. */
 class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var web: WebView
     private var asked = false; private var askedBt = false   // ask once per launch; a permanent denial must not loop dialogs
     private var loaded = false
+    @Volatile private var local = false      // the WebView is showing our own page: the bridge answers only then
+    @Volatile private var blocker = ""       // why the mesh cannot run (permission, Bluetooth off, port taken); the page shows it too
     private var loggedSecure = false
     private var pick: ValueCallback<Array<Uri>>? = null   // pending <input type=file> from the page
     private var invite: InviteDialog? = null
@@ -41,26 +46,12 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         secure(window)
+        // System bars in the page's light background (Theme.Material.Light keeps the WebView's colour scheme light).
+        window.statusBarColor = Color.WHITE; window.navigationBarColor = Color.WHITE
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         val prefs = getSharedPreferences(MeshService.PREFS, MODE_PRIVATE)
-        fun toggle(label: String, key: String, def: Boolean) = Switch(this).apply {
-            text = label; isChecked = prefs.getBoolean(key, def); setPadding(0, 0, 32, 0)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(key, on).apply(); MeshService.instance?.let { s -> Thread { s.applyPrefs() }.start() } }
-        }
-        status = TextView(this).apply { setPadding(16, 0, 0, 0) }
-        val row = LinearLayout(this).apply {
-            setPadding(24, 8, 24, 8)
-            addView(toggle("Bluetooth", "ble", true)); addView(toggle("Wi-Fi LAN", "lan", false))
-            val guest = toggle("Guest mode", "guest", false); addView(guest)
-            addView(Button(this@MainActivity).apply { text = "Invite guests"; setOnClickListener { invite = InviteDialog(this@MainActivity) { guest.isChecked = true }.also { it.show() } } })
-            addView(Button(this@MainActivity).apply { text = "QR hop"; setOnClickListener { startActivity(Intent(this@MainActivity, QrActivity::class.java)) } })
-            addView(Button(this@MainActivity).apply { text = "Share app"; setOnClickListener { shareApp() } })
-            addView(Button(this@MainActivity).apply { text = "Bundle"; setOnClickListener { bundleDialog() } })
-            addView(Button(this@MainActivity).apply { text = "Keep alive"; setOnClickListener { KeepAlive.dialog(this@MainActivity) } })
-            addView(Switch(this@MainActivity).apply { text = "Block screenshots"; isChecked = prefs.getBoolean(SECURE, false); setPadding(16, 0, 32, 0)
-                setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(SECURE, on).apply(); secure(window)
-                    Toast.makeText(this@MainActivity, if (on) "Screenshots, recording and the recents preview now show blank" else "Screenshots allowed again", Toast.LENGTH_LONG).show() } })
-            addView(status)
-        }
+        status = TextView(this).apply { setPadding(48, 48, 48, 48); visibility = View.GONE }   // only until the page is up
         // A fold or rotation recreates the activity; the service keeps running and the page re-renders from /ws's snapshot.
         web = WebView(this).apply { settings.javaScriptEnabled = true; settings.domStorageEnabled = true
             // The page's photo-DM <input type=file accept="image/*"> needs the app to open a picker and hand back the Uri.
@@ -74,13 +65,64 @@ class MainActivity : Activity() {
                     if (p == 100 && !loggedSecure) { loggedSecure = true; v.evaluateJavascript("window.isSecureContext") { android.util.Log.i(TAG, "webview isSecureContext=$it") } }
                 }
             }
+            // The bridge is for our own page only, so nothing else may load here: a link elsewhere is dropped.
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = !r.url.toString().startsWith("$ORIGIN/")
+                override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) { local = url.startsWith("$ORIGIN/") }
+            }
+            addJavascriptInterface(Bridge(), "OMNative")
         }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(HorizontalScrollView(this@MainActivity).apply { addView(row) }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))   // the row is wider than a phone
+            addView(status, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         })
         if (!prefs.getBoolean("fingerprintShown", false)) { prefs.edit().putBoolean("fingerprintShown", true).apply(); firstRun() }
+    }
+
+    /**
+     * The page's only door into native code: read four switches, set them, open five screens. No commands, no file access.
+     * shortcut: addJavascriptInterface reaches every frame; safe while the page has no iframes and navigation is pinned to
+     * ORIGIN. Move to WebViewCompat.addWebMessageListener (origin rule) if androidx.webkit becomes a dependency.
+     */
+    private inner class Bridge {
+        @JavascriptInterface fun state(): String {
+            if (!local) return "{}"
+            val p = getSharedPreferences(MeshService.PREFS, MODE_PRIVATE)
+            return JSONObject().put("ble", p.getBoolean("ble", true)).put("lan", p.getBoolean("lan", false))
+                .put("guest", p.getBoolean("guest", false)).put(SECURE, p.getBoolean(SECURE, false)).put("status", blocker).toString()
+        }
+        @JavascriptInterface fun set(key: String, on: Boolean) { if (local) runOnUiThread { setSwitch(key, on) } }
+        @JavascriptInterface fun open(what: String) { if (local) runOnUiThread { when (what) {
+            "invite" -> invite = InviteDialog(this@MainActivity) { setSwitch("guest", true) }.also { it.show() }
+            "qr" -> startActivity(Intent(this@MainActivity, QrActivity::class.java))
+            "share" -> shareApp()
+            "bundle" -> bundleDialog()
+            "keepalive" -> KeepAlive.dialog(this@MainActivity)
+        } } }
+    }
+
+    private fun setSwitch(key: String, on: Boolean) {
+        val prefs = getSharedPreferences(MeshService.PREFS, MODE_PRIVATE)
+        when (key) {
+            "ble", "lan", "guest" -> { prefs.edit().putBoolean(key, on).apply(); MeshService.instance?.let { s -> Thread { s.applyPrefs() }.start() } }
+            SECURE -> { prefs.edit().putBoolean(SECURE, on).apply(); secure(window)
+                toast(if (on) "Screenshots, recording and the recents preview now show blank" else "Screenshots allowed again") }
+            else -> return
+        }
+        sync()
+    }
+
+    /** Tells the page to re-read [Bridge.state]. */
+    private fun sync() { if (loaded) web.evaluateJavascript("window.omNative&&omNative()", null) }
+
+    private fun say(s: String) { blocker = s; status.text = s; status.visibility = if (s.isEmpty() || loaded) View.GONE else View.VISIBLE; sync() }
+
+    /** System Back closes the page's pushed screen; from a top-level tab (or before the page is up) it leaves the app. */
+    @Deprecated("Activity API; this app uses plain Activity")
+    override fun onBackPressed() {
+        if (!loaded) return super.onBackPressed()
+        web.evaluateJavascript("typeof omBack=='function'&&omBack()") { if (it != "true") super.onBackPressed() }
     }
 
     /** Research "Offline APK sharing": a fresh install can only trust a fingerprint read out by the sharer, so show it once. */
@@ -131,7 +173,7 @@ class MainActivity : Activity() {
         if (!askedBt && btGranted && !Perms.bluetoothOn(this)) {
             askedBt = true; startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
         }
-        status.text = Perms.blocker(this) ?: ""
+        say(Perms.blocker(this) ?: "")
         if (!btGranted) return   // plan 8: start the service only once permissions are granted
         startForegroundService(Intent(this, MeshService::class.java))
         // First run only (the Keep alive button asks again): a sleeping phone was the one real-phone failure.
@@ -211,18 +253,20 @@ class MainActivity : Activity() {
 
     private fun load() {
         if (loaded || isDestroyed) return
-        MeshService.failed?.let { status.text = it; return }   // bind failed: never load whatever else answers on the port
+        MeshService.failed?.let { say(it); return }   // bind failed: never load whatever else answers on the port
         if (!MeshService.listening) return
         loaded = true
         // A .omb opened from Files or Quick Share: import once the node is up.
         intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data?.let { intent.action = null; importBundle(it) }
-        web.loadUrl("http://127.0.0.1:${MeshService.UI_PORT}/")
+        status.visibility = View.GONE
+        web.loadUrl("$ORIGIN/")
     }
 }
 
 private const val PICK = 2
 private const val IMPORT = 4
 private const val SECURE = "secure"
+private const val ORIGIN = "http://127.0.0.1:${MeshService.UI_PORT}"
 
 /** "Block screenshots" (default off: it also blanks adb screencap, recording and mirroring). Dialogs are separate windows, so each calls this too. */
 fun Context.secure(w: Window?) =

@@ -17,3 +17,5 @@
 # Our @Serializable wire/UI types: keep names so serialized field names and polymorphic discriminators never change.
 -keep @kotlinx.serialization.Serializable class mesh.** { *; }
 -keepattributes *Annotation*, InnerClasses, Signature, EnclosingMethod
+# MainActivity.Bridge: the page calls these by name (OMNative.state/set/open).
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
