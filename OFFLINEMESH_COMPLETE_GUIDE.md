@@ -935,9 +935,9 @@ Done when acceptance checks 1 to 6 pass on three phones.
 **`BleL2capTransport` details**
 
 - Server: `adapter.listenUsingInsecureL2capChannel()`, read `psm`, accept in a loop on its own thread.
-- Advertise (connectable, low latency): advertising data holds the 128-bit service UUID only, device name excluded. The **scan response** holds service data for that UUID: `4-byte NodeId prefix || 2-byte PSM`. Putting both in one packet exceeds the 31-byte limit and fails with `ADVERTISE_FAILED_DATA_TOO_LARGE`.
+- Advertise (connectable, low latency): advertising data holds the 128-bit service UUID only, device name excluded. The **scan response** holds service data for that UUID: `4-byte advert tag || 2-byte PSM`. The tag is 4 random bytes (SecureRandom) drawn on every transport start, not the NodeId prefix, so a passive listener cannot link sessions (the PSM is still fixed within one session). It serves only the dial tie-break; identity is proven in `HELLO_AUTH`. Putting both in one packet exceeds the 31-byte limit and fails with `ADVERTISE_FAILED_DATA_TOO_LARGE`.
 - Scan: one `ScanFilter` on the service UUID, low-latency mode. From each result read the service data.
-- Who connects: connect only if `myPrefix < peerPrefix` (unsigned byte compare), or if this phone cannot advertise (`bluetoothLeAdvertiser == null`). This prevents two phones dialling each other at once.
+- Who connects: connect only if `myTag < peerTag` (unsigned byte compare), or if this phone cannot advertise (`bluetoothLeAdvertiser == null`). This prevents two phones dialling each other at once.
 - Connect with `scanResult.device.createInsecureL2capChannel(psm)` then `connect()` on an I/O thread. **Use the `BluetoothDevice` object from the scan result**, not one rebuilt from an address string; the address is random and its type matters. Close the socket from a watchdog after 10 s. Retry with backoff 1, 2, 4 s, five attempts.
 - Per link: one reader thread (`readInt`, range-check against `MAX_FRAME`, `readFully`) and one single-thread writer with a bounded queue of 64 frames. Any `IOException` closes the link and reports `onLinkDown`.
 - Respect `MAX_LINKS`. If the server socket is recreated, re-advertise the new PSM.
@@ -949,7 +949,7 @@ Done when acceptance checks 1 to 6 pass on three phones.
 
 1. `UiServer(node, port)`: static page, `/ws`, `/api/snapshot`, `/api/cmd`, bound to 127.0.0.1. Start with a fake `MeshNode` that emits sample events so the page can be built before the core exists.
 2. `index.html` per section 7.
-3. `LanTransport` (in `lan/`, no Android imports): TCP listener plus optional UDP broadcast discovery (port 47474, every 2 s, payload `"OMESH1" || 4-byte NodeId prefix || u16 tcpPort`), plus static peers from the command line. Same tie-break as Bluetooth for discovered peers.
+3. `LanTransport` (in `lan/`, no Android imports): TCP listener plus optional UDP broadcast discovery (port 47474, every 2 s, payload `"OMESH1" || 4-byte NodeId prefix || u16 tcpPort`), plus static peers from the command line. Same tie-break as Bluetooth for discovered peers (the LAN beacon keeps the NodeId prefix; only the Bluetooth advert uses a random tag).
 4. `desktop` main: `--data <dir> --ui-port <n> --listen <n> [--peer host:port]... [--no-discovery]`.
 5. `run-3-desktop.sh`: three nodes on one laptop wired in a line (A↔B, B↔C, discovery off), UIs on 8081 to 8083.
 6. `e2e.sh`: drives three UIs through `curl` (works against desktop nodes and against phones through `adb forward`) and checks acceptance items 1 to 6. For item 6 it mutes B and C toward each other to create the partition, then unmutes.
