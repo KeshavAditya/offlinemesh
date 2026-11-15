@@ -4,10 +4,13 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.view.Window
+import android.view.WindowManager.LayoutParams.FLAG_SECURE
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.webkit.ValueCallback
@@ -18,6 +21,7 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
 import java.security.MessageDigest
@@ -35,6 +39,7 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        secure(window)
         val prefs = getSharedPreferences(MeshService.PREFS, MODE_PRIVATE)
         fun toggle(label: String, key: String, def: Boolean) = Switch(this).apply {
             text = label; isChecked = prefs.getBoolean(key, def); setPadding(0, 0, 32, 0)
@@ -49,6 +54,9 @@ class MainActivity : Activity() {
             addView(Button(this@MainActivity).apply { text = "QR hop"; setOnClickListener { startActivity(Intent(this@MainActivity, QrActivity::class.java)) } })
             addView(Button(this@MainActivity).apply { text = "Share app"; setOnClickListener { shareApp() } })
             addView(Button(this@MainActivity).apply { text = "Keep alive"; setOnClickListener { KeepAlive.dialog(this@MainActivity) } })
+            addView(Switch(this@MainActivity).apply { text = "Block screenshots"; isChecked = prefs.getBoolean(SECURE, false); setPadding(16, 0, 32, 0)
+                setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(SECURE, on).apply(); secure(window)
+                    Toast.makeText(this@MainActivity, if (on) "Screenshots, recording and the recents preview now show blank" else "Screenshots allowed again", Toast.LENGTH_LONG).show() } })
             addView(status)
         }
         // A fold or rotation recreates the activity; the service keeps running and the page re-renders from /ws's snapshot.
@@ -82,7 +90,7 @@ class MainActivity : Activity() {
                 text = "Compare this with the person who shared the app.\n\nApp file SHA-256 (short):\n${shortSha(apk)}\n\n" +
                     "Full: ${apk.chunked(4).joinToString(" ")}\n\nSigning certificate SHA-256:\n${certSha()}\n\n" +
                     "If they differ, uninstall it: the copy was changed on the way." })
-            .setPositiveButton("OK", null).show()
+            .setPositiveButton("OK", null).show().also { secure(it.window) }
     }
 
     private fun certSha(): String {
@@ -147,7 +155,7 @@ class MainActivity : Activity() {
                 val send = Intent(Intent.ACTION_SEND).setType("application/vnd.android.package-archive")
                     .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 startActivity(Intent.createChooser(send, "Share OfflineMesh"))
-            }.show()
+            }.show().also { secure(it.window) }
     }
 
     private fun load() {
@@ -160,3 +168,8 @@ class MainActivity : Activity() {
 }
 
 private const val PICK = 2
+private const val SECURE = "secure"
+
+/** "Block screenshots" (default off: it also blanks adb screencap, recording and mirroring). Dialogs are separate windows, so each calls this too. */
+fun Context.secure(w: Window?) =
+    if (getSharedPreferences(MeshService.PREFS, Context.MODE_PRIVATE).getBoolean(SECURE, false)) w?.addFlags(FLAG_SECURE) else w?.clearFlags(FLAG_SECURE)

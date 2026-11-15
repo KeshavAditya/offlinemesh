@@ -15,8 +15,8 @@ object Qr {
         mapOf(EncodeHintType.CHARACTER_SET to "ISO-8859-1", EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.L, EncodeHintType.MARGIN to 2))
 
     /** Text as a QR code, e.g. the invite's WIFI: join code and guest URL. UTF-8 (with an ECI header some scanners mishandle) only when not ASCII. */
-    fun text(s: String): BitMatrix = QRCodeWriter().encode(s, BarcodeFormat.QR_CODE, 0, 0,
-        mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 2) +
+    fun text(s: String, level: ErrorCorrectionLevel = ErrorCorrectionLevel.M): BitMatrix = QRCodeWriter().encode(s, BarcodeFormat.QR_CODE, 0, 0,
+        mapOf(EncodeHintType.ERROR_CORRECTION to level, EncodeHintType.MARGIN to 2) +
             (if (s.all { it.code < 128 }) emptyMap() else mapOf(EncodeHintType.CHARACTER_SET to "UTF-8")))
 
     /** One pixel per module scaled to [side] without smoothing, so the modules stay sharp. */

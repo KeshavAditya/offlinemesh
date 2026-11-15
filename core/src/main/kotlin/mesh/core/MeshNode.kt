@@ -150,10 +150,10 @@ class MeshNode(
         if (isJpeg(jpeg)) sealDm(to, byteArrayOf(1) + jpeg, PHOTO, Base64.getEncoder().encodeToString(jpeg))
     }
 
-    /** U6: the stored POST or DM as ENVELOPE-frame payload bytes, for one QR code; null if unknown or over QR_MAX_BYTES. */
-    fun exportEnvelope(msgIdHex: String): ByteArray? = synchronized(lock) {
+    /** U6: the stored POST or DM as ENVELOPE-frame payload bytes, for one QR code (or animated QR frames with a larger [max]); null if unknown or over [max]. */
+    fun exportEnvelope(msgIdHex: String, max: Int = C.QR_MAX_BYTES): ByteArray? = synchronized(lock) {
         store.envs[msgIdHex.lowercase()]?.env?.takeIf { it.type == EnvType.POST || it.type == EnvType.DM }
-            ?.let(Codec::encodeEnvelope)?.takeIf { it.size <= C.QR_MAX_BYTES }
+            ?.let(Codec::encodeEnvelope)?.takeIf { it.size <= max }
     }
 
     /**
