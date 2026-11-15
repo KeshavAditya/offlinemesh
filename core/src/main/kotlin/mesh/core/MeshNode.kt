@@ -13,6 +13,8 @@ import kotlin.random.Random
 /** JPEG starts with FF D8 FF; checked on send and again on receive before a photo DM is shown. */
 fun isJpeg(b: ByteArray) = b.size >= 3 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() && b[2] == 0xFF.toByte()
 private const val PHOTO = "(photo)"
+/** U-C: kind 5 = 8 B groupId + 8 B groupMsgId + JPEG, inside the same 39,999 data bytes as every DM (MAX_DM_PLAINTEXT minus the kind byte). */
+const val MAX_GROUP_JPEG = C.MAX_DM_PLAINTEXT - 17
 private const val QR_LINK = "qr"   // U6 pseudo-link id, shown on its security events
 private const val BUNDLE_LINK = "bundle"   // data-mule bundle import pseudo-link id
 private val BUNDLE_MAGIC = "OMB1".toByteArray(Charsets.US_ASCII)
@@ -288,7 +290,7 @@ class MeshNode(
         mine(EnvType.DM, dst, ++lamport, epochNow(), 0, C.TTL_DM, body, text, img, gm)
     }
 
-    // ---- 13.2 groups: fan-out DMs, plaintext kinds 2 (GROUP_INVITE) and 3 (GROUP_TEXT) ----
+    // ---- 13.2 groups: fan-out DMs, plaintext kinds 2 (GROUP_INVITE), 3 (GROUP_TEXT) and 5 (GROUP_IMAGE) ----
 
     fun createGroup(name: String, members: List<String>): String {
         val salt = Crypto.randomBytes(8)
@@ -311,17 +313,25 @@ class MeshNode(
         invite(g, old.members + g.members)
     }
 
-    fun sendGroup(groupId: String, text: String) = loop {
-        val g = groups[groupId] ?: return@loop
+    fun sendGroup(groupId: String, text: String) {
         val body = text.toByteArray(Charsets.UTF_8)
-        if (body.isEmpty() || body.size > C.MAX_POST_BODY) return@loop
+        if (body.isNotEmpty() && body.size <= C.MAX_POST_BODY) fanGroup(groupId, 3, body, text, null)
+    }
+
+    /** U-C: one JPEG to the group (plaintext kind 5), one DM per member like GROUP_TEXT. Dropped if not JPEG or over [MAX_GROUP_JPEG]. */
+    fun sendGroupImage(groupId: String, jpeg: ByteArray) {
+        if (isJpeg(jpeg) && jpeg.size <= MAX_GROUP_JPEG) fanGroup(groupId, 5, jpeg, PHOTO, Base64.getEncoder().encodeToString(jpeg))
+    }
+
+    private fun fanGroup(groupId: String, kind: Int, data: ByteArray, text: String, img: String?) = loop {
+        val g = groups[groupId] ?: return@loop
         posted += groupId
         val gm = Crypto.randomBytes(8)
         val uid = me + hex(gm)
         val others = g.members.filterKeys { it != me && it !in revoked }
         addMsg(Msg(uid, me, null, text, ++lamport, now(), true, if (others.isEmpty()) MsgStatus.SENT else MsgStatus.QUEUED, 0, null,
-            group = groupId, delivered = 0, total = others.size), emit = true)
-        val plain = byteArrayOf(3) + Crypto.unhex(groupId) + gm + body
+            img, group = groupId, delivered = 0, total = others.size), emit = true)
+        val plain = byteArrayOf(kind.toByte()) + Crypto.unhex(groupId) + gm + data
         others.forEach { (m, pub) -> dmTo(m, pub, plain, text, null, uid) }
     }
 
@@ -391,18 +401,24 @@ class MeshNode(
         return true
     }
 
-    /** GROUP_TEXT: shown once per (sender, groupMsgId), the UI id, if the group is known and [src] is a member; own ones only on replay. */
+    /**
+     * GROUP_TEXT (kind 3) or GROUP_IMAGE (kind 5): shown once per (sender, groupMsgId), the UI id, if the group is known and
+     * [src] is a member; own ones only on replay.
+     */
     private fun onGroupText(e: Envelope, p: ByteArray, mid: String, src: String, now: Long, hops: Int, via: String?, emit: Boolean): Boolean {
-        if (p.size < 18 || p.size - 17 > C.MAX_POST_BODY) return false
+        val image = p[0].toInt() == 5
+        if (p.size < 18 || p.size - 17 > (if (image) MAX_GROUP_JPEG else C.MAX_POST_BODY)) return false
         val gid = hex(p.copyOfRange(1, 9))
         val uid = src + hex(p.copyOfRange(9, 17))   // includes the sender, so one member cannot suppress another's message
-        val text = String(p, 17, p.size - 17, Charsets.UTF_8)
+        val jpeg = if (image) p.copyOfRange(17, p.size).takeIf(::isJpeg) ?: return false else null
+        val text = if (jpeg != null) PHOTO else String(p, 17, p.size - 17, Charsets.UTF_8)
+        val img = jpeg?.let { Base64.getEncoder().encodeToString(it) }
         val g = groups[gid]
         if (src == me) { fanout[mid] = uid; posted += gid }
         if (g == null || src !in g.members || uid in msgs) return true
         if (src == me) addMsg(Msg(uid, me, null, text, e.lamport, now, true, MsgStatus.QUEUED, 0, null,
-            group = gid, delivered = 0, total = g.members.keys.count { it != me && it !in revoked }), emit = false)
-        else addMsg(Msg(uid, src, null, text, e.lamport, now, false, MsgStatus.RECEIVED, hops, via, group = gid), emit)
+            img, group = gid, delivered = 0, total = g.members.keys.count { it != me && it !in revoked }), emit = false)
+        else addMsg(Msg(uid, src, null, text, e.lamport, now, false, MsgStatus.RECEIVED, hops, via, img, group = gid), emit)
         return true
     }
 
@@ -757,7 +773,7 @@ class MeshNode(
                 addMsg(Msg(mid, src, to, PHOTO, e.lamport, now, mine, st, hops, via, Base64.getEncoder().encodeToString(jpeg)), emit = !replay)
             }
             2 -> return onInvite(src, p, emit = !replay)
-            3 -> return onGroupText(e, p, mid, src, now, hops, via, emit = !replay)
+            3, 5 -> return onGroupText(e, p, mid, src, now, hops, via, emit = !replay)
             4 -> { if (p.size != 1) return false; if (!mine) onRevoke(src, replay) }
             else -> return false
         }
@@ -790,8 +806,9 @@ class MeshNode(
         if (e.type != EnvType.DM) return dst == x
         val p = when { dst == me -> openDm(e, e.srcPub); src == me -> pubOf(dst!!)?.let { openDm(e, it) }; else -> null }
         val k = p?.get(0)?.toInt()
-        if (p != null && (k == 2 || k == 3) && p.size >= 9 && hex(p.copyOfRange(1, 9)) in gone) return true
-        return dst == x && k != 2 && k != 3   // own group fan-outs to x in my groups stay: they rebuild my group history
+        val grp = k == 2 || k == 3 || k == 5
+        if (p != null && grp && p.size >= 9 && hex(p.copyOfRange(1, 9)) in gone) return true
+        return dst == x && !grp   // own group fan-outs to x in my groups stay: they rebuild my group history
     }
 
     private fun sendAck(dm: Envelope, l: Link) {

@@ -1,8 +1,10 @@
 package mesh.core
 
 import java.io.ByteArrayOutputStream
+import java.util.Base64
 import kotlin.random.Random
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -269,5 +271,53 @@ class GroupTest {
         val got = s.groupMsgs("J")
         assertEquals(setOf("same id from D", "same id from G"), got.map { it.text }.toSet())
         assertEquals(setOf(s.n("D").id + Crypto.hex(gm), s.n("G").id + Crypto.hex(gm)), got.map { it.id }.toSet())
+    }
+
+    private fun jpeg(n: Int, seed: Int = 7) = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) + Random(seed).nextBytes(n - 3)
+    private fun photo(s: Setup, gm: ByteArray, jpeg: ByteArray) = byteArrayOf(5) + Crypto.unhex(s.gid) + gm + jpeg
+
+    /** U-C: a full-size group photo (kind 5) is one ACK-tracked DM per member, like GROUP_TEXT. */
+    @Test fun t20_groupPhotoReachesEveryMemberAndCountsDeliveries() {
+        val s = setup()
+        val a = s.n("A")
+        val img = jpeg(MAX_GROUP_JPEG)
+        val before = s.net.sent.size   // after the invites
+        a.node.sendGroupImage(s.gid, img)
+        s.net.runFor(40_000)
+        val ids = listOf("D", "G", "J").map { m ->
+            val got = s.groupMsgs(m).single()
+            assertContentEquals(img, Base64.getDecoder().decode(got.img), m); assertEquals(a.id, got.from)
+            got.id
+        }
+        assertEquals(1, ids.toSet().size)
+        listOf("B", "C", "E", "F", "H", "I").forEach { assertTrue(s.n(it).added().isEmpty(), "$it emitted MessageAdded") }
+        val shown = a.node.snapshot().gdms.getValue(s.gid).single()
+        assertEquals(ids[0], shown.id); assertContentEquals(img, Base64.getDecoder().decode(shown.img))
+        assertEquals(3, shown.delivered); assertEquals(3, shown.total)
+        assertEquals(listOf(1, 2, 3), a.events.filterIsInstance<MeshEvent.GroupStatusChanged>().map { it.delivered })
+        assertEquals(3, s.net.sent.drop(before).mapNotNull { it.env }.filter { it.type == EnvType.DM && it.srcId.contentEquals(a.node.id.nodeId) && it.hops == 0 }
+            .map { Crypto.hex(it.msgId) }.toSet().size, "one DM per member")
+    }
+
+    @Test fun t21_groupPhotoFromNonMemberRemovedMemberOversizeOrNonJpegIsDropped() {
+        val s = setup()
+        val (a, d, g) = listOf("A", "D", "G").map { s.n(it) }
+        forge(s, "B", "D", photo(s, Crypto.randomBytes(8), jpeg(1_000)))                          // B is not a member
+        forge(s, "G", "D", photo(s, Crypto.randomBytes(8), jpeg(MAX_GROUP_JPEG + 1)))              // one byte over
+        forge(s, "G", "D", photo(s, Crypto.randomBytes(8), byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)))   // not a JPEG
+        s.net.runFor(20_000)
+        assertTrue(s.groupMsgs("D").isEmpty(), "dropped photo shown: ${s.groupMsgs("D")}")
+        a.node.setGroupMembers(s.gid, listOf(d.id, s.n("J").id))   // G removed
+        s.net.runFor(20_000)
+        forge(s, "G", "D", photo(s, Crypto.randomBytes(8), jpeg(1_000)))
+        s.net.runFor(20_000)
+        assertTrue(s.groupMsgs("D").isEmpty(), "removed member's photo shown")
+        val before = s.net.sent.size
+        a.node.sendGroupImage(s.gid, jpeg(MAX_GROUP_JPEG + 1))
+        a.node.sendGroupImage(s.gid, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47))
+        s.net.runFor(5_000)
+        assertTrue(s.net.sent.drop(before).mapNotNull { it.env }.none { it.type == EnvType.DM }, "oversize or non-JPEG photo sent")
+        assertTrue(a.node.snapshot().gdms[s.gid].isNullOrEmpty())
+        assertTrue(g.node.snapshot().groups.isEmpty())
     }
 }
