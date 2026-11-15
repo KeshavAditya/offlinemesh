@@ -108,9 +108,9 @@ Independent QA on branch `ui-qa-fixes` = `origin/v2` + `origin/ui-modern` (4a238
 
 ## Open (not attempted: larger than a page fix, or by design)
 
-- **Verified and Muted do not survive a node restart**: core keeps them in memory only (MeshNode.verified is a HashSet; the data dir holds identity, messages, name). Seen on desktop: B verified Alice, after restart Alice is unverified. Not a page bug.
+- **Verified and Muted do not survive a node restart**: core keeps them in memory only (MeshNode.verified is a HashSet; the data dir holds identity, messages, name). Seen on desktop: B verified Alice, after restart Alice is unverified. Not a page bug. **Fixed in core (8c1bb40):** saved in `marks.txt`, loaded at start, deleted by panic wipe.
 - ~~**Mesh map crowds with 4+ direct neighbours**~~ Closed on `ui-boosters`: two rings with names outside, cut to fit, "+N" beyond 12 per ring; checked with 4, 6, 9, 12 and 14 direct neighbours at 390 px, and 6 and 12 also in dark mode and at 1280 px.
-- **After a panic wipe the phone lists its own old ID as a contact in range**: on C: "Carol · e82a, 2 hops via Bob", not flagged revoked there (it wiped that knowledge). Core. The public feed also syncs back in (11 posts), which is expected for public posts.
+- **After a panic wipe the phone lists its own old ID as a contact in range**: on C: "Carol · e82a, 2 hops via Bob", not flagged revoked there (it wiped that knowledge). Core. The public feed also syncs back in (11 posts), which is expected for public posts. **Fixed in core (8c1bb40):** the wiped node ignores its own old ID.
 - ~~**A removed member sees the group as "Group"**~~ Closed on `ui-boosters`: the page keeps the last known name (localStorage), also after a reload. A browser that never saw the name still shows "Group".
 - **Browser Back after a reload or a tab switch needs extra presses**: old history entries stay behind and do nothing. Desktop browsers only; Android uses omBack() and is fine.
 - ~~**Alert bar shows raw codes**~~ Closed on `ui-boosters` for the bar: a sentence with the name ("Someone is using Alice's name: ecbf", "Forged message blocked, via Bob · 7361"). The log keeps the code and detail on purpose; LINK_FLOOD, LINK_CLOSED, STALE, MALFORMED, BAD_POW and PEER_REVOKED still show as code plus detail in the bar.

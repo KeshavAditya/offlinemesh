@@ -22,7 +22,7 @@ Where things were tested is in "How far this is tested" below. In short: the sim
 | Change a message it relays | Every envelope is signed (ECDSA) and its ID is a hash of its content. The next honest node rejects it and logs `BAD_SIGNATURE`. Bad envelopes stop at the first honest node and are never forwarded (T2). | 5.3, 5.6 step 6 |
 | Pretend to be someone else | A node ID is a 64-bit hash of its public key. Every message is signed by that key. You cannot sign without the private key. A contact's key never changes for its ID, whatever later packets say (T11). | 5.1 |
 | Copy the display name of someone I trust | If a newcomer's name matches a contact I marked verified, it is marked suspect, `NAME_IMPERSONATION` is logged, and the UI shows "same name as a verified contact". The match ignores case, all spaces, invisible and direction characters (such as U+200B, U+202E), full-width forms (NFKC) and common look-alikes (Cyrillic and Greek letters, 0/O, 1/l). Unverified names always show the first 4 hex digits of the ID (`Sam · 3fa9`). Names are capped at 32 bytes and hostile names decode safely (T7). | U8 |
-| Forge a message with someone else's key | Signature fails. The link that delivered it loses 100 points and is closed. The named source is not punished. | 5.6 rule |
+| Forge a message with someone else's key | Signature fails and `BAD_SIGNATURE` is logged. The link that delivered it loses 100 points, which takes a fresh link from 100 to 0; a link closes when its score goes below 0, so the next offence of any kind closes it. The named source is not punished. | 5.6 rule |
 | Re-run the handshake on a live link to take it over | A second `HELLO` or `HELLO_AUTH` on a link that is already bound closes it. A `HELLO_AUTH` replayed from an old session fails, because it signs a fresh nonce (T3). DM keys come from the recipient's key, never from what the link claims. | 5.5 |
 | Crash a node with a broken or huge frame | Frames over 60,000 bytes are refused. Nothing is decompressed. Fuzzed, truncated and length-lying frames decode to "malformed" without an exception, and the link is closed (T1). | 5.2, 5.6 |
 | Make a new ID for the same message by re-encoding it | The message ID is a hash of the signed content without the signature, so signature variants keep the same ID and cannot be used to build a ban proof against an honest key (T4). | 5.3 |
@@ -80,7 +80,7 @@ We say these out loud. They are not hidden.
 ### Seizure and devices
 
 - **A seized phone proves authorship.** DMs are signed, so a captured DM shows who wrote it. With no forward secrecy, the phone's key also decrypts all its past DMs. Panic wipe is the only mitigation, and only if pressed in time.
-- **A key copied to two devices gets banned.** Two devices with one key will both post into the same slots, which looks exactly like cheating, and the key is banned. A restart on one device does not trigger this (T5). Note: the Android app does not opt out of Android backup, and `identity.bin` sits in its files folder, so a backup restore or phone-to-phone transfer could copy the key to a second device (reported in `STATUS.md`).
+- **A key copied to two devices gets banned.** Two devices with one key will both post into the same slots, which looks exactly like cheating, and the key is banned. A restart on one device does not trigger this (T5). The Android app opts out of Android backup (`allowBackup="false"`, and data extraction rules that exclude every folder from cloud backup and phone-to-phone transfer), so those do not copy `identity.bin`; a rooted phone or a hand-made copy of the app's files folder still could.
 
 ### Panic wipe (U2)
 
@@ -89,6 +89,7 @@ We say these out loud. They are not hidden.
 - Relay copies are ciphertext and expire within the hour; they are not recalled.
 - It protects only if the button is pressed before the phone is taken.
 - A revoked peer's public posts stay on other phones. Only DMs, group messages and owned groups are removed.
+- The wiped phone ignores its own old ID from then on (never a contact, a route or a relayed message there). It remembers that ID in memory only, so the wiped storage does not name it; if the app restarts within the hour, a neighbour's cached presence can list the old ID as a stranger until it expires.
 
 ### Length padding (U7)
 
@@ -98,6 +99,7 @@ We say these out loud. They are not hidden.
 
 - It only warns. Nothing is banned, because sharing a name is not proof of malice.
 - It only protects names of contacts you marked verified.
+- Verified and Muted marks are saved in plain text in the app's private folder (`marks.txt`) so the warning survives a restart. A seized, unlocked phone shows who you verified and muted; panic wipe deletes the file.
 - The look-alike list covers common cases, not every Unicode confusable.
 - The browser client runs the same name check, ported to JavaScript.
 

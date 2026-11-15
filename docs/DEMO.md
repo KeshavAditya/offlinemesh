@@ -74,6 +74,7 @@ Same browser tabs, same script below. Tell judges it is TCP on one laptop instea
   scripts/booth.sh 8181 8182 8183                               # ports only, e.g. UI_BASE=8181 scripts/run-3-desktop.sh
   ```
   Each label links to that node's full page. Press F11 in the browser for full screen.
+- **Demo guide:** on each phone, Me tab, *Security and demo attacks*, turn on the **Demo guide** switch. A card under the top bar lists the demo steps and ticks each one as that phone sees it.
 
 ## The script (TDS: Privacy and Security)
 
