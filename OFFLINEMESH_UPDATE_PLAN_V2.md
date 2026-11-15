@@ -104,6 +104,8 @@ fun setProfile(p: Profile)
 fun panicWipe()                                   // U2
 fun exportEnvelope(msgIdHex: String): ByteArray?  // U6
 fun importEnvelope(bytes: ByteArray): Boolean     // U6
+fun exportBundle(): ByteArray                     // U6 data mule
+fun importBundle(bytes: ByteArray): BundleResult? // U6 data mule; null = whole file rejected
 ```
 
 UI protocol additions:
@@ -220,6 +222,14 @@ Moves one message between two phones with every radio off, as the honest answer 
 - Demo: airplane mode with Bluetooth off on A and B; A shows a post as QR; B scans; B turns Bluetooth on; the post reaches C.
 
 Simulator test: export from one node, import into another with no link between them; signature and proof of work still verify; a QR with one flipped byte is rejected.
+
+**Data-mule bundle (file, not a wire frame).** `exportBundle()` writes every envelope the node would offer in sync (5.8 `offerable`: posts, DMs it holds or relays, ACKs, presence; newest first; relay copies with ttl-1, hops+1 as sync would send them) into one `.omb` file, at most `BUNDLE_MAX_BYTES` = 4 MiB and `BUNDLE_MAX_COUNT` = 5000 envelopes:
+
+```
+"OMB1" | u32 count | count x (u32 len | ENVELOPE payload bytes) | u16 pubLen | exporter public key DER | u16 sigLen | sig
+```
+
+All integers big-endian. `sig` is the exporter's identity signature over every byte before `sigLen`; it only vouches for the file (corruption, "bundle from <fingerprint>, N messages"), never for the envelopes, which carry their own. `importBundle` rejects the whole file (null, MALFORMED on link `bundle`) on wrong magic, size or count over the caps, truncation, trailing bytes or a bad bundle signature. Otherwise each envelope runs the full 5.6 ingress on a pseudo-link `bundle` (like `qr`: no score, route or sends; PoW, signature, staleness, per-source rate rules and bans all apply). Unlike `qr` it has no 30-per-10 s link bucket, since one file holds thousands of envelopes. Returns `BundleResult(from, total, accepted, duplicates, rejected)`. Local UI server only: `GET /api/bundle` downloads `offlinemesh-<date>.omb`; `POST /api/bundle` (body = file, same 4 MiB cap, 413 over it) answers `{"ok":true,from,total,accepted,duplicates,rejected}` or 400 `{"ok":false}`. Not on the guest server.
 
 ### U7. DM length padding (about 45 minutes; core)
 

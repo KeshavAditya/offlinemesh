@@ -12,7 +12,10 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.receiveText
+import io.ktor.server.response.header
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -20,7 +23,9 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
+import io.ktor.utils.io.readRemaining
 import io.ktor.websocket.readText
+import kotlinx.io.readByteArray
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -32,6 +37,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import mesh.core.BundleResult
+import mesh.core.C
 import mesh.core.MeshEvent
 import mesh.core.MeshNode
 import mesh.core.Snapshot
@@ -46,6 +53,8 @@ interface UiNode {
     fun stats(): Stats = snapshot().stats
     fun exportEnvelope(msgIdHex: String): ByteArray? = null   // U6
     fun importEnvelope(bytes: ByteArray): Boolean = false
+    fun exportBundle(): ByteArray = ByteArray(0)              // data mule
+    fun importBundle(bytes: ByteArray): BundleResult? = null
 }
 
 fun MeshNode.asUiNode(): UiNode = object : UiNode {
@@ -55,6 +64,8 @@ fun MeshNode.asUiNode(): UiNode = object : UiNode {
     override fun stats() = this@asUiNode.stats()
     override fun exportEnvelope(msgIdHex: String) = this@asUiNode.exportEnvelope(msgIdHex)
     override fun importEnvelope(bytes: ByteArray) = this@asUiNode.importEnvelope(bytes)
+    override fun exportBundle() = this@asUiNode.exportBundle()
+    override fun importBundle(bytes: ByteArray) = this@asUiNode.importBundle(bytes)
 }
 
 /**
@@ -105,6 +116,20 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
                     val b = try { java.util.Base64.getDecoder().decode(call.receiveText().trim()) } catch (e: IllegalArgumentException) { null }
                     val ok = b != null && b.size <= 4096 && node.importEnvelope(b)
                     call.respondText("""{"ok":$ok}""", ContentType.Application.Json)
+                }
+                // Data mule: the OMB1 bundle file (plan V2, U6) down and up; import answers {"ok":true,...BundleResult} or {"ok":false}.
+                get("/api/bundle") {
+                    call.response.header(HttpHeaders.ContentDisposition, "attachment; filename=\"offlinemesh-${java.time.LocalDate.now()}.omb\"")
+                    call.respondBytes(node.exportBundle(), ContentType.Application.OctetStream)
+                }
+                post("/api/bundle") {
+                    val declared = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: 0
+                    val raw = if (declared > C.BUNDLE_MAX_BYTES) null else call.receiveChannel().readRemaining(C.BUNDLE_MAX_BYTES + 1L).readByteArray()
+                    if (raw == null || raw.size > C.BUNDLE_MAX_BYTES)
+                        return@post call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.PayloadTooLarge)
+                    val r = node.importBundle(raw) ?: return@post call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.BadRequest)
+                    val body = JsonObject(mapOf("ok" to JsonPrimitive(true)) + json.encodeToJsonElement(BundleResult.serializer(), r).jsonObject)
+                    call.respondText(body.toString(), ContentType.Application.Json)
                 }
                 get("/api/qr") {
                     val text = call.request.queryParameters["text"].orEmpty()

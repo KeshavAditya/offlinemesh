@@ -86,6 +86,10 @@ data class Stats(
     val drops: Map<String, Int> = SecKind.values().associate { it.name to 0 },
 )
 
+/** Data-mule bundle import: exporter NodeId hex, envelopes in the file, and what each became. */
+@Serializable
+data class BundleResult(val from: String, val total: Int, val accepted: Int, val duplicates: Int, val rejected: Int)
+
 @Serializable
 data class SelfInfo(val id: String, val name: String)
 
