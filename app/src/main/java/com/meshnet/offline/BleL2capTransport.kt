@@ -46,6 +46,19 @@ fun decodePsm(data: ByteArray) = ((data[4].toInt() and 0xff) shl 8) or (data[5].
 /** 4 random bytes per transport start: a static NodeId prefix in the advert would be a passive tracking handle. */
 fun newAdvertTag() = ByteArray(4).also { SecureRandom().nextBytes(it) }
 
+/** AOSP silently blocks an app's 5th startScan within 30 s, so starts wait for a free slot. Pure: callers pass the clock. */
+class ScanLimiter(private val max: Int = 4, private val windowMs: Long = 30_000) {
+    private val starts = java.util.ArrayDeque<Long>()
+    /** 0 = start allowed now (and recorded); otherwise ms to wait before asking again. */
+    @Synchronized fun acquire(now: Long): Long {
+        while (starts.isNotEmpty() && now - starts.peekFirst() >= windowMs) starts.pollFirst()
+        if (starts.size >= max) return starts.peekFirst() + windowMs - now
+        starts.addLast(now); return 0
+    }
+}
+/** Process-wide: the OS counts per app, and Switchable builds a new transport per start. */
+val scanLimiter = ScanLimiter()
+
 /** Unsigned lexicographic compare; the lower tag dials. */
 fun prefixLess(a: ByteArray, b: ByteArray): Boolean {
     for (i in a.indices) { val d = (a[i].toInt() and 0xff) - (b[i].toInt() and 0xff); if (d != 0) return d < 0 }
@@ -67,6 +80,7 @@ class BleL2capTransport(ctx: Context, longRange: Boolean = false) : Transport {
         const val ATTEMPTS = 5
         const val SHORT_LINK_MS = 10_000L
         const val REDIAL_COOLDOWN_MS = 30_000L
+        const val SCAN_REFRESH_MS = 25 * 60_000L   // AOSP downgrades a scan running over 30 min to opportunistic
     }
 
     private val adapter: BluetoothAdapter = (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
@@ -79,16 +93,19 @@ class BleL2capTransport(ctx: Context, longRange: Boolean = false) : Transport {
     @Volatile private var server: BluetoothServerSocket? = null
     private val coded = longRange && adapter.isLeCodedPhySupported && adapter.isLeExtendedAdvertisingSupported
     private val seen = ConcurrentHashMap<String, String>()   // address -> " rssi -61[ phy coded]" from its last scan result (U1)
+    private val scanKick = java.util.concurrent.LinkedBlockingQueue<String>()   // reasons to restart the scan now
     private val tag = newAdvertTag()   // advertised for the dial tie-break only; Switchable builds a new instance per start
 
     override fun start(listener: TransportListener) {
         this.listener = listener
         running.set(true)
         thread("ble-accept") { acceptLoop() }
+        thread("ble-scan") { scanLoop() }
     }
 
     override fun stop() {
         running.set(false)
+        scanKick.offer("stop")   // wakes scanLoop so it exits
         runCatching { adapter.bluetoothLeScanner?.stopScan(scanCb) }
         runCatching { adapter.bluetoothLeAdvertiser?.stopAdvertising(advCb) }
         if (coded) runCatching { adapter.bluetoothLeAdvertiser?.stopAdvertisingSet(codedCb) }
@@ -112,7 +129,7 @@ class BleL2capTransport(ctx: Context, longRange: Boolean = false) : Transport {
             if (!running.get()) { runCatching { srv.close() }; return }
             Log.i(TAG, "ble listening psm=${srv.psm}")
             advertise(srv.psm)
-            scan()   // restarted with each server socket: a Bluetooth toggle also kills the scan
+            scanKick.offer("new socket")   // restarted with each server socket: a Bluetooth toggle also kills the scan
             while (running.get()) {
                 val s = try { srv.accept() } catch (e: IOException) { Log.w(TAG, "ble accept ended: $e"); break }
                 if (links.size >= C.MAX_LINKS) runCatching { s.close() } else open(s)
@@ -179,6 +196,23 @@ class BleL2capTransport(ctx: Context, longRange: Boolean = false) : Transport {
             }
         }
         override fun onScanFailed(code: Int) { Log.e(TAG, "ble scan failed code=$code") }
+    }
+
+    /** Every scan start goes through here: rate-limited (scanLimiter) and refreshed every SCAN_REFRESH_MS. */
+    private fun scanLoop() {
+        while (running.get()) {
+            val why = scanKick.poll(SCAN_REFRESH_MS, java.util.concurrent.TimeUnit.MILLISECONDS) ?: "refresh"
+            if (!running.get()) return   // a stopping transport must not use up a start slot
+            var wait = scanLimiter.acquire(android.os.SystemClock.elapsedRealtime())
+            while (wait > 0 && running.get()) {
+                Log.i(TAG, "ble scan start deferred ${wait}ms (max 4 per 30 s)")
+                sleep(wait); wait = scanLimiter.acquire(android.os.SystemClock.elapsedRealtime())
+            }
+            if (!running.get()) return
+            scanKick.clear()   // kicks that arrived while waiting are covered by this start
+            Log.i(TAG, "ble scan start ($why)")
+            scan()
+        }
     }
 
     private fun scan() {
