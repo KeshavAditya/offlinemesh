@@ -66,6 +66,8 @@ class CmdTest {
         assertTrue(localOnly("localhost:8081", "http://localhost:8081"))
         assertFalse(localOnly("evil.com:8081", null))
         assertFalse(localOnly("127.0.0.1:8081", "http://evil.com"))
+        assertFalse(localOnly("127.0.0.1:8081", "http://127.0.0.1:9999"))   // another local site
+        assertFalse(localOnly("localhost:8081", "http://localhost.evil.com:8081"))
         assertFalse(localOnly("127.0.0.1:8081", "null"))
         assertFalse(localOnly(null, null))
     }

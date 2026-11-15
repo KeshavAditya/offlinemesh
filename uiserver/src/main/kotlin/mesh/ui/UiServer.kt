@@ -5,6 +5,7 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
@@ -12,6 +13,7 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
@@ -90,7 +92,10 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
             install(WebSockets)
             intercept(ApplicationCallPipeline.Plugins) {
                 // Block other web pages (CSRF, DNS rebinding) from driving this node through the browser.
-                if (!localOnly(call.request.headers[HttpHeaders.Host], call.request.headers[HttpHeaders.Origin])) {
+                val h = call.request.headers
+                // X-OM on writes: a custom header forces a CORS preflight we never answer, so no-cors/form posts fail.
+                val write = call.request.httpMethod != HttpMethod.Get && call.request.httpMethod != HttpMethod.Head
+                if (!localOnly(h[HttpHeaders.Host], h[HttpHeaders.Origin]) || (write && h["X-OM"] != "1")) {
                     call.respondText("forbidden", status = HttpStatusCode.Forbidden)
                     finish()
                 }
@@ -200,9 +205,11 @@ internal fun qrSvg(text: String): String {
 
 private val LOCAL = setOf("127.0.0.1", "localhost")
 
-/** Host must be loopback (any port, adb forward changes it); Origin, if sent, must be a loopback http page. */
+/**
+ * Host must be loopback (any port: adb forward changes it), which blocks DNS rebinding. Origin, if sent, must be this
+ * very server (http://<Host>): a page on another loopback port is another site and must not drive the node.
+ */
 internal fun localOnly(host: String?, origin: String?): Boolean {
     if (host == null || host.substringBeforeLast(':') !in LOCAL) return false
-    if (origin == null) return true
-    return origin.startsWith("http://") && origin.removePrefix("http://").substringBefore(':').substringBefore('/') in LOCAL
+    return origin == null || origin == "http://$host"
 }

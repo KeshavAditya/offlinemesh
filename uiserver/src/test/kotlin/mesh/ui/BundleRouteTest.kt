@@ -31,7 +31,7 @@ class BundleRouteTest {
             assertEquals("application/octet-stream", dl.headers().firstValue("content-type").get())
             assertTrue(Regex("""attachment; filename="offlinemesh-\d{4}-\d\d-\d\d\.omb"""").matches(dl.headers().firstValue("content-disposition").get()))
 
-            fun up(b: ByteArray) = http.send(HttpRequest.newBuilder(uri).POST(HttpRequest.BodyPublishers.ofByteArray(b)).build(), HttpResponse.BodyHandlers.ofString())
+            fun up(b: ByteArray) = http.send(HttpRequest.newBuilder(uri).header("X-OM", "1").POST(HttpRequest.BodyPublishers.ofByteArray(b)).build(), HttpResponse.BodyHandlers.ofString())
             val ok = up(file)
             assertEquals(200, ok.statusCode())
             assertEquals("""{"ok":true,"from":"ab","total":3,"accepted":2,"duplicates":1,"rejected":0}""", ok.body())

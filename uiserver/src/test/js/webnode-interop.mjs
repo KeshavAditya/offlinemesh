@@ -50,7 +50,7 @@ function desktop(n, args) {
 }
 const api = (ui) => ({
   snap: async () => (await fetch(`http://127.0.0.1:${ui}/api/snapshot`)).json(),
-  cmd: async (c) => { const r = await fetch(`http://127.0.0.1:${ui}/api/cmd`, { method: 'POST', body: JSON.stringify(c) }); if (!r.ok) throw new Error(await r.text()); },
+  cmd: async (c) => { const r = await fetch(`http://127.0.0.1:${ui}/api/cmd`, { method: 'POST', headers: { 'X-OM': '1' }, body: JSON.stringify(c) }); if (!r.ok) throw new Error(await r.text()); },
 });
 
 function cleanup() {
