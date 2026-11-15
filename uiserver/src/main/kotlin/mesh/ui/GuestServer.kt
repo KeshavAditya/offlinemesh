@@ -4,21 +4,28 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.origin
+import io.ktor.server.request.path
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
+import mesh.core.C
 import mesh.core.MeshNode
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -31,13 +38,15 @@ import java.util.concurrent.atomic.AtomicInteger
  * Guest access (5.13): a second server on 0.0.0.0 for browsers on the host's hotspot. Read the feed and post through the
  * host, which signs guest posts as its own POSTs ("[guest name] text"), so they obey the host's per-epoch limit.
  * No DMs, no keys, no controls. Everything is behind [pin]; every guest IP may post once per 5 s.
+ * With [web], /mesh?pin= also lets a browser join as a full mesh node over WebSocket (see [WebTransport]).
  */
 class GuestServer(
     private val node: UiNode,
     private val port: Int = 8090,
     private val guard: PinGuard = PinGuard(),
+    private val web: WebTransport? = null,
 ) {
-    constructor(node: MeshNode, port: Int = 8090) : this(node.asUiNode(), port)
+    constructor(node: MeshNode, port: Int = 8090, web: WebTransport? = null) : this(node.asUiNode(), port, PinGuard(), web)
 
     /** Current PIN; it changes when [PinGuard] rotates it, so re-read it (and [urls]) from [PinGuard.onRotate]. */
     val pin: String get() = guard.pin
@@ -49,7 +58,13 @@ class GuestServer(
 
     fun start() {
         server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+            install(WebSockets) { maxFrameSize = C.MAX_FRAME.toLong() }
+            // Wrong PIN on /mesh gets a 403 before the WebSocket upgrade.
+            intercept(ApplicationCallPipeline.Plugins) {
+                if (call.request.path() == "/mesh" && !pinOk(call)) { call.respondText("forbidden", status = HttpStatusCode.Forbidden); finish() }
+            }
             routing {
+                if (web != null) webSocket("/mesh") { web.serve(this, call.request.origin.remoteAddress) }
                 get("/") { call.respondText(page, ContentType.Text.Html) }
                 get("/api/feed") {
                     if (!pinOk(call)) return@get call.respondText("forbidden", status = HttpStatusCode.Forbidden)

@@ -22,6 +22,7 @@ import mesh.core.TransportListener
 import mesh.lan.LanTransport
 import mesh.ui.GuestServer
 import mesh.ui.UiServer
+import mesh.ui.WebTransport
 import kotlin.concurrent.thread
 
 /** Foreground service (plan 8, Agent B step 4): owns the MeshNode, its transports and the UI server on 127.0.0.1:8080. */
@@ -46,6 +47,7 @@ class MeshService : Service() {
     lateinit var lan: Switchable; private set
     private var multicast: WifiManager.MulticastLock? = null
     @Volatile private var guest: GuestServer? = null
+    private val web = WebTransport()   // browser mesh nodes via the guest server's /mesh; links only exist while guest mode is on
     @Volatile private var prefix = ByteArray(4)   // NodeId prefix the transports advertise; changes on panic wipe (U2)
     @Volatile private var longRange = false        // U5: profile wants coded PHY and the adapter supports it
     private var codedOk = false
@@ -70,7 +72,7 @@ class MeshService : Service() {
         prefix = Identity.loadOrCreate(filesDir).nodeId.copyOf(4)
         ble = Switchable("ble") { BleL2capTransport(this, prefix, longRange) }
         lan = Switchable("lan") { LanTransport(LAN_PORT, emptyList(), prefix) }
-        node = MeshNode(filesDir, ExecutorScheduler(), listOf(ble, lan))
+        node = MeshNode(filesDir, ExecutorScheduler(), listOf(ble, lan, web))
         node.addListener { if (it is MeshEvent.Reset) thread(name = "mesh-refresh") { refreshTransports() } }
         ui = UiServer(node, UI_PORT) { guest }
         dms = DmNotifier(this, node).also { node.addListener(it::onEvent) }
@@ -128,7 +130,7 @@ class MeshService : Service() {
     /** Guest mode (5.13): a separate 0.0.0.0:8090 server for hotspot browsers; each start gets a fresh PIN guard. */
     private fun setGuest(want: Boolean) {
         if (want && guest == null) {
-            val g = GuestServer(node, GUEST_PORT)
+            val g = GuestServer(node, GUEST_PORT, web)
             try { g.start(); guest = g; Log.i(TAG, "guest listening 0.0.0.0:$GUEST_PORT") }
             catch (e: Exception) { Log.e(TAG, "guest server failed: $e"); runCatching { g.stop() } }
         } else if (!want && guest != null) {

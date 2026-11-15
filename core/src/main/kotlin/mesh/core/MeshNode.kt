@@ -450,7 +450,9 @@ class MeshNode(
     // ---- 5.5 handshake ----
 
     private fun linkUp(t: Transport, linkId: LinkId, desc: String) {
-        if (links.size >= profile.maxLinks || linkId in links) { t.close(linkId); return }
+        // Browser nodes ("web") never relay, so they do not use up maxLinks; WebTransport caps them itself.
+        val full = t.name != "web" && links.values.count { it.transport.name != "web" } >= profile.maxLinks
+        if (full || linkId in links) { t.close(linkId); return }
         val l = Link(linkId, t, desc, now())
         links[linkId] = l
         frame(l, Frame.Hello(id.publicDer, l.myNonce))
