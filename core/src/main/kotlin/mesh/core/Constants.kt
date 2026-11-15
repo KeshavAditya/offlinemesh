@@ -5,7 +5,8 @@ object C {
     const val PROTOCOL_VERSION = 1
     const val MAX_FRAME = 60_000
     const val MAX_POST_BODY = 1_000
-    const val MAX_DM_PLAINTEXT = 40_000
+    const val MAX_DM_PLAINTEXT = 40_000   // kind byte + data, before U7 padding
+    const val MAX_DM_PADDED = 40_960      // U7: 3 + 39,999 rounds up to 10 x 4096
     const val MAX_NAME = 32
 
     const val TTL_POST = 6

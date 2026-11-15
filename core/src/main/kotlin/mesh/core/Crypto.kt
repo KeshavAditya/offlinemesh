@@ -66,6 +66,23 @@ object Crypto {
         }
     } catch (e: Exception) { null }
 
+    /** U7: [p] = kind + data becomes `u8 kind | u16 dataLen | data | zeros` up to the bucket; null if over MAX_DM_PADDED. */
+    fun padDm(p: ByteArray): ByteArray? {
+        val n = p.size - 1
+        var size = 64
+        while (size < 3 + n && size < 4096) size *= 2
+        if (size < 3 + n) size = (3 + n + 4095) / 4096 * 4096
+        if (n < 0 || size > C.MAX_DM_PADDED) return null
+        return ByteArray(size).also { it[0] = p[0]; it[1] = (n shr 8).toByte(); it[2] = n.toByte(); p.copyInto(it, 3, 1) }
+    }
+
+    /** U7: back to kind + data; null (MALFORMED) if dataLen exceeds the remaining bytes. Padding is ignored. */
+    fun unpadDm(x: ByteArray): ByteArray? {
+        if (x.size < 3) return null
+        val n = ((x[1].toInt() and 0xff) shl 8) or (x[2].toInt() and 0xff)
+        return if (n > x.size - 3) null else byteArrayOf(x[0]) + x.copyOfRange(3, 3 + n)
+    }
+
     private fun helloData(peerNonce: ByteArray, signerId: ByteArray, otherId: ByteArray) =
         "offlinemesh-hello-v1".toByteArray() + peerNonce + signerId + otherId
 

@@ -38,7 +38,7 @@ class GroupTest {
     /** Signs a DM carrying [plain] from [from] to [to] and hands it to one of [from]'s neighbours. */
     private fun forge(s: Setup, from: String, to: String, plain: ByteArray, f: Identity = s.n(from).node.id): String {
         val t = s.n(to).node.id
-        val body = Crypto.seal(Crypto.dmKey(f.private, t.publicDer), f.nodeId + t.nodeId, plain)
+        val body = Crypto.seal(Crypto.dmKey(f.private, t.publicDer), f.nodeId + t.nodeId, Crypto.padDm(plain)!!)
         val ep = Math.floorDiv(s.net.nowMs(), C.EPOCH_SECONDS * 1000L)
         val e = Envelope.create(f, EnvType.DM, t.nodeId, 1_000, ep, 0, C.TTL_DM, body)
         s.net.inject(from, s.adj.getValue(from).first(), Codec.encodeFrame(Frame.Env(e)))

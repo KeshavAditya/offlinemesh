@@ -25,7 +25,7 @@ class PhotoDmTest {
         assertEquals(MsgStatus.DELIVERED, a.events.filterIsInstance<MeshEvent.StatusChanged>().last().status)
         assertTrue(b.added().isEmpty(), "relay must not emit MessageAdded")
         val dm = net.sent.mapNotNull { it.env }.first { it.type == EnvType.DM }
-        assertTrue(dm.body.size <= C.MAX_DM_PLAINTEXT + 28)
+        assertEquals(C.MAX_DM_PADDED + 28, dm.body.size)   // U7: 3 + 39,999 pads to 40,960
         assertNull(Crypto.open(Crypto.dmKey(b.node.id.private, a.node.id.publicDer), dm.srcId + dm.dst, dm.body))
     }
 

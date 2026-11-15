@@ -27,7 +27,7 @@ interface Scheduler {                                  // real impl: single-thre
     fun schedule(delayMs: Long, task: () -> Unit)
 }
 
-enum class DebugFlag { TAMPER_RELAY, DROP_RELAY }
+enum class DebugFlag { TAMPER_RELAY, DROP_RELAY, DROP_ACK }   // DROP_ACK: test only, relays drop ACKs
 enum class Attack { FLOOD, SPOOF, REPLAY }
 
 // UI-facing data, field names match the JSON UI protocol in section 6 so uiserver can encode them directly.

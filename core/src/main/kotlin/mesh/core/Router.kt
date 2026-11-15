@@ -5,6 +5,8 @@ package mesh.core
 internal class SeenEntry(var firstLink: LinkId?, val dst: String?, val type: Int, var ttl: Int = C.MAX_INIT_TTL, var dist: Int = 0) {
     val have = HashSet<LinkId>()
     var acked = false
+    var ack: Envelope? = null          // own ACK for a DM to me, re-sent once per link on a failover resend
+    val reAcked = HashSet<LinkId>()
 }
 
 /** LRU of msgId hex, SEEN_CAP entries. */

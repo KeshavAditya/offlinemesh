@@ -135,7 +135,7 @@ class MeshNode(
     private fun dmTo(to: String, pub: ByteArray, plain: ByteArray, text: String, img: String?, gm: String?) {
         if (plain.size > C.MAX_DM_PLAINTEXT) return
         val dst = Crypto.unhex(to)
-        val body = Crypto.seal(Crypto.dmKey(id.private, pub), id.nodeId + dst, plain)
+        val body = Crypto.seal(Crypto.dmKey(id.private, pub), id.nodeId + dst, Crypto.padDm(plain) ?: return)
         mine(EnvType.DM, dst, ++lamport, epochNow(), 0, C.TTL_DM, body, text, img, gm)
     }
 
@@ -444,6 +444,8 @@ class MeshNode(
             it.have += l.id; routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false)
             if (!asked && treeOn(e)) prune(l)   // U9 rule 3
             if (asked && treeOn(e) && e.ttl > it.ttl) betterCopy(e, it)
+            // A failover resend of a DM I ACKed: the same ACK bytes back on this link; old-path relays drop it as a dupe.
+            it.ack?.let { a -> if (it.reAcked.add(l.id)) give(l, a) }
             dupes++
             return
         }
@@ -527,7 +529,9 @@ class MeshNode(
             }
             EnvType.DM -> when {
                 dst == me -> {
-                    val p = openDm(e, e.srcPub) ?: return
+                    val raw = Crypto.open(Crypto.dmKey(id.private, e.srcPub), e.srcId + e.dst, e.body) ?: return
+                    // Validly signed, so the relay could not have known: log only, no link penalty.
+                    val p = Crypto.unpadDm(raw)?.takeIf { it.isNotEmpty() } ?: return sec(SecKind.MALFORMED, "dm $mid bad padding", l, src)
                     if (!onDm(e, p, mid, src, now, shownHops, l?.peer, replay)) return
                     store.put(e, now, relayOnly = false, log = !replay)
                     if (l != null) sendAck(e, l)
@@ -576,7 +580,7 @@ class MeshNode(
     }
 
     private fun openDm(e: Envelope, peerPub: ByteArray): ByteArray? =
-        Crypto.open(Crypto.dmKey(id.private, peerPub), e.srcId + e.dst, e.body)?.takeIf { it.isNotEmpty() }
+        Crypto.open(Crypto.dmKey(id.private, peerPub), e.srcId + e.dst, e.body)?.let(Crypto::unpadDm)?.takeIf { it.isNotEmpty() }
 
     /** Handles one opened DM plaintext by kind (received, or own on replay). False if malformed: not stored, not ACKed. */
     private fun onDm(e: Envelope, p: ByteArray, mid: String, src: String, now: Long, hops: Int, via: String?, replay: Boolean): Boolean {
@@ -599,6 +603,7 @@ class MeshNode(
     private fun sendAck(dm: Envelope, l: Link) {
         val a = Envelope.create(id, EnvType.ACK, dm.srcId, ++lamport, epochNow(), 0, C.TTL_ACK, dm.msgId)
         seen[hex(a.msgId)] = SeenEntry(null, hex(dm.srcId), EnvType.ACK)
+        seen[hex(dm.msgId)]?.ack = a
         give(l, a)
     }
 
@@ -655,7 +660,7 @@ class MeshNode(
     }
 
     private fun relayCopy(e: Envelope): Envelope? {
-        if (e.ttl < 2 || DebugFlag.DROP_RELAY in debug) return null
+        if (e.ttl < 2 || DebugFlag.DROP_RELAY in debug || (e.type == EnvType.ACK && DebugFlag.DROP_ACK in debug)) return null
         val c = e.copy(ttl = e.ttl - 1, hops = e.hops + 1)
         if (DebugFlag.TAMPER_RELAY !in debug) return c
         // 5.12: flip one body bit and redo the PoW so receivers reach the signature check.

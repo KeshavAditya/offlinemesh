@@ -108,7 +108,7 @@ object Codec {
     private fun bodyOk(type: Int, body: ByteArray): Boolean = when (type) {
         EnvType.PRESENCE -> body.isNotEmpty() && (body[0].toInt() and 0xff).let { it <= C.MAX_NAME && body.size == 1 + it }
         EnvType.POST -> body.size in 1..C.MAX_POST_BODY
-        EnvType.DM -> body.size in (12 + 1 + 16)..(12 + C.MAX_DM_PLAINTEXT + 16)
+        EnvType.DM -> body.size in (12 + 1 + 16)..(12 + C.MAX_DM_PADDED + 16)
         EnvType.ACK -> body.size == 8
         else -> false
     }
