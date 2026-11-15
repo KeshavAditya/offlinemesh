@@ -39,7 +39,7 @@ class MeshService : Service() {
         @Volatile var onListening: (() -> Unit)? = null
     }
 
-    private lateinit var node: MeshNode
+    lateinit var node: MeshNode; private set   // read by QrActivity (U6)
     private lateinit var ui: UiServer
     lateinit var dms: DmNotifier; private set
     lateinit var ble: Switchable; private set

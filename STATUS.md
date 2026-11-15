@@ -55,3 +55,4 @@
 [android] [16:38] done: section 13 on 4 emulators (meshA-D): e2e.sh 8081-8084 PASS 1-8 (C<->D pre-muted, see e2e note); C got 'Ridgeline' group notification from background (3 senders, Reply action); B WebView shows group chat; deploy-all.sh --fresh now wipes all devices before launching any (old feeds were re-synced into wiped nodes); meshD needs disk.dataPartition.size=4G (laptop disk ~11 GB free)
 [ui] [16:52] done: e2e.sh mutes C from every node past the 3rd (lifted for items 7-8), 4 emulators and 4 desktop nodes pass 1-8; page autofocuses the message box only on fine pointers
 [ui] [19:06] v2 done: merged main, link desc shown
+[android] [19:05] v2 done: U6 QR screens (QrActivity from 'QR hop' in settings row; show post/DM as byte-mode QR, scan via zxing-android-embedded -> importEnvelope). QrTest: encode->decode 500 bytes round-trips exactly. Emulator: QR drawn (shots/v2-qr-show.png), scanner opens/cancels; a live scan needs real phones.

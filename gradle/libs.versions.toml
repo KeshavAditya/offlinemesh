@@ -4,6 +4,8 @@ kotlin = "2.0.21"
 ktor = "3.0.3"
 serialization = "1.7.3"
 zxing = "3.5.3"
+zxing-embedded = "4.3.0"
+androidx-core = "1.13.1"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
@@ -11,6 +13,8 @@ ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+zxing-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxing-embedded" }
+androidx-core = { module = "androidx.core:core", version.ref = "androidx-core" }   # zxing-android-embedded calls ContextCompat but does not declare it
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
