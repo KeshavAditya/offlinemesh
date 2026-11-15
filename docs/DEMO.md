@@ -22,7 +22,7 @@ Have the fallback (desktop) ready in a second terminal before you start.
    adb -s <serial-of-C> forward tcp:8083 tcp:8080
    ```
 3. Open `http://127.0.0.1:8081/`, `:8082/`, `:8083/` side by side in the laptop browser for the projector.
-4. Force two hops. On A's Network tab tick **Muted** for C. On C's Network tab tick **Muted** for A. (All phones on a desk are in range; muting is done in software. Say so.)
+4. Force two hops. On A: People tab, open C, switch on **Muted**. On C: People tab, open A, switch on **Muted**. (All phones on a desk are in range; muting is done in software. Say so.)
 5. Dry run once: `scripts/e2e.sh 8081 8082 8083` must print PASS for items 1 to 7 (7 is the group check). It bans A on B for 10 minutes at the end, so run it at least 10 minutes before the demo, or restart the apps after it.
 
 ### Path 2: emulators (practice only)
@@ -58,7 +58,7 @@ Same browser tabs, same script below. Tell judges it is TCP on one laptop instea
   n D 8094 9104 --peer 127.0.0.1:9102 --peer 127.0.0.1:9103
   # stop later: for f in $R/*.pid; do kill $(cat $f); done
   ```
-  Open `http://127.0.0.1:8091/` (A) and `:8094/` (D). Wait until A's Network tab shows D at 2 hops (a few seconds). Tried on the laptop: A's route to D went via B; with Drop on B, A's DM reached D via C in about 5 s and A logged `ROUTE_FAILED`.
+  Open `http://127.0.0.1:8091/` (A) and `:8094/` (D). Wait until A's People tab shows D at 2 hops (a few seconds). Tried on the laptop: A's route to D went via B; with Drop on B, A's DM reached D via C in about 5 s and A logged `ROUTE_FAILED`.
 - **`docs/NUMBERS.md`** open in a laptop tab, scrolled to the forwarding benchmark (step 7).
 
 ### Booth setup
@@ -76,21 +76,23 @@ Same browser tabs, same script below. Tell judges it is TCP on one laptop instea
 
 Organised by the three verbs of the prompt. Steps 1 to 6 are real actions on the phones (or the 3 desktop nodes in the fallback). **Steps 7 and 8 run on the laptop**: step 7 is the simulator benchmark table, step 8 is four desktop nodes. Say so when you get there.
 
+Where things are (map in `docs/UI_STRUCTURE.md`): the **Security screen** is Me tab, *Security and demo attacks* (two taps); a new event also shows as a strip under the top bar on every screen, and tapping it opens the log. **Statistics** and links are Me tab, *Network and statistics*. **Muted** and **Verified** are People tab, open the person.
+
 | Time | Do | Say |
 |---|---|---|
 | | **Protects user privacy** | |
-| 0:00 | 1. Show the three phones in airplane mode. A: Chats, pick C, send "meet at the gym". Show C has it, A shows "Delivered, 2 hops via B". On B: Chats is empty, and in Statistics `relayed` went up. | "No internet, no server. B carried it but cannot read it. C's signed receipt came back the same way." |
+| 0:00 | 1. Show the three phones in airplane mode. A: Chats, pick C, send "meet at the gym". Show C has it, A shows "Delivered, 2 hops via B". On B: Chats has no conversation between A and C, and in Statistics `relayed` went up. | "No internet, no server. B carried it but cannot read it. C's signed receipt came back the same way." |
 | 0:25 | 2. Nothing to tap. | "A relay sees sender, recipient, timing and a size bucket. Nothing else. A one-letter and a fifty-letter message are the same size on the air." |
-| 0:35 | *Optional, cut if short on time.* B: Chats, **New group**, tick every contact, send "group test". Show B: "Delivered to 2 of 2". | "A group message is one encrypted DM to each member. Relays still see only DMs." |
+| 0:35 | *Optional, cut if short on time.* B: Chats, **New chat**, **New group**, tick every contact, send "group test". Show B: "Delivered to 2 of 2". | "A group message is one encrypted DM to each member. Relays still see only DMs." |
 | | **Detects threats** | |
-| 0:55 | 3. B: Security tab, tick **Tamper while relaying**. A sends C another DM. Show C's Security tab: `BAD_SIGNATURE` against the link to B. Untick Tamper. | "B flips one bit in everything it forwards. C rejects it and blames B's link, not A." |
-| 1:15 | 4. C changes its name to A's name. Show B: C's row says "same name as a verified contact", and `NAME_IMPERSONATION` is in B's Security tab. Change C's name back. | "Names can be copied, keys cannot. B verified A earlier, so it warns. It does not ban: sharing a name is not proof." |
+| 0:55 | 3. B: Security screen, tick **Tamper while relaying**. A sends C another DM. Show C's Security screen: `BAD_SIGNATURE` against the link to B. Untick Tamper. | "B flips one bit in everything it forwards. C rejects it and blames B's link, not A." |
+| 1:15 | 4. C changes its name to A's name. Show B: C's row says "same name as a verified contact", and `NAME_IMPERSONATION` is in B's Security screen. Change C's name back. | "Names can be copied, keys cannot. B verified A earlier, so it warns. It does not ban: sharing a name is not proof." |
 | | **Mitigates attacks** | |
-| 1:35 | 5. A: Security tab, press **Flood**. Show B: `RATE_EQUIVOCATION ... banned 10 min`. Show C's feed: only the first three. | "Four posts in one 10-second window; the limit is three. Two signed posts for one slot is proof. B bans A's key." |
+| 1:35 | 5. A: Security screen, press **Flood**. Show B: `RATE_EQUIVOCATION ... banned 10 min`. Show C's feed: only the first three. | "Four posts in one 10-second window; the limit is three. Two signed posts for one slot is proof. B bans A's key." |
 | 1:55 | 6. Show the Statistics table on B and C: drops by kind, duplicates dropped, delivery time. | "Every number here is counted by the code as it runs." |
 | | **Efficiency** (for "does it just spam everyone?") | |
 | 2:10 | 7. Laptop: `docs/NUMBERS.md`, forwarding benchmark, 30-in-a-room rows. | "This is the simulator running our real core code. Plain flooding is NAIVE; CURRENT is what ships. TREE halves the sends but loses delivery, so it is off by default." |
-| 2:25 | 8. Laptop diamond: on A's Network tab see which of B or C its route to D uses; tick **Drop while relaying** on that node. A DMs D. After about 5 s A shows "Delivered, 2 hops via" the other node (the status line says "rerouted via" while it is live), and `ROUTE_FAILED` is in A's Security tab. | "These are four desktop nodes, same code over TCP; three phones in a line have no second path. No receipt, so A resent on a backup route." |
+| 2:25 | 8. Laptop diamond: on A's People tab see which of B or C its route to D uses; tick **Drop while relaying** on that node. A DMs D. After about 5 s A shows "Delivered, 2 hops via" the other node (the status line says "rerouted via" while it is live), and `ROUTE_FAILED` is in A's Security screen. | "These are four desktop nodes, same code over TCP; three phones in a line have no second path. No receipt, so A resent on a backup route." |
 | 2:45 | One sentence on limits. | "We don't stop one person making many identities, relays see who talks to whom, and there is no forward secrecy. It's all in THREATS.md." |
 
 If you cut the group step, you have 20 s spare for questions. Either way the script ends before 3:00.
@@ -99,7 +101,7 @@ Flood (step 5) bans A on B for 10 minutes, and B drops everything signed by A's 
 
 **If time remains**
 
-9. Panic wipe on C: Network tab, **Panic wipe**, type `WIPE`. A's conversation with C disappears, A's Security tab logs `PEER_REVOKED`, and C comes back with a new ID. (Not on A: A's revoke would be dropped by B because of the ban.)
+9. Panic wipe on C: Me tab, **Panic wipe** at the bottom, type `WIPE`. A's conversation with C disappears, A's Security screen logs `PEER_REVOKED`, and C comes back with a new ID. (Not on A: A's revoke would be dropped by B because of the ban.)
 10. A judge joins from their own phone through the guest page (see Optional extras).
 
 ## Driving it from the shell (if a tap fails)
@@ -120,7 +122,7 @@ Use `127.0.0.1`, not `localhost` (on this laptop `localhost` can reach another s
 
 ## Optional extras (only if time is left)
 
-- **Guest join**: B turns on its hotspot and Guest mode; the iPhone scans the QR on B's Network tab and posts from Safari. The post shows as "guest of B".
+- **Guest join**: B turns on its hotspot and Guest mode; the iPhone scans the QR on B's Me tab and posts from Safari. The post shows as "guest of B".
 - **Photo DM:** A sends C a photo (downscaled to under 40 KB, one frame).
 - **Catch-up after reconnect:** turn Bluetooth off on C, A posts "C, are you there?", turn Bluetooth back on. The post appears on C within about 20 s. Without touching the phone:
   ```
