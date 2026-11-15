@@ -8,9 +8,9 @@
 <style>
 /* One accent (--acc): primary buttons, my bubbles, the active tab, badges, the verified mark. Red is for danger and errors only.
    Type: 13 / 16 / 17 / 22 px, weights 400 and 600. Spacing: 4 / 8 / 12 / 16 / 24. docs/UI_STRUCTURE.md, "Modern pass". */
-:root { --bg: #fff; --fg: #121a18; --mut: #5b6765; --line: #e2e8e6; --sur: #f1f4f3; --acc: #0a7566; --accfg: #fff; --red: #b3261e; --nb: 0px; --e: cubic-bezier(.23, 1, .32, 1); color-scheme: light dark; accent-color: var(--acc); }
+:root { --bg: #fff; --fg: #121a18; --mut: #5b6765; --line: #e2e8e6; --sur: #f1f4f3; --acc: #0a7566; --accfg: #fff; --red: #b3261e; --nb: 0px; --qz: -20px; --e: cubic-bezier(.23, 1, .32, 1); color-scheme: light dark; accent-color: var(--acc); }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #0f1514; --fg: #e6ecea; --mut: #96a4a1; --line: #27312f; --sur: #1a2321; --acc: #4cc2ae; --accfg: #04201b; --red: #f2857a; }
+  :root { --bg: #0f1514; --fg: #e6ecea; --mut: #96a4a1; --line: #27312f; --sur: #1a2321; --acc: #4cc2ae; --accfg: #04201b; --red: #f2857a; --qz: 0px; }
 }
 * { box-sizing: border-box; }
 html { scroll-padding: 120px 0 calc(var(--nb) + 96px); -webkit-text-size-adjust: 100%; }
@@ -29,8 +29,13 @@ h1 { margin: 0; display: flex; align-items: center; font-size: 17px; font-weight
 #chatWarn { padding-bottom: 8px; }
 #conn { background: var(--fg); color: var(--bg); font-size: 13px; font-weight: 600; text-align: center; padding: 4px 16px; }
 /* Newest unseen security event, one tap from any screen */
-#alert { display: block; width: 100%; border: 0; line-height: 44px; padding: 0 max(16px, calc(50% - 324px)); border-radius: 0; text-align: left; font-size: 13px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+#alert, #guide { padding: 0 max(16px, calc(50% - 324px)); }
+#alert { display: block; width: 100%; border: 0; line-height: 44px; border-radius: 0; text-align: left; font-size: 13px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
 #alert b { margin-right: 8px; }
+/* Demo guide, docked under the top bar */
+#guide { margin: 0; border-top: 1px solid var(--line); max-height: 60vh; overflow: auto; }
+#guide li { padding: 4px 0; }
+#guide button { margin: 4px 0 8px; }
 .bad > b, .bad td + td { color: var(--red); }
 /* Tabs: a row under the top bar on wide screens, a bottom bar on phones */
 nav { display: flex; }
@@ -88,6 +93,7 @@ li + li, .sw + .sw, .sw + ul, tr + tr td { border-top: 1px solid var(--line); }
 @media (hover: hover) { .chat:hover { background: var(--sur); } }
 .main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.line > :last-child { flex: none; }   /* the time: a long title is cut short, the time never wraps */
 .prev { color: var(--mut); }
 .rowc, .post, .ev { padding: 10px 0; overflow-wrap: anywhere; }
 .post { display: flex; gap: 12px; align-items: flex-start; }
@@ -98,6 +104,7 @@ li + li, .sw + .sw, .sw + ul, tr + tr td { border-top: 1px solid var(--line); }
 .pick label { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
 .pick input { width: 20px; height: 20px; margin: 0; }
 .pick:empty::before { content: "No one in range to add yet."; color: var(--mut); font-size: 13px; }
+details[open] summary::after { transform: rotate(135deg); }
 summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-weight: 600; }
 /* Switch rows: label on the left, switch on the right */
 .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; gap: 16px; min-height: 60px; padding: 8px 0; cursor: pointer; }
@@ -116,8 +123,14 @@ summary { min-height: 44px; display: flex; align-items: center; justify-content:
 .bub img { display: block; max-width: 100%; border-radius: 12px; margin: 4px -4px; }
 .compose { position: fixed; bottom: var(--nb); left: 0; right: 0; max-width: 680px; margin: 0 auto; z-index: 1; background: var(--bg); padding: 8px 16px; border-top: 1px solid var(--line); }
 #feed, #convo { padding-bottom: 112px; }
+@media (max-width: 359px) {   /* narrow phone: a group's three buttons leave no room for the text box, so it takes its own row */
+  #convo.grp { padding-bottom: 164px; }
+  .grp .compose .row { flex-wrap: wrap; }
+  .grp #dmText { order: -1; }
+  .grp #dmBtn { margin-left: auto; }
+}
 #iMsg, dialog button { width: 100%; margin-top: 16px; }
-.qr { display: block; width: 176px; height: 176px; background: #fff; border-radius: 12px; margin: 8px 0; }
+.qr { display: block; width: 176px; height: 176px; background: #fff; border-radius: 12px; margin: 8px 0 8px var(--qz); }   /* light: the code's white margin would read as an indent */
 table { border-collapse: collapse; width: 100%; }
 td { padding: 8px 0; overflow-wrap: anywhere; }
 td + td { padding-left: 16px; text-align: right; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -125,14 +138,16 @@ fieldset { border: 0; padding: 0; margin: 24px 0 0; min-width: 0; }
 legend { margin-top: 0; }
 .btns { display: flex; gap: 8px; margin: 12px 0 4px; }
 .btns button { flex: 1; padding: 0; }
-/* Mesh map */
-#topo { display: block; width: 100%; max-width: 400px; margin: 0 auto; overflow: visible; }
-#topo line { stroke: var(--fg); stroke-width: 1.5; }
-#topo .far { stroke: var(--mut); stroke-dasharray: 4 4; }
-#topo .ring { fill: none; stroke: var(--line); }
-#topo .node { fill: var(--bg); stroke: var(--fg); stroke-width: 1.5; }
-#topo .me { fill: var(--acc); stroke: var(--acc); }
-#topo text { fill: var(--fg); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; font-size: 13px; text-anchor: middle; }
+/* Mesh map; .dot runs along a message's path */
+.topo { display: block; width: 100%; max-width: 400px; margin: 0 auto; overflow: visible; }
+.topo line { stroke: var(--fg); stroke-width: 1.5; }
+.topo .far { stroke: var(--mut); stroke-dasharray: 4 4; }
+.topo .node { fill: var(--bg); stroke: var(--fg); stroke-width: 1.5; }
+.topo .me, .dot { fill: var(--acc); stroke: var(--acc); }
+.topo text { fill: var(--fg); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; font-size: 13px; text-anchor: middle; }
+.topo .you { fill: var(--accfg); stroke: none; }
+.dot { opacity: 0; }
+.hot { display: inline-block; color: var(--fg); }
 /* First run */
 dialog { width: 100%; height: 100%; max-width: none; max-height: none; padding: 48px 0 24px; border: 0; background: var(--bg); color: var(--fg); }
 dialog h1 { font-size: 28px; margin-bottom: 12px; }
@@ -142,6 +157,7 @@ dialog h1 { font-size: 28px; margin-bottom: 12px; }
   button:not(.chat):active { transform: scale(.97); }
   .sw input::after { transition: transform .15s var(--e); }
   .in > :not(.compose) { animation: in .18s var(--e); }
+  .go { animation: in .6s var(--e); }
 }
 @keyframes in { from { opacity: 0; transform: translateX(12px); } }
 [hidden] { display: none !important; }
@@ -166,6 +182,9 @@ dialog h1 { font-size: 28px; margin-bottom: 12px; }
   </div>
   <div id="conn" role="status" hidden></div>
   <button id="alert" onclick="goSec()" aria-label="Open the security log" hidden></button>
+  <details id="guide" open hidden><summary id="gT"></summary>
+    <ul id="gList"></ul>
+    <button onclick="gSet(1)">Reset</button></details>
 </header>
 
 <main class="wrap">
@@ -260,13 +279,13 @@ dialog h1 { font-size: 28px; margin-bottom: 12px; }
   <p id="iWarn" class="err"></p>
   <button id="iMsg" class="pri" onclick="message()">Message</button>
   <div id="iContact">
+    <h2>Route</h2>
+    <div id="iPath"></div>
+    <svg id="iTopo" class="topo" role="img" aria-label="Mesh map"><g></g><circle class="dot" r="6"/></svg>
     <h2>Verify</h2>
     <p class="mut">Names can be copied. Scan the QR on their Me screen or read the fingerprint off their phone; if it matches the one below, switch on Verified.</p>
     <div id="iFp" class="fpbox mono"></div>
     <div id="iSw"></div>
-    <h2>Route</h2>
-    <div id="iPath"></div>
-    <small id="iRoute"></small>
   </div>
   <div id="iGroup">
     <h2>Members <small id="iCount"></small></h2>
@@ -279,6 +298,7 @@ dialog h1 { font-size: 28px; margin-bottom: 12px; }
 </section>
 
 <section id="security">
+  <label class="sw"><input type="checkbox" id="gOn" onchange="gSet(this.checked)"><span>Demo guide<small>The demo steps, ticked as this phone sees them</small></span></label>
   <fieldset>
     <legend>Demo attacks</legend>
     <p class="mut">For demos: each one misbehaves on purpose so the other phones catch it. Flood: four posts in three slots. Spoof: a post under another contact's key. Replay: resend a stored message. Tamper: change posts while relaying, on until pressed again.</p>
@@ -288,6 +308,7 @@ dialog h1 { font-size: 28px; margin-bottom: 12px; }
       <button onclick="send({t:'attack',kind:'replay'})">Replay</button>
       <button id="tamper" aria-pressed="false" onclick="send({t:'debug',flag:'tamper',on:!S.debug.tamper})">Tamper</button>
     </div>
+    <small id="atk" role="status"></small>
     <label class="sw"><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})">Drop while relaying</label>
   </fieldset>
   <h2>Blocked by this phone since start</h2>
@@ -300,7 +321,7 @@ dialog h1 { font-size: 28px; margin-bottom: 12px; }
 
 <section id="net">
   <h2>Map <small id="nMap"></small></h2>
-  <svg id="topo" viewBox="0 0 400 400" role="img" aria-label="Mesh map: you in the middle, direct links on the first ring, contacts farther out by hop count"></svg>
+  <svg id="topo" class="topo" role="img" aria-label="Mesh map"><g></g><circle class="dot" r="6"/></svg>
   <h2>Links <small id="nLinks"></small></h2>
   <ul id="links"></ul>
   <h2>Mission profile</h2>
@@ -390,7 +411,9 @@ function name(id) {
 }
 const flags = c => [c.suspect ? 'Same name as a verified contact' : '', c.revoked ? 'Revoked' : ''].filter(x => x).join(' · ');
 const grp = id => S.groups.find(g => g.id === id);
-const gname = id => cap((grp(id) || {}).name || 'Group', 32);   // a left group keeps only its history
+let GN = {};   // group id -> last known name, kept after you are removed
+try { GN = JSON.parse(localStorage.omGN) || {}; } catch (e) {}
+const gname = id => cap((grp(id) || {}).name || GN[id] || 'Group', 32);
 const uk = (kind, id) => kind + ':' + id;            // unread key: a group id may equal a contact id
 const isOpen = (kind, id) => cur === 'convo' && open.kind === kind && open.id === id;
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
@@ -423,6 +446,7 @@ function nav(fwd) {   // fwd: a screen was pushed, so it slides in; tabs and Bac
   if (cur in unread) unread[cur] = 0;
   if (cur === 'convo') dmUnread[uk(open.kind, open.id)] = 0;
   render(); if (cur === 'feed' || cur === 'convo') toBottom(); else scrollTo(0, 0);
+  if (cur === 'net' || cur === 'info') fly();
 }
 const mark = () => { try { history.replaceState({ n: stack.length }, ''); } catch (e) {} };   // keep the current history entry's depth equal to the stack's
 function show(id) { tab = id; stack = []; mark(); nav(); }
@@ -444,13 +468,14 @@ function toggleGroupForm(on = $('newGroup').hidden) { $('newGroup').hidden = !on
 // First run (and after a wipe): pick a name, see the fingerprint. Not in automated browsers or the booth's iframes.
 function welcome() {
   let seen; try { seen = localStorage.omWelcome; } catch (e) { return; }
-  if (seen === S.self.id || navigator.webdriver || self !== top || $('welcome').open) return;
+  if (!live || seen === S.self.id || navigator.webdriver || self !== top || $('welcome').open) return;
   $('wName').value = S.self.name; $('wFp').textContent = fp(S.self.id);
   $('welcome').showModal(); $('wName').select();
 }
 function start() {
   try { localStorage.omWelcome = S.self.id; } catch (e) {}
   if (val('wName') && val('wName') !== S.self.name) send({ t: 'name', name: val('wName') });
+  if (LEAF) tick(0);
 }
 
 // Compose bars: Enter sends, button disabled while empty or too long, byte counter from 80% of the limit.
@@ -507,11 +532,14 @@ function send(cmd, clearId, errId) {
     if (clearId) { $(clearId).value = ''; if ($(clearId).dataset.max) compose($(clearId)); }
     // No event reports these back, so keep the local copy in step.
     if (cmd.t === 'name') S.self.name = cmd.name;
+    if (LEAF && (cmd.t === 'name' || cmd.t === 'post')) tick(+(cmd.t === 'post'));
+    if (cmd.kind === 'replay') $('atk').textContent = 'Replay sent: receivers drop it as a duplicate, see Duplicates dropped';
     if (cmd.t === 'debug') S.debug[cmd.flag] = cmd.on;
     render();
   }, e => errId ? ($(errId).textContent = 'Not sent: ' + e.message) : alert('Not sent: ' + e.message));
 }
 
+function gkeep(g) { GN[g.id] = g.name; try { localStorage.omGN = JSON.stringify(GN); } catch (e) {} }
 function upsert(list, m) {
   const i = list.findIndex(x => x.id === m.id);
   if (i >= 0) list[i] = m; else list.push(m);
@@ -522,29 +550,44 @@ function apply(ev) {
   if (ev.t === 'snapshot') {
     const wiped = S && S.self.id !== ev.self.id;   // U2: wiped, new identity (the server pushes this snapshot on Reset)
     S = ev; S.groups = S.groups || []; S.gdms = S.gdms || {};
+    S.groups.forEach(gkeep);
     if (wiped) { unread.feed = unread.security = 0; for (const k in dmUnread) delete dmUnread[k]; show(tab); }
     welcome(); return; }
   if (!S) return;
   if (ev.t === 'msg') {
     const m = ev.msg;
     if (m.group) {
-      if (upsert(S.gdms[m.group] = S.gdms[m.group] || [], m) && !m.mine && !isOpen('group', m.group)) dmUnread[uk('group', m.group)] = (dmUnread[uk('group', m.group)] || 0) + 1;
+      if (upsert(S.gdms[m.group] = S.gdms[m.group] || [], m) && !m.mine) { trace(m); if (!isOpen('group', m.group)) dmUnread[uk('group', m.group)] = (dmUnread[uk('group', m.group)] || 0) + 1; }
     } else if (m.to === null) { if (upsert(S.feed, m) && !m.mine && cur !== 'feed') unread.feed++; }
     else {
       const p = m.mine ? m.to : m.from;
-      if (upsert(S.dms[p] = S.dms[p] || [], m) && !m.mine && !isOpen('dm', p)) dmUnread[uk('dm', p)] = (dmUnread[uk('dm', p)] || 0) + 1;
+      if (upsert(S.dms[p] = S.dms[p] || [], m) && !m.mine) { trace(m); if (!isOpen('dm', p)) dmUnread[uk('dm', p)] = (dmUnread[uk('dm', p)] || 0) + 1; }
     }
   } else if (ev.t === 'status') {
     for (const list of [S.feed, ...Object.values(S.dms)])
-      for (const m of list) if (m.id === ev.id) { m.status = ev.status; m.hops = ev.hops; m.via = ev.via; m.rerouteVia = ev.rerouteVia; }
+      for (const m of list) if (m.id === ev.id) {
+        const was = m.status; m.status = ev.status; m.hops = ev.hops; m.via = ev.via; m.rerouteVia = ev.rerouteVia;
+        if (m.to && was !== 'DELIVERED' && m.status === 'DELIVERED') trace(m);
+      }
   } else if (ev.t === 'gstatus') {
     for (const list of Object.values(S.gdms)) for (const m of list) if (m.id === ev.id) { m.delivered = ev.delivered; m.total = ev.total; }
   } else if (ev.t === 'group') {
-    S.groups = S.groups.filter(g => g.id !== ev.group.id);
+    S.groups = S.groups.filter(g => g.id !== ev.group.id); gkeep(ev.group);
     if (ev.group.members.includes(S.self.id)) S.groups.push(ev.group);   // left out of the list: live state goes, history stays
   } else if (ev.t === 'net') { S.contacts = ev.contacts; S.links = ev.links; }
   else if (ev.t === 'stats') S.stats = ev.stats;
   else if (ev.t === 'sec') { S.security.push(ev.event); if (S.stats && S.stats.drops) S.stats.drops[ev.event.kind] = (S.stats.drops[ev.event.kind] || 0) + 1; if (cur !== 'security') unread.security++; }
+}
+
+// The strip's sentence; the log keeps the code.
+function say(e) {
+  const who = e.src ? name(e.src) : 'A peer', l = S.links.find(l => l.link === e.link);
+  return {
+    BAD_SIGNATURE: 'Forged message blocked' + (l && l.peer ? ', via ' + name(l.peer) : ''),
+    RATE_EQUIVOCATION: who + ' flooded: banned for 10 min',
+    NAME_IMPERSONATION: 'Someone is using ' + cap((contact(e.detail) || {}).name, 32) + '\'s name: ' + (e.src || '').slice(0, 4),
+    ROUTE_FAILED: 'No receipt from ' + who + ', rerouting',
+  }[e.kind] || e.kind + ' ' + cap(e.detail, 120);
 }
 
 function badge(id, n) { $(id).textContent = n > 0 ? (n > 99 ? '99+' : n) : ''; }
@@ -556,15 +599,15 @@ function render() {
   $('back').hidden = !stack.length;
   $('title').textContent = convo ? (gq ? gname(open.id) : name(open.id)) : cur === 'info' ? (gq ? 'Group info' : 'Contact info') : TITLE[cur];
   $('chatVf').hidden = !(convo && c.verified);
-  $('sub').textContent = !convo ? '' : gq ? (g ? g.members.length + ' members' : 'You left this group') : route(c) + (c.verified ? ' · verified' : ' · not verified');
+  $('sub').textContent = !convo ? '' : gq ? (g ? g.members.length + ' members' : 'You are no longer in this group') : route(c) + (c.verified ? ' · verified' : ' · not verified');
   $('infoBtn').hidden = !convo; $('nlinks').hidden = convo;
   $('chatWarn').textContent = !convo ? '' : gq ? late(g) : flags(c);
-  $('nlinks').textContent = linksText();
+  $('nlinks').textContent = up ? linksText() : '';   // the bar below says "Reconnecting…"
   badge('n-feed', unread.feed); badge('n-me', unread.security); badge('n-sec', unread.security);
   badge('n-chats', Object.values(dmUnread).reduce((a, b) => a + b, 0));
   const ev = unread.security && S.security[S.security.length - 1], al = $('alert');
   al.hidden = !ev;
-  if (ev) { al.className = BAD.includes(ev.kind) ? 'bad' : ''; al.replaceChildren(el('b', ev.kind), cap(ev.detail, 120)); }
+  if (ev) { al.className = BAD.includes(ev.kind) ? 'bad' : ''; al.replaceChildren(el('b', al.className ? 'Alert' : 'Notice'), say(ev)); }
   const keep = (cur === 'feed' || convo) && atBottom();
   ({ chats: renderChats, feed: renderFeed, people: renderPeople, me: renderMe, newchat: renderNew, convo: renderConvo, info: renderInfo, security: renderSecurity, net: renderNet })[cur]();
   if (keep) toBottom();
@@ -606,7 +649,7 @@ function renderChats() {
   const q = val('q').toLowerCase();
   const row = (kind, id) => ({ kind, id, title: kind === 'group' ? gname(id) : name(id), last: ((kind === 'group' ? S.gdms : S.dms)[id] || []).reduce((a, m) => !a || byOrder(a, m) < 0 ? m : a, null) });
   const when = r => r.last ? r.last.tsMs : r.kind === 'group' ? 0 : -1;
-  const rows = [...[...new Set([...others().map(c => c.id), ...Object.keys(S.dms)])].map(id => row('dm', id)),
+  const rows = [...[...new Set([...others().filter(c => !c.revoked).map(c => c.id), ...Object.keys(S.dms)])].map(id => row('dm', id)),   // a wiped identity is not offered as "in range"
                 ...[...new Set([...S.groups.map(g => g.id), ...Object.keys(S.gdms)])].map(id => row('group', id))]
     .filter(r => !q || r.title.toLowerCase().includes(q) || (r.last && r.last.text || '').toLowerCase().includes(q))
     .sort((a, b) => when(b) - when(a) || a.title.localeCompare(b.title));
@@ -618,7 +661,7 @@ function renderChats() {
     if (when(r) < 0 && !fresh) { fresh = true; ul.appendChild(el('li', 'In range, no chat yet', 'sub')); }
     b.onclick = () => openChat(r.kind, r.id);
     // Second line: the last message, or (no message yet) how far away the person is
-    const prev = m ? (m.mine ? 'You: ' : gq ? name(m.from) + ': ' : '') + cap(said(m), 80) : !gq ? route(c) : g ? g.members.length + ' members' : 'You left this group';
+    const prev = m ? (m.mine ? 'You: ' : gq ? name(m.from) + ': ' : '') + cap(said(m), 80) : !gq ? route(c) : g ? g.members.length + ' members' : 'You are no longer in this group';
     const nm = el('b', r.title);
     if (c.verified) nm.appendChild(vf());
     add(b, add(el('span', null, 'main'),
@@ -647,16 +690,30 @@ function renderNew() {
 }
 
 // The way a DM travels: You, the first relay (when known), any further relays, then the contact.
-function path(c, id) {
-  const stops = ['You'];
-  if (c.hops == null) stops.push('?');
-  else { if (c.hops > 1) stops.push(c.via ? name(c.via) : '…'); if (c.hops > 2) stops.push('+' + (c.hops - 2)); }
-  return [...stops, name(id)].join(' → ');
+function stops(c, id) {
+  const st = ['You'];
+  if (c.hops == null) st.push('?');
+  else { if (c.hops > 1) st.push(c.via ? name(c.via) : '…'); if (c.hops > 2) st.push('+' + (c.hops - 2)); }
+  return [...st, name(id)];
+}
+// Live path: a delivered DM or an arrival runs a dot along its path on the map, over the hops this phone knows.
+let hot = { t: 0 }, P = new Map(), busy = 0;   // P: node id -> place on the map
+function trace(m) {
+  const far = m.mine ? m.to : m.from, w = stops(m, far), ids = [S.self.id, ...m.hops > 1 ? [m.via] : [], far];
+  hot = { id: m.id, t: Date.now(), go: 1, w: (m.mine ? w : w.reverse()).join(' → '), ids: m.mine ? ids : ids.reverse() };
+  setTimeout(render, 4100);
+}
+function fly() {   // never queued; none under reduced motion
+  const d = document.querySelector('.on .dot'), now = Date.now(), pts = (hot.ids || []).map(id => P.get(id));
+  hot.go = 0;
+  if (!d || now < busy || now - hot.t > 6e4 || !pts.every(p => p) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  busy = now + 900;
+  d.animate(pts.map(p => ({ opacity: 1, transform: 'translate(' + p.x + 'px,' + p.y + 'px)' })), 300 * pts.length);
 }
 
 function renderConvo() {
   const id = open.id, gq = open.kind === 'group', g = gq && grp(id);
-  $('safeBtn').hidden = !g; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes (13.2)
+  $('safeBtn').hidden = !g; $('convo').classList.toggle('grp', !!g); $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes (13.2)
   document.querySelector('#convo .compose').hidden = gq && !g;
   const ul = $('msgs'); ul.replaceChildren();
   const list = [...((gq ? S.gdms : S.dms)[id] || [])].sort(byOrder).slice(-MAX);
@@ -668,7 +725,9 @@ function renderConvo() {
     else bub.appendChild(el('span', cap(said(m), 40000), 'txt'));
     const li = el('li', null, m.mine ? 'mine' : '');
     if (gq && !m.mine) li.appendChild(el('small', name(m.from)));
-    ul.appendChild(add(li, bub, el('small', meta(m))));
+    const sm = el('small', meta(m));
+    if (m.id === hot.id && Date.now() - hot.t < 4000) sm.replaceChildren(hhmm(m.tsMs) + (m.mine ? ' · Delivered · ' : ' · '), el('b', hot.w, hot.go ? 'hot go' : 'hot'));
+    ul.appendChild(add(li, bub, sm));
   }
 }
 
@@ -712,7 +771,7 @@ function sw(label, hint, checked, onchange) {
 function renderInfo() {
   const id = open.id, gq = open.kind === 'group', g = gq && grp(id), c = !gq && contact(id) || {};
   $('iName').replaceChildren(gq ? gname(id) : name(id), ...c.verified ? [vf()] : []);
-  $('iSub').textContent = gq ? (g ? 'Group · ' + g.members.length + ' members' : 'You left this group') : route(c) + ' · ' + (c.linked ? 'linked' : 'not linked');
+  $('iSub').textContent = gq ? (g ? 'Group · ' + g.members.length + ' members' : 'You are no longer in this group') : route(c) + ' · ' + (c.linked ? 'linked' : 'not linked');
   $('iWarn').textContent = flags(c);
   $('iContact').hidden = gq; $('iGroup').hidden = !gq;
   if (!gq) {
@@ -720,7 +779,7 @@ function renderInfo() {
     $('iSw').replaceChildren(
       sw('Verified', 'I compared the fingerprint in person', !!c.verified, on => send({ t: 'verify', id, on })),
       sw('Muted', 'Ignore this phone\'s direct link, so messages relay through others', !!c.muted, on => send({ t: 'mute', id, on })));
-    $('iPath').textContent = path(c, id); $('iRoute').textContent = route(c);
+    $('iPath').textContent = stops(c, id).join(' → '); topo($('iTopo'));
     return;
   }
   const own = g && g.owner === S.self.id, mem = g ? g.members : [], rc = rollCall(id), cut = Date.now() - lateMin(id) * 60000;
@@ -751,7 +810,7 @@ function renderMe() {
   if (qr && $('myQr').getAttribute('src') !== qr) $('myQr').src = qr;
   if (document.activeElement !== $('myName')) $('myName').value = S.self.name;
   const n = S.security.length;
-  $('meSecT').textContent = $('tamper').closest('fieldset').hidden ? 'Security log' : 'Security and demo attacks';   // the browser client (a leaf) hides the attack console
+  $('meSecT').textContent = LEAF ? 'Security log' : 'Security and demo attacks';   // the browser client (a leaf) hides the attack console
   $('meSec').textContent = n ? n + (n === 1 ? ' event' : ' events') + ' in the log' : 'Nothing caught yet';
   $('meNet').textContent = linksText() + ' · ' + (S.profile || 'STANDARD') + ' profile';
 }
@@ -763,48 +822,56 @@ function renderNet() {
     lt.appendChild(add(el('li', null, 'rowc'), el('b', l.peer ? name(l.peer) : l.link), el('small', l.peer ? fp(l.peer) : '', 'mono'),
       el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting') + (l.tree ? ' · tree ' + l.tree : '')), l.desc ? el('small', cap(l.desc, 200)) : ''));
   }
-  renderTopo();
+  const n = topo($('topo')), none = others().filter(c => c.hops == null).length;
+  $('nMap').textContent = n + ' reachable' + (none ? ' · ' + none + ' no route' : '');
   if (document.activeElement !== $('profile')) $('profile').value = S.profile || 'STANDARD';
   kv('profVals', S.profileValues || {});
   renderStats();
 }
-// Mesh map: you in the middle, ring h = h hops away (3 and more share the outer ring). A line joins each contact to its
-// first relay when known (dashed when more relays follow), else a dashed line to you. Names go in with textContent.
-function renderTopo() {
-  const NS = 'http://www.w3.org/2000/svg', C = 200, R = 52;
-  const mk = (tag, a, text) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (text != null) e.textContent = text; return e; };
-  const direct = new Set(S.links.filter(l => l.authed && l.peer && l.peer !== S.self.id).map(l => l.peer));
-  const hop = new Map(others().map(c => [c.id, direct.has(c.id) ? 1 : c.hops]));
-  for (const id of direct) hop.set(id, 1);
-  const pos = new Map([[S.self.id, { x: C, y: C, a: -Math.PI / 2 }]]), lines = [];
-  for (const k of [1, 2, 3]) {
-    const ring = [...hop].filter(([, h]) => h != null && Math.min(h, 3) === k).map(([id]) => id).slice(0, 40)
-      .map(id => { const c = contact(id) || {}, p = k > 1 && c.via && pos.get(c.via); return { id, p, a: p ? p.a : 9 }; })
-      .sort((x, y) => x.a - y.a || (x.id < y.id ? -1 : 1));
-    const a0 = ring.length && ring[0].p ? ring[0].a : -Math.PI / 2;
-    ring.forEach((n, i) => {
-      const a = a0 + i * 2 * Math.PI / ring.length;
-      pos.set(n.id, { x: C + R * k * Math.cos(a), y: C + R * k * Math.sin(a), a });
-      lines.push([n.p || pos.get(S.self.id), pos.get(n.id), k === 1 || (k === 2 && n.p) ? '' : 'far']);
-    });
+// Mesh map: you, direct links on the inner ring, the rest on the outer ring beside the neighbour they are reached
+// through (dashed: more relays follow). A ring holds 12, then "+N". Names go in with textContent. Returns the count.
+function topo(svg) {
+  const C = 200, T = 2 * Math.PI, me = S.self.id, lines = [], nodes = [];
+  const mk = (tag, a, text) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in a) e.setAttribute(k, a[k]); if (text != null) e.textContent = text; return e; };
+  const fit = (l, more) => l.length > 12 ? [...l.slice(0, 11), more + (l.length - 11)] : l;   // "+3", " +3": below any id
+  const pt = (r, a) => ({ r, a, x: C + r * Math.cos(a), y: C + r * Math.sin(a) });
+  const ids = f => others().filter(f).map(c => c.id).sort(), near = ids(c => c.hops === 1), far = ids(c => c.hops > 1);
+  const R = !far.length ? 104 : near.length > 8 ? 68 : 58;
+  P = new Map([[me, pt(0, 0)]]);
+  fit(near, '+').forEach((id, i, l) => P.set(id, pt(R, i * T / l.length - T / 4)));
+  const hub = id => { const p = P.get((contact(id) || {}).via); return p && p.r === R && p; };
+  const pa = id => (hub(id) || { a: 9 }).a;
+  const out = fit(far.sort((x, y) => pa(x) - pa(y)), ' +'), s = .5, A = [];
+  // Half a step off its neighbour's spoke, away from that neighbour's name; then a step apart all round.
+  out.forEach((id, i) => {
+    const a = pa(id), g = out.filter(x => pa(x) === a), h = g.length >> 1, cw = Math.sin(2 * a) > -1e-9;
+    A.push(Math.max(a + (g.indexOf(id) - (cw ? h - .5 : g.length - h - .5)) * s, i ? A[i - 1] + s : -9));
+  });
+  for (let i = A.length, lim = A[0] + T; i--;) lim = A[i] = Math.min(A[i], lim - s);
+  out.forEach((id, i) => P.set(id, pt(128, A[i])));
+  for (const [id, p] of P) {
+    if (id === me) { nodes.push(mk('circle', { cx: C, cy: C, r: 17, class: 'node me' }), mk('text', { x: C, y: C + 4.5, class: 'you' }, 'You')); continue; }
+    const c = contact(id) || {}, more = id < '0', q = p.r === R ? P.get(me) : hub(id);
+    if (!more || q) lines.push(mk('line', { x1: (q || P.get(me)).x, y1: (q || P.get(me)).y, x2: p.x, y2: p.y, class: p.r === R || q && c.hops === 2 ? '' : 'far' }));
+    nodes.push(mk('circle', { cx: p.x, cy: p.y, r: 12, class: 'node' }), mk('text', { x: p.x, y: p.y + 4.5 }, more ? id : c.hops));
+    // Name outside the ring, cut before the next node or the edge.
+    const d = Math.abs(Math.cos(p.a)) < .2 ? 0 : p.x > C ? 1 : -1, k = d || (p.r === R && far.length ? (p.y < C ? -1 : 1) : 0), x = p.x + (d ? d * 17 : k * 4);
+    let room = d ? (d > 0 ? 398 - x : x - 2) : 98;
+    for (const o of P.values()) if (d && o !== p && Math.abs(o.y - p.y) < 22 && (o.x - x) * d > 0) room = Math.min(room, (o.x - x) * d - 15);
+    nodes.push(mk('text', { x, y: p.y + (d ? 4.5 : p.y < C ? -18 : 28), style: 'text-anchor:' + ['end', 'middle', 'start'][k + 1] }, more ? '' : cap(c.name || id.slice(0, 8), Math.max(2, room / 6.5 - 1 | 0))));
   }
-  const kids = [1, 2, 3].map(k => mk('circle', { cx: C, cy: C, r: R * k, class: 'ring' }));
-  for (const [p, q, cls] of lines) kids.push(mk('line', { x1: p.x, y1: p.y, x2: q.x, y2: q.y, class: cls }));
-  for (const [id, p] of pos) {
-    const me = id === S.self.id;
-    kids.push(mk('circle', { cx: p.x, cy: p.y, r: 12, class: 'node' + (me ? ' me' : '') }));
-    if (!me) kids.push(mk('text', { x: p.x, y: p.y + 4.5 }, String(hop.get(id))));
-    kids.push(mk('text', { x: p.x, y: p.y + 30 }, me ? 'You' : cap(name(id), 16)));
-  }
-  $('topo').replaceChildren(...kids);
-  const none = [...hop.values()].filter(h => h == null).length;
-  $('nMap').textContent = (pos.size - 1) + ' reachable' + (none ? ' · ' + none + ' no route' : '');
+  const ys = [...P.values()].map(p => p.y), y0 = Math.min(...ys) - 36;
+  svg.setAttribute('viewBox', '0 ' + y0 + ' 400 ' + (Math.max(...ys) + 36 - y0));   // as tall as its content
+  svg.firstChild.replaceChildren(...lines, ...nodes);
+  return near.length + far.length;
 }
 // Two-column list of key → value; drops{kind:n} becomes one row per kind seen so far (core lists every kind).
 const tr = (k, v, cls) => add(el('tr', null, cls), el('td', k), el('td', String(v)));
+// duplicatesDropped -> "Duplicates dropped"; the title keeps the id.
+const words = k => k.replace(/([a-z])([A-Z])/g, (m, a, b) => a + ' ' + b.toLowerCase()).replace(/^./, c => c.toUpperCase()).replace('Ack rtt', 'Receipt time').replace('Pow', 'Proof of work');
 function kv(id, o) {
   $(id).replaceChildren(...Object.entries(o).flatMap(([k, v]) => v && typeof v === 'object' ? Object.entries(v).filter(e => e[1]).map(([d, n]) => [k + ' ' + d, n]) : [[k, v]])
-    .map(([k, v]) => tr(k, typeof v === 'boolean' ? (v ? 'on' : 'off') : v)));
+    .map(([k, v]) => { const r = tr(words(k), typeof v === 'boolean' ? (v ? 'on' : 'off') : v); r.title = k; return r; }));
 }
 const renderStats = () => kv('stats', S.stats || {});
 
@@ -843,6 +910,44 @@ function renderBlocked() {
     : [el('li', 'No one banned. A peer that floods or forges is listed here.', 'rowc mut')]);
 }
 
+// Demo guide: ticks each step of docs/DEMO.md as this phone sees it. The guest client (a leaf) gets "Try it", on at start.
+const LEAF = $('tamper').closest('fieldset').hidden;
+const STEPS = LEAF ? [['Pick a name', 'Me: type your name, Save'], ['Post to the feed', 'Feed: write to everyone nearby'],
+  ['Send the host a private message', 'Chats: pick the host, send a message']]
+: [['Send a private message across two hops', 'End phone: Chats, message the far phone'],
+  // shortcut: "relayed" counts beacons and posts too; a DM-only tick needs a core counter.
+  ['The relay cannot read it', 'Middle phone: no copy in Chats. Relayed here: #'],
+  ['Tampering is caught', 'Middle phone: Security > Tamper, then send again'],
+  ['A flood gets banned', 'End phone: Security > Flood. The others ban it'],
+  ['Catch up after reconnect', 'Cut a phone off, post, reconnect: it catches up']];
+let G = null;   // off, or {d: ticks, dn: link drops, a: one dropped since, s: syncRecovered then}
+try { G = JSON.parse(localStorage.omGuide || (LEAF ? '{"d":[]}' : '0')); G.d.length; } catch (e) { G = null; }
+function gSet(on) {   // on: a clean sheet
+  G = on ? { d: [] } : null; $('guide').open = true;
+  try { localStorage.omGuide = '0'; } catch (e) {}
+  if (S) gShow();
+}
+function tick(i) { if (G) { G.d[i] = 1; gShow(); } }
+function guide(ev) {
+  const d = G.d, st = S.stats || {}, k = ev.t === 'sec' && ev.event.kind, done = ev.t === 'status' && ev.status === 'DELIVERED' && ev.hops;
+  if (LEAF) { if (done === 1) d[2] = 1; return; }
+  if (done > 1) d[0] = 1;
+  if (st.relayed) d[1] = 1;
+  if (k === 'BAD_SIGNATURE') d[2] = 1;
+  if (k === 'RATE_EQUIVOCATION') d[3] = 1;
+  // Step 5: sync pulled something in after a link (or the node) went away.
+  if (G.dn != null && st.linkDowns !== G.dn) G.a = 1;
+  G.dn = st.linkDowns;
+  if (!G.a) G.s = st.syncRecovered; else if (st.syncRecovered && st.syncRecovered !== G.s) d[4] = 1;
+}
+function gShow() {
+  $('guide').hidden = !G; $('gOn').checked = !!G;
+  if (!G) return;
+  $('gT').textContent = (LEAF ? 'Try it · ' : 'Demo guide · ') + G.d.filter(x => x).length + ' of ' + STEPS.length;
+  $('gList').replaceChildren(...STEPS.map(([t, h], i) => add(el('li'), i + 1 + '. ' + t, G.d[i] ? el('span', 'Done', 'tag') : el('small', h.replace('#', (S.stats || {}).relayed || 0)))));
+  try { localStorage.omGuide = JSON.stringify(G); } catch (e) {}
+}
+
 // 5.13: while guest mode is on, show each join URL as a QR plus the PIN. Polled, so a rotated PIN shows up within 3 s.
 let guestKey = '';
 function guest() {
@@ -864,7 +969,7 @@ setInterval(guest, 3000); guest();
 
 // Android app only: MainActivity gives the page OMNative { state() -> JSON, set(key, on), open(what) }. In a browser Settings stays hidden.
 const NAT = window.OMNative;
-let up = true, blocker = '';   // blocker: why the mesh cannot run ("Turn on Bluetooth."), from the app
+let up = true, live = false, blocker = '';   // blocker: why the mesh cannot run ("Turn on Bluetooth."), from the app
 function bar() { $('conn').textContent = up ? blocker : 'Reconnecting…'; $('conn').hidden = up && !blocker; }
 function omNative() {   // the app calls this when a switch or the blocker changed on its side
   const st = JSON.parse(NAT.state());
@@ -890,8 +995,12 @@ function importBundle(inp) {
     e => m.textContent = e.message);
 }
 
-backend.onState(u => { up = u; bar(); });
-backend.onEvent(ev => { apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'net') renderStats(); else if (cur === 'security') renderBlocked(); });   // stats every 2 s: do not rebuild the switches
+backend.onState(u => { up = u; bar(); if (G && !u) G.a = 1; if (u && !live) { live = true; if (S) welcome(); } render(); });
+backend.onEvent(ev => {
+  apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'net') renderStats(); else if (cur === 'security') renderBlocked();
+  if (hot.go) fly();
+  if (S) { if (G) guide(ev); gShow(); }
+});   // stats every 2 s: do not rebuild the switches
 show(tab);
 backend.connect();
 </script>
