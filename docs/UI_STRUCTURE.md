@@ -14,7 +14,7 @@ Tabs (bottom bar on phones, row under the top bar from 600 px)
 ├─ Feed            one line saying posts are public; posts; compose bar
 ├─ People          everyone the node knows about, with verified / muted / suspect / revoked
 │   └─ Contact info      (same screen as above)
-└─ Me              name, my fingerprint, my QR, guest PIN and QR (while guest mode is on)
+└─ Me              name, my fingerprint, my QR, Settings (Android app only), guest PIN and QR (while guest mode is on)
     ├─ Security and demo attacks   tamper / drop switches, flood / spoof / replay, event log
     ├─ Network and statistics      links (tree, description), mission profile, statistics
     └─ Panic wipe                  bottom of the screen, behind typing WIPE
@@ -54,8 +54,16 @@ Sources read for this: the Apple HIG pages above (local copy, June 2026), the An
 - **Security buried in settings.** Chat apps hide it; here it is the demo, so it gets a badge and an always-visible strip.
 - **An in-app QR scanner.** Needs camera access, which plain-HTTP Safari does not grant. The other phone's camera app reads the QR text.
 
+## Android bridge (Me > Settings)
+
+The app's WebView fills the screen; the old native switch row is gone. `MainActivity.Bridge` is exposed to the page as `OMNative` (`addJavascriptInterface`; navigation is pinned to `http://127.0.0.1:8080/` and the bridge answers only while that page is loaded):
+
+- `OMNative.state()` returns JSON `{ble, lan, guest, secure, status}`; `status` is the blocker text ("Turn on Bluetooth.") or empty.
+- `OMNative.set(key, on)` for `ble`, `lan`, `guest`, `secure`; `OMNative.open(what)` for `invite`, `qr`, `share`, `bundle`, `keepalive`. Other values are ignored.
+- The app calls the page's `omNative()` after a native-side change, and `omBack()` on system Back (true: a pushed screen was closed; false: leave the app).
+
+The page builds one `li.set-row` per item in `#natRows` (switch rows reuse `label.sw`, tap rows reuse `.chat` plus a chevron) and shows `#nat` only when `window.OMNative` exists, so a desktop browser and the browser guest client never see it. The blocker text shows in the `#conn` bar under the top bar.
+
 ## Follow-ups (not done here)
 
-- The native Android switch row (Bluetooth, Wi-Fi LAN, Guest mode, QR hop, Share app in `MainActivity.kt`) stays native: there is no JS-to-native bridge. With one (`addJavascriptInterface`), these belong under Me.
-- `MainActivity` does not forward the system back button to the WebView. Adding `if (web.canGoBack()) web.goBack()` makes Android back close pushed screens; the page side is already in place.
 - The welcome screen is skipped in iframes (the booth page) and when `navigator.webdriver` is set. A test that drives a normal browser must press Start once or set `localStorage.omWelcome` to the node id.
