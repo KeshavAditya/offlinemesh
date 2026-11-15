@@ -4,18 +4,18 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.origin
-import io.ktor.server.request.path
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
@@ -59,12 +59,14 @@ class GuestServer(
     fun start() {
         server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
             install(WebSockets) { maxFrameSize = C.MAX_FRAME.toLong() }
-            // Wrong PIN on /mesh gets a 403 before the WebSocket upgrade.
-            intercept(ApplicationCallPipeline.Plugins) {
-                if (call.request.path() == "/mesh" && !pinOk(call)) { call.respondText("forbidden", status = HttpStatusCode.Forbidden); finish() }
-            }
             routing {
-                if (web != null) webSocket("/mesh") { web.serve(this, call.request.origin.remoteAddress) }
+                // Route-scoped so the PIN check runs for whatever path the router matched to /mesh; 403 before the upgrade.
+                if (web != null) route("/mesh") {
+                    install(createRouteScopedPlugin("MeshPin") {
+                        onCall { call -> if (!pinOk(call)) call.respondText("forbidden", status = HttpStatusCode.Forbidden) }
+                    })
+                    webSocket { web.serve(this, call.request.origin.remoteAddress) }
+                }
                 get("/") { call.respondText(page, ContentType.Text.Html) }
                 get("/api/feed") {
                     if (!pinOk(call)) return@get call.respondText("forbidden", status = HttpStatusCode.Forbidden)
