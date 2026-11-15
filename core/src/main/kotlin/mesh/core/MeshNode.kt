@@ -14,6 +14,8 @@ import kotlin.random.Random
 fun isJpeg(b: ByteArray) = b.size >= 3 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() && b[2] == 0xFF.toByte()
 private const val PHOTO = "(photo)"
 private const val QR_LINK = "qr"   // U6 pseudo-link id, shown on its security events
+private const val BUNDLE_LINK = "bundle"   // data-mule bundle import pseudo-link id
+private val BUNDLE_MAGIC = "OMB1".toByteArray(Charsets.US_ASCII)
 
 /**
  * Sections 5.5 to 5.11. Every state change runs as a task on [scheduler] (one thread), wrapped in [lock]
@@ -60,13 +62,18 @@ class MeshNode(
     private val seen = Seen()
     // U6: pseudo-link for QR imports. Authenticated, never muted, never in [links] (so live() is false: nothing is sent to it,
     // forward() never targets it), no score or route; its own 30-per-10 s bucket stays on (scans are human-paced).
-    private val qr by lazy { Link(QR_LINK, object : Transport {
-        override val name = "qr"
+    private val qr by lazy { pseudoLink(QR_LINK) }
+    // Bundle import pseudo-link: like qr, but no link bucket (a bundle holds up to BUNDLE_MAX_COUNT envelopes in one human act;
+    // per-source rules such as 3 posts per epoch still apply in typeRules).
+    private val bundle by lazy { pseudoLink(BUNDLE_LINK) }
+    private fun pseudoLink(n: String) = Link(n, object : Transport {
+        override val name = n
         override fun start(listener: TransportListener) {}
         override fun stop() {}
         override fun send(link: LinkId, frame: ByteArray) = false
         override fun close(link: LinkId) {}
-    }, "qr", now()).apply { authed = true } }
+    }, n, now()).apply { authed = true }
+    private fun pseudo(l: Link) = l === qr || l === bundle
     private var routes = Routes()
     private var guard = Guard()
     private lateinit var store: Store
@@ -162,6 +169,66 @@ class MeshNode(
         if (guard.accepted.containsKey(mid)) { dupes++; return false }
         try { ingress(qr, e) } catch (x: Exception) { System.err.println("OfflineMesh: qr import failed"); x.printStackTrace(); return false }
         guard.accepted.containsKey(mid)
+    }
+
+    /**
+     * Data mule: every envelope [offerable] in sync, newest first, as one file signed by this node (format in plan V2, U6):
+     * "OMB1" | u32 count | count x (u32 len | ENVELOPE payload) | u16 pubLen | exporter public key DER | u16 sigLen | sig.
+     * The Ed25519 signature covers every byte before sigLen. Relay copies go out as sync would send them (ttl-1, hops+1).
+     */
+    fun exportBundle(): ByteArray = synchronized(lock) {
+        val ep = epochNow()
+        val envs = ArrayList<ByteArray>()
+        var size = 4 + 4 + 2 + id.publicDer.size + 2 + 128
+        for (s in store.envs.values.toList().asReversed()) {
+            if (envs.size >= C.BUNDLE_MAX_COUNT) break
+            val e = s.env.takeIf { offerable(it, ep) } ?: continue
+            val b = Codec.encodeEnvelope(if (isOwn(e)) e else e.copy(ttl = e.ttl - 1, hops = e.hops + 1))
+            if (size + 4 + b.size > C.BUNDLE_MAX_BYTES) break
+            size += 4 + b.size; envs += b
+        }
+        val out = ByteArrayOutputStream()
+        out.write(BUNDLE_MAGIC); out.write(ByteBuffer.allocate(4).putInt(envs.size).array())
+        envs.forEach { out.write(ByteBuffer.allocate(4).putInt(it.size).array()); out.write(it) }
+        out.write(ByteBuffer.allocate(2).putShort(id.publicDer.size.toShort()).array()); out.write(id.publicDer)
+        val signed = out.toByteArray()
+        val sig = Crypto.sign(id.private, signed)
+        signed + ByteBuffer.allocate(2).putShort(sig.size.toShort()).array() + sig
+    }
+
+    /**
+     * Data mule: a bundle from [exportBundle]. A bad format, size or bundle signature rejects the whole file (null, logged
+     * MALFORMED on link "bundle"). Otherwise each envelope goes through the full 5.6 ingress on the pseudo-link `bundle`
+     * (PoW, signature, staleness, per-source rate rules, bans), with no link bucket, score or route. Under the lock like [importEnvelope].
+     */
+    fun importBundle(bytes: ByteArray): BundleResult? = synchronized(lock) {
+        if (!running) return null
+        fun bad(why: String): BundleResult? { sec(SecKind.MALFORMED, "bundle: $why", bundle, null); return null }
+        if (bytes.size > C.BUNDLE_MAX_BYTES) return bad("over ${C.BUNDLE_MAX_BYTES} bytes")
+        val envs = ArrayList<ByteArray>()
+        val pub: ByteArray
+        try {
+            val b = ByteBuffer.wrap(bytes)
+            if (!ByteArray(4).also { b.get(it) }.contentEquals(BUNDLE_MAGIC)) return bad("not an OMB1 file")
+            val n = b.int
+            if (n < 0 || n > C.BUNDLE_MAX_COUNT) return bad("count $n")
+            repeat(n) { val len = b.int; if (len < 0 || len > b.remaining()) return bad("truncated"); envs += ByteArray(len).also { b.get(it) } }
+            pub = ByteArray(b.short.toInt() and 0xffff).also { b.get(it) }
+            val signedLen = b.position()
+            val sig = ByteArray(b.short.toInt() and 0xffff).also { b.get(it) }
+            if (b.hasRemaining()) return bad("trailing bytes")
+            if (!Crypto.verify(pub, bytes.copyOfRange(0, signedLen), sig)) return bad("bad bundle signature")
+        } catch (x: BufferUnderflowException) { return bad("truncated") }
+        var accepted = 0; var dupes = 0; var rejected = 0
+        for (eb in envs) {
+            val e = Codec.decodeEnvelope(eb)
+            if (e == null) { rejected++; sec(SecKind.MALFORMED, "bundle: bad envelope", bundle, null); continue }
+            val mid = hex(e.msgId)
+            if (seen.containsKey(mid) || guard.accepted.containsKey(mid)) { dupes++; this.dupes++; continue }
+            try { ingress(bundle, e) } catch (x: Exception) { System.err.println("OfflineMesh: bundle import failed"); x.printStackTrace() }
+            if (seen[mid]?.firstLink == BUNDLE_LINK) accepted++ else rejected++
+        }
+        BundleResult(hex(Crypto.nodeId(pub)), envs.size, accepted, dupes, rejected)
     }
 
     /**
@@ -521,7 +588,7 @@ class MeshNode(
 
     private fun penalize(l: Link, delta: Int, kind: SecKind?, detail: String, src: String?) {
         if (kind != null) sec(kind, detail, l, src) else drops.merge(SecKind.MALFORMED.name, 1, Int::plus)   // unlogged sanity failure
-        if (l === qr) return   // U6: logged, nothing to penalise
+        if (pseudo(l)) return   // U6: logged, nothing to penalise
         l.score += delta
         if (l.score < 0 && links[l.id] === l) {
             l.peer?.let { guard.refused[it] = now() + C.REFUSE_MS }
@@ -536,7 +603,7 @@ class MeshNode(
         val asked = l.wanted.remove(mid)   // before any early return, so dropped envelopes cannot fill the 512 cap for good
         // U10: duplicates teach backup routes (same msgId means same signed core, so src is genuine).
         seen[mid]?.let {
-            it.have += l.id; if (l !== qr) routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false)
+            it.have += l.id; if (!pseudo(l)) routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false)
             if (!asked && treeOn(e)) prune(l)   // U9 rule 3
             if (asked && treeOn(e) && e.ttl > it.ttl) betterCopy(e, it)
             // A failover resend of a DM I ACKed: the same ACK bytes back on this link; old-path relays drop it as a dupe.
@@ -557,7 +624,7 @@ class MeshNode(
             if (treeOn(e) && e.type == EnvType.PRESENCE) seen[mid] = SeenEntry(l.id, null, e.type, e.ttl, e.hops + 1).also { it.have += l.id }
             return
         }
-        if (!asked && !l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
+        if (!asked && l !== bundle && !l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
         if (!asked && treeOn(e)) l.eager = true   // Plumtree: the link that pushed the first copy is in the tree
         val ann = missing.remove(mid)
         if (asked) syncRecovered++   // pulled by SYNC_WANT, or by GRAFT in TREE mode
@@ -611,7 +678,7 @@ class MeshNode(
         seen[mid] = SeenEntry(l?.id, dst, e.type, e.ttl, if (l == null) 0 else e.hops + 1).also { s -> l?.let { s.have += it.id } }
         if (e.type == EnvType.POST || e.type == EnvType.DM) guard.accepted[mid] = e.epoch
         lamport = maxOf(lamport, e.lamport)
-        if (l != null && l !== qr) routes.learn(src, l.id, e.hops, now)   // U6: no route back through a QR scan
+        if (l != null && !pseudo(l)) routes.learn(src, l.id, e.hops, now)   // U6: no route back through a QR scan or bundle
         val shownHops = if (mine) 0 else e.hops + 1
         when (e.type) {
             EnvType.PRESENCE -> { onPresence(e, src, now); forward(e) }

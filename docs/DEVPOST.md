@@ -33,11 +33,11 @@ The apps people reached for have broken in public. Bridgefy could be taken down 
 - **DM failover:** a DM with no receipt is resent on a backup route through a different first link.
 - **Built-in red-team buttons** (tamper, drop, flood, spoof, replay) so you can attack the mesh live and watch it hold.
 
-**Also:** missed messages catch up when a phone comes back in range; live statistics counted by the code (drops by kind, duplicates, delivery time); mission profiles that trade airtime against delivery speed; photo DMs; a QR hop that carries a short signed message between two phones with every radio off; notifications with inline reply.
+**Also:** missed messages catch up when a phone comes back in range; live statistics counted by the code (drops by kind, duplicates, delivery time); mission profiles that trade airtime against delivery speed; photo DMs; a "verified only" feed filter; a QR hop that carries a short signed message between two phones with every radio off; notifications with inline reply.
 
 **Browser guests.** An iPhone, or any phone without the app, joins through the host phone's hotspot and runs a full mesh client in the page: its own key, signed posts, encrypted DMs and receipts. It is a leaf, not a relay. It trusts the host for its code, and we say so.
 
-**Offline app sharing.** The host can hand the 2.4 MB Android app to a new phone without internet, through the share sheet or a download from the guest page, with a SHA-256 fingerprint to compare.
+**Offline app sharing.** The host can hand the 2.4 MB Android app to a new phone without internet, through the share sheet or a download from the guest page. The new app shows its SHA-256 fingerprints on first run to compare with the sharer's screen. "Invite guests" shows two QR codes: one joins the Wi-Fi, one opens the page.
 
 ## "Does it just spam messages to everyone?"
 

@@ -97,7 +97,7 @@ After Flood, B drops everything signed by A's key for 10 minutes. Nothing in the
 | Length | Driver does | Speaker says (exact lines) |
 |---|---|---|
 | 15 s | **Impersonation.** C changes its name to A's name. Point at B: C's row says "same name as a verified contact", `NAME_IMPERSONATION` in B's Security screen. Change it back. | "Names can be copied, keys cannot. B verified A in person, so it warns. It does not ban, because sharing a name is not proof." |
-| 20 s | **Browser guest.** B: Guest mode on, the iPhone scans the QR on B's Me tab, enters the PIN, sends C a DM. C replies. | "The iPhone has no app. The page gives it its own key, so it signs and decrypts its own messages. It trusts B for the code, and we say so in our threat model." |
+| 20 s | **Browser guest.** B: **Invite guests**. The iPhone scans QR 1 (joins B's Wi-Fi), then QR 2 (opens the page with the PIN), and sends C a DM. C replies. | "The iPhone has no app. The page gives it its own key, so it signs and decrypts its own messages. It trusts B for the code, and we say so in our threat model." |
 | 15 s | **Panic wipe.** C: Me tab, Panic wipe, type `WIPE`. Point at B: the conversation with C is gone, `PEER_REVOKED` logged; C has a new ID. | "If your phone is about to be taken, one word wipes it and asks your contacts to delete their copies. It is a request, not a guarantee." |
 | 15 s | **Numbers slide** (below) or `docs/NUMBERS.md`, 30-in-a-room rows. | "In our simulator, running our real code with 30 phones in a room, a direct message costs about 5 transmissions; plain flooding costs about 98." |
 | 15 s | **Failover**, laptop diamond (see prep): tick **Drop while relaying** on the node A's route to D uses; A DMs D; after about 5 s "Delivered ... via" the other node and `ROUTE_FAILED` on A. | "These are four desktop nodes running the same code over TCP. A relay drops the message, the receipt never comes, A resends on a backup route." |
@@ -165,7 +165,7 @@ Use `127.0.0.1`, not `localhost` (on this laptop `localhost` can reach another s
 
 ## Optional extras (only if time is left)
 
-- **Guest join** (prep for the second-minute guest step): B turns on its hotspot (16 or more random characters as the Wi-Fi password, not the guest PIN) and Guest mode. The iPhone joins the hotspot, scans the QR on B's Me tab and opens the full web client in Safari with its own key. `http://<B's hotspot IP>:8090/lite` is the old read-only page, whose posts show as "guest of B". The Me tab of the web client also offers the APK download with its SHA-256.
+- **Guest join** (prep for the second-minute guest step): on B tap **Invite guests**. It starts a local-only hotspot (or type B's own hotspot password: 16 or more random characters, not the guest PIN) and shows QR 1, the Wi-Fi join code, and QR 2, `http://<B's IP>:8090/?pin=...`, with guest mode switched on. The iPhone camera scans QR 1, then QR 2, and opens the full web client in Safari with its own key. `http://<B's hotspot IP>:8090/lite` is the old read-only page, whose posts show as "guest of B". The Me tab of the web client also offers the APK download with its SHA-256.
 - **Photo DM:** A sends C a photo (downscaled to under 40 KB, one frame).
 - **Catch-up after reconnect:** turn Bluetooth off on C, A posts "C, are you there?", turn Bluetooth back on. The post appears on C within about 20 s. Without touching the phone:
   ```
