@@ -17,7 +17,7 @@ fi
 command -v jq >/dev/null 2>&1 || { echo "jq not found"; exit 2; }
 
 snap() { curl -s --max-time 5 "http://127.0.0.1:$1/api/snapshot"; }
-cmd() { curl -s --max-time 5 -X POST "http://127.0.0.1:$1/api/cmd" -d "$2" >/dev/null; }
+cmd() { curl -s --max-time 5 -X POST -H "X-OM: 1" "http://127.0.0.1:$1/api/cmd" -d "$2" >/dev/null; }
 # q <port> <jq filter> [jq args...]: true when the filter yields true on that node's snapshot.
 q() { local p=$1; shift; snap "$p" | jq -e "$@" >/dev/null 2>&1; }
 val() { local p=$1; shift; snap "$p" | jq -r "$@" 2>/dev/null | tr -d '\r'; }

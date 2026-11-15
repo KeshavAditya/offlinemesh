@@ -404,7 +404,7 @@ function httpBackend() {
     },
     async send(cmd) {
       let r;
-      try { r = await fetch('/api/cmd', { method: 'POST', body: JSON.stringify(cmd) }); } catch (e) { throw new Error(String(e)); }
+      try { r = await fetch('/api/cmd', { method: 'POST', headers: { 'X-OM': '1' }, body: JSON.stringify(cmd) }); } catch (e) { throw new Error(String(e)); }
       if (!r.ok) throw new Error(r.status === 429 ? 'slow down' : await r.text());
       // No event reports a profile change, so fetch the new values and hand them over as a snapshot.
       if (cmd.t === 'profile') emit(Object.assign(await (await fetch('/api/snapshot')).json(), { t: 'snapshot' }));
