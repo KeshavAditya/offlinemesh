@@ -238,7 +238,7 @@ function show(id) {
   if (id === 'chats' && open) dmUnread[uk(open.kind, open.id)] = 0;
   render(); if (id === 'feed' || (id === 'chats' && open)) toBottom(); else scrollTo(0, 0);
 }
-function openChat(kind, id) { open = { kind, id }; dmUnread[uk(kind, id)] = 0; $('dmErr').textContent = ''; render(); toBottom(); $('dmText').focus(); }
+function openChat(kind, id) { open = { kind, id }; dmUnread[uk(kind, id)] = 0; $('dmErr').textContent = ''; render(); toBottom(); if (matchMedia('(pointer: fine)').matches) $('dmText').focus(); }
 function closeChat() { open = null; render(); scrollTo(0, 0); }
 
 // Compose bars: Enter sends, button disabled while empty or too long, byte counter from 80% of the limit.

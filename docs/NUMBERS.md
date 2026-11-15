@@ -6,12 +6,12 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 
 | What | Result |
 |---|---|
-| `./gradlew :core:test` (v2 branch) | 108 tests, all pass, none ignored |
+| `./gradlew :core:test` (v2 branch) | 108 tests, all pass, none ignored (lan 2, uiserver 10) |
 | of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 19, all pass |
 | `scripts/e2e.sh` on 3 desktop nodes (TCP, one laptop) | items 1-6 PASS (run twice) |
 | `scripts/e2e.sh` on 3 Android emulators (API 36, emulated Bluetooth) | items 1-6 PASS |
 | `scripts/e2e.sh` on 5 desktop nodes (`NODES=5`, TCP, one laptop, in a line) | items 1-8 PASS; item 7 (group of all 5) showed `Delivered to 4 of 4` in about 1 s |
-| `scripts/e2e.sh` on 4 Android emulators | **TODO: results being collected now, fill in here** |
+| `scripts/e2e.sh` on 4 Android emulators | items 1-8 PASS (fresh deploy, no manual mutes; group notification shown on C) |
 | v2 on 4 emulators: `e2e.sh` + persistent-link check (10 DMs A to C, `linkUps` must not rise) | **TODO: being measured now by another helper, fill in here** |
 | `scripts/e2e.sh` on the 3 real phones | **not run yet** |
 
@@ -73,7 +73,7 @@ A group message is sent as one ordinary DM to each other member, so it costs **(
 ## Still to measure
 
 - PoW time on each real phone.
-- `e2e.sh` on 4 emulators, and v2 on 4 emulators with the persistent-link check (TODOs above).
+- v2 on 4 emulators with the persistent-link check (TODO above).
 - `e2e.sh` on the three real phones, and real Bluetooth range and timing.
 
 ## Forwarding benchmark in plain words

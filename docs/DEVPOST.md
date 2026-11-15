@@ -43,7 +43,7 @@ No. Direct messages are routed: each phone learns from signed beacons which neig
 - **Desktop node** over TCP, used as the fallback demo and for testing.
 - **Simulator:** an in-memory network with virtual time runs the real core code. 108 core tests cover the acceptance checks plus red-team cases: forged receipts, presence spam, slot reuse across restarts, oversized and truncated frames, sync amplification, impersonation, panic wipe, failover.
 - **Benchmark:** `./gradlew :core:bench` compares plain flooding, our routing and the tree on four topologies and writes the table into `docs/NUMBERS.md`, so every figure we quote traces to code.
-- One acceptance script (`scripts/e2e.sh`) drives the nodes over HTTP and checks the goals: two-hop DM, relay cannot read it, post arrives once, tampering rejected, flood banned, catch-up after reconnect.
+- One acceptance script (`scripts/e2e.sh`) drives three or more nodes over HTTP and checks eight goals: two-hop DM, relay cannot read it, post arrives once, tampering rejected, flood banned, catch-up after reconnect, group message delivered to every member, post reaches every node.
 
 ## Challenges we ran into
 
@@ -55,7 +55,7 @@ No. Direct messages are routed: each phone learns from signed beacons which neig
 
 ## Accomplishments we're proud of
 
-- All six acceptance checks pass on three desktop nodes and on three Android emulators talking over emulated Bluetooth.
+- All eight acceptance checks pass on desktop nodes (3, 4 and 5) and on four Android emulators talking over emulated Bluetooth.
 - Five desktop nodes pass all eight checks, including a group of all five delivered to 4 of 4 in about a second.
 - One public post on a 25-phone simulated mesh with 40 links took 41 transmissions, about one per link.
 - Every efficiency figure we quote comes from a generated benchmark table, including the ones that do not flatter us.
