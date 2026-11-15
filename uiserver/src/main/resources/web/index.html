@@ -88,6 +88,7 @@ li + li, .sw + .sw, .sw + ul, tr + tr td { border-top: 1px solid var(--line); }
 @media (hover: hover) { .chat:hover { background: var(--sur); } }
 .main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.line > :last-child { flex: none; }   /* the time: a long title is cut short, the time never wraps */
 .prev { color: var(--mut); }
 .rowc, .post, .ev { padding: 10px 0; overflow-wrap: anywhere; }
 .post { display: flex; gap: 12px; align-items: flex-start; }
