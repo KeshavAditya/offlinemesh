@@ -72,7 +72,7 @@ class InviteDialog(private val a: Activity, private val enableGuest: () -> Unit)
     private fun toggleHotspot() {
         lohs?.let { lohsReservation?.close(); lohsReservation = null; lohs = null; qrs.removeAllViews(); refreshButton(); status.text = "Hotspot stopped."; return }
         val need = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
-        if (a.checkSelfPermission(need) != PackageManager.PERMISSION_GRANTED) { a.requestPermissions(arrayOf(need), PERM_REQ); return }
+        if (a.checkSelfPermission(need) != PackageManager.PERMISSION_GRANTED) { a.requestPermissions(if (Build.VERSION.SDK_INT >= 33) arrayOf(need) else arrayOf(need, Manifest.permission.ACCESS_COARSE_LOCATION), PERM_REQ); return }
         startHotspot()
     }
 
