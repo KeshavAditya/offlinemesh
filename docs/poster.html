@@ -60,6 +60,11 @@
   .num span { display: block; font-size: 15.0pt; line-height: 1.3; margin-top: 2.1mm; color: var(--ink); }
   .num.wide { grid-column: span 2; }
   .num.wide strong { font-size: 36.0pt; }
+  .shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6.4mm; align-items: start; }
+  .shots figure { margin: 0; }
+  .shots img { display: block; width: 100%; height: 62mm; object-fit: cover; object-position: top; border: 0.7mm solid var(--rule); border-radius: 3.5mm; }
+  .shots figcaption { font-size: 14.4pt; line-height: 1.25; margin-top: 2.1mm; color: var(--muted); }
+  .feat li { font-size: 17.4pt; margin-bottom: 1.4mm; }
   .src { font-size: 13.2pt; color: var(--muted); margin-top: 2.8mm; line-height: 1.35; }
 
   footer { display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 9.9mm; align-items: stretch; background: var(--ink); color: #fff; border-radius: 5.7mm; padding: 8.5mm 11.3mm; }
@@ -96,7 +101,8 @@
       </section>
     </div>
 
-    <section class="how">
+    <div class="col">
+    <section class="how" style="flex: 1 1 0; min-height: 0;">
       <h2>How it works</h2>
       <svg viewBox="0 0 760 400" role="img" aria-label="Phone A sends over Bluetooth to phone B, the relay. B passes it over Wi-Fi to a laptop. A browser guest joins B's hotspot.">
         <defs>
@@ -150,6 +156,12 @@
         <li>A phone that comes back in range catches up on what it missed.</li>
       </ol>
     </section>
+    <div class="shots">
+      <figure><img src="img/chat-roll-call.png" alt="Group chat: an I'm safe message delivered, and a reply that came 2 hops via another phone"><figcaption><b>Roll call.</b> "I'm safe" in a group; the reply shows its hop path.</figcaption></figure>
+      <figure><img src="img/attack-console.png" alt="Attack console with Flood, Spoof, Replay and Tamper buttons and blocked counters"><figcaption><b>Attack console.</b> Attack live; other phones count the blocks.</figcaption></figure>
+      <figure><img src="img/mesh-map.png" alt="Network map: this phone, one neighbour at 1 hop and a second phone at 2 hops"><figcaption><b>Mesh map.</b> Who is reachable, and how many hops away.</figcaption></figure>
+    </div>
+    </div>
 
     <div class="col">
       <section>
@@ -159,20 +171,29 @@
           <div class="num"><strong>~1</strong><span>send per link for a public post: 40 links cost 40 to 42 (simulator)</span></div>
           <div class="num"><strong>6&ndash;9 ms</strong><span>proof of work per post on a laptop core</span></div>
           <div class="num"><strong>8 / 8</strong><span>end-to-end checks pass on 4 Android emulators over Bluetooth</span></div>
-          <div class="num"><strong>108</strong><span>automated tests pass, 19 of them attack tests</span></div>
-          <div class="num"><strong>&lt; 1 s</strong><span>to relink a Bluetooth link after it drops (emulators)</span></div>
-          <div class="num"><strong>&le; 20 s</strong><span>for a missed post to arrive after reconnecting</span></div>
+          <div class="num"><strong>157</strong><span>tests pass, 29 of them red-team attacks</span></div>
         </div>
-        <p class="src">From docs/NUMBERS.md. Simulator runs use the real app code in virtual time. Phone timings not measured yet.</p>
+        <p class="src">From docs/NUMBERS.md. Simulator: real app code in virtual time. Phone timings not measured yet.</p>
+      </section>
+      <section>
+        <h2>In the demo build</h2>
+        <ul class="feat">
+          <li><b>Browser guests:</b> any phone, no app</li>
+          <li><b>Two-QR join:</b> Wi-Fi, then the page</li>
+          <li><b>Attack console</b> with live counters</li>
+          <li><b>"I'm safe" roll call</b>, group photos</li>
+          <li><b>Mesh map</b> with hop paths</li>
+          <li><b>2.4 MB app</b> shared offline</li>
+        </ul>
       </section>
     </div>
   </main>
 
   <footer>
     <h2>Try it</h2>
-    <div class="step"><i>1</i><div><b>Join our hotspot</b><p>Connect your phone's Wi-Fi to the hotspot on our relay phone. No internet involved.</p></div></div>
-    <div class="step"><i>2</i><div><b>Open the page</b><p>Scan the QR code on the relay phone, or open the address shown under it, in any browser.</p></div></div>
-    <div class="step"><i>3</i><div><b>Or get the app</b><p>Android: ask us to share the app with you offline, phone to phone. Then you are a full node.</p></div></div>
+    <div class="step"><i>1</i><div><b>Join the Wi-Fi</b><p>Scan the first QR code on our relay phone to join its hotspot. No internet involved.</p></div></div>
+    <div class="step"><i>2</i><div><b>Open the page</b><p>Scan the second QR code. The chat runs in your browser, with your own key.</p></div></div>
+    <div class="step"><i>3</i><div><b>Or get the app</b><p>Android: we share the 2.4 MB app with you offline, phone to phone. Then you are a full node.</p></div></div>
   </footer>
 </div>
 </body>
