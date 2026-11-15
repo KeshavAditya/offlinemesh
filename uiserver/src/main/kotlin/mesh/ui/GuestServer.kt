@@ -147,7 +147,9 @@ class GuestServer(
         thread(isDaemon = true, name = "guest-accept") {
             while (true) {
                 val c = try { f.accept() } catch (e: IOException) { break }
-                thread(isDaemon = true, name = "guest-conn") { splice(c, inner) }
+                val ip = c.inetAddress.hostAddress
+                if (!admit(ip)) { c.close(); continue }
+                thread(isDaemon = true, name = "guest-conn") { try { splice(c, inner) } finally { release(ip) } }
             }
         }
     }
@@ -158,19 +160,34 @@ class GuestServer(
      * anything else is copied both ways to Ktor, with the guest's IP kept in [peers] for the PIN and rate limits.
      */
     private fun splice(c: Socket, inner: Int): Unit = c.use {
-        val first = try { c.soTimeout = 30_000; c.getInputStream().read() } catch (e: IOException) { -1 }
+        val first = try { c.soTimeout = FIRST_BYTE_MS; c.getInputStream().read() } catch (e: IOException) { -1 }
         if (first == -1 || first == 0x16) return
-        c.soTimeout = 0
+        // Idle timeout per direction reclaims half-open sockets; a live /mesh link has traffic both ways well inside 45 s.
+        c.soTimeout = IDLE_MS
         Socket(InetAddress.getLoopbackAddress(), inner).use { s ->
+            s.soTimeout = IDLE_MS
             peers[s.localPort] = c.inetAddress.hostAddress
             try {
                 thread(isDaemon = true, name = "guest-up") {
-                    try { s.getOutputStream().write(first); c.getInputStream().copyTo(s.getOutputStream()); s.shutdownOutput() } catch (e: IOException) {}
+                    // On error or timeout close both so the other direction's read ends too; on EOF half-close like TCP.
+                    try { s.getOutputStream().write(first); c.getInputStream().copyTo(s.getOutputStream()); s.shutdownOutput() }
+                    catch (e: IOException) { s.close(); c.close() }
                 }
                 try { s.getInputStream().copyTo(c.getOutputStream()) } catch (e: IOException) {}
             } finally { peers.remove(s.localPort) }
         }
     }
+
+    private val open = HashMap<String, Int>() // guest IP -> spliced sockets; guarded by itself
+    private var total = 0
+
+    /** Per-IP and global caps so a guest cannot exhaust threads and file descriptors by opening sockets. */
+    private fun admit(ip: String) = synchronized(open) {
+        val n = open[ip] ?: 0
+        (total < MAX_CONNS && n < MAX_CONNS_PER_IP).also { if (it) { open[ip] = n + 1; total++ } }
+    }
+
+    private fun release(ip: String) = synchronized(open) { total--; open.compute(ip) { _, n -> if (n!! > 1) n - 1 else null } }
 
     fun stop() {
         front?.close()
@@ -193,6 +210,11 @@ class GuestServer(
 }
 
 private const val MAX_BODY = 4096
+// Above WebTransport's 16-link cap plus ~6 page/asset loads, so the link cap (1013) stays reachable; 2 threads per socket.
+internal const val MAX_CONNS_PER_IP = 24
+internal const val MAX_CONNS = 96
+private const val FIRST_BYTE_MS = 5_000
+private const val IDLE_MS = 120_000
 private val JS = listOf("webbackend.js", "meshnode.js", "meshcore.js", "noble.js")
 private val APK_TYPE = ContentType.parse("application/vnd.android.package-archive")
 
