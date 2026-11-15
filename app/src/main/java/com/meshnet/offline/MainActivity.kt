@@ -28,6 +28,7 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private var asked = false; private var askedBt = false   // ask once per launch; a permanent denial must not loop dialogs
     private var loaded = false
+    private var loggedSecure = false
     private var pick: ValueCallback<Array<Uri>>? = null   // pending <input type=file> from the page
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -45,6 +46,7 @@ class MainActivity : Activity() {
             addView(toggle("Guest mode", "guest", false))
             addView(Button(this@MainActivity).apply { text = "QR hop"; setOnClickListener { startActivity(Intent(this@MainActivity, QrActivity::class.java)) } })
             addView(Button(this@MainActivity).apply { text = "Share app"; setOnClickListener { shareApp() } })
+            addView(Button(this@MainActivity).apply { text = "Keep alive"; setOnClickListener { KeepAlive.dialog(this@MainActivity) } })
             addView(status)
         }
         // A fold or rotation recreates the activity; the service keeps running and the page re-renders from /ws's snapshot.
@@ -55,6 +57,9 @@ class MainActivity : Activity() {
                     pick?.onReceiveValue(null); pick = cb
                     val i = Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
                     return try { startActivityForResult(i, PICK); true } catch (e: Exception) { pick = null; false }
+                }
+                override fun onProgressChanged(v: WebView, p: Int) {   // research row 4(c): a pitch fact, logged once
+                    if (p == 100 && !loggedSecure) { loggedSecure = true; v.evaluateJavascript("window.isSecureContext") { android.util.Log.i(TAG, "webview isSecureContext=$it") } }
                 }
             }
         }
@@ -92,6 +97,12 @@ class MainActivity : Activity() {
         status.text = Perms.blocker(this) ?: ""
         if (!btGranted) return   // plan 8: start the service only once permissions are granted
         startForegroundService(Intent(this, MeshService::class.java))
+        // First run only (the Keep alive button asks again): a sleeping phone was the one real-phone failure.
+        val prefs = getSharedPreferences(MeshService.PREFS, MODE_PRIVATE)
+        if (Perms.blocker(this) == null && !prefs.getBoolean("batteryAsked", false)) {
+            prefs.edit().putBoolean("batteryAsked", true).apply()
+            if (!KeepAlive.exempt(this)) KeepAlive.request(this)
+        }
         MeshService.onListening = { runOnUiThread { load() } }
         if (MeshService.listening || MeshService.failed != null) load()
     }
