@@ -9,6 +9,7 @@ import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import * as m from '../../main/resources/web/meshcore.js';
+import { createWebNode } from '../../main/resources/web/meshnode.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const vecDir = path.join(root, 'core/build/web-vectors');
@@ -17,6 +18,31 @@ const pattern = (n) => Uint8Array.from({ length: n + 1 }, (_, i) => (i * 7) & 0x
 const roundTrip = (f) => { const b = m.encodeFrame(f); assert.deepEqual(m.encodeFrame(m.decodeFrame(b)), b); return m.decodeFrame(b); };
 
 // ---- JS only ----
+test('normName: same cases as core RedTeamTest T7', () => {
+  // case, spaces, RTL override, zero-width space, Cyrillic A, fullwidth letters, capital I for l
+  for (const n of ['alice', 'Alice ', ' ALICE', 'Ali ce', '\u202eAlice', 'Ali\u200bce', '\u0410lice', '\uff21\uff4c\uff49\uff43\uff45', 'AIice'])
+    assert.equal(m.normName(n), m.normName('Alice'), JSON.stringify(n));
+  assert.notEqual(m.normName('Bob'), m.normName('Alice'));
+});
+
+test('T3: a handshake frame on a bound link closes it', () => {
+  for (const late of [(h) => ({ t: 'hello', pub: h.pub, nonce: m.randomBytes(16) }), () => ({ t: 'helloAuth', sig: new Uint8Array(64).fill(1) })]) {
+    let sock = null; const sent = [];
+    class FakeWS { constructor() { sock = this; this.readyState = 1; } send(b) { sent.push(m.decodeFrame(b)); } close() { this.readyState = 3; this.onclose?.(); } }
+    const web = createWebNode({ url: 'ws://x/mesh', storage: new Map(), WebSocket: FakeWS });
+    const host = m.createIdentity(), push = (f) => sock.onmessage({ data: m.encodeFrame(f).slice().buffer });
+    sock.onopen();
+    const hello = sent.find((f) => f.t === 'hello');
+    push({ t: 'hello', pub: host.pub, nonce: m.randomBytes(16) });
+    push({ t: 'helloAuth', sig: m.helloSign(host, hello.nonce, m.nodeId(hello.pub)) });
+    assert.ok(web.connected, 'handshake did not complete');
+    push(late(host));
+    assert.equal(web.connected, false, `${late(host).t} on a bound link was ignored`);
+    assert.ok(web.snapshot().security.some((e) => e.kind === 'LINK_CLOSED' && e.detail === 'handshake frame on a bound link'));
+    web.stop();
+  }
+});
+
 test('identity export/import', () => {
   const a = m.createIdentity();
   const b = m.importIdentity(JSON.parse(JSON.stringify(m.exportIdentity(a))));

@@ -109,6 +109,12 @@ export function openDm(me, e, peerPubDer) {
   } catch { return null; }
 }
 
+// U8, same as core MeshNode.normName: Cyrillic a e o p c y x i j s d palochka, Greek alpha omicron nu rho tau iota kappa upsilon, then 0 l 1
+const LOOK_FROM = 'аеорсухіјѕԁӏαονρτικυ0l1', LOOK_TO = 'aeopcyxijsdiaovptikuoii';
+/** U8: name key ignoring case, all spaces, invisible/bidi characters (U+200B, U+202E), width (NFKC) and common look-alikes. */
+export const normName = (s) => Array.from(s.normalize('NFKC').toLowerCase().replace(/[\s\x1c-\x1f\p{Cf}]/gu, ''),
+  (c) => { const i = LOOK_FROM.indexOf(c); return i < 0 ? c : LOOK_TO[i]; }).join('');
+
 const HELLO_TAG = utf8.encode('offlinemesh-hello-v1');
 /** 5.5 step 2: sig over "offlinemesh-hello-v1" || peerNonce || myNodeId || peerNodeId. */
 export const helloSign = (me, peerNonce, peerId) => sign(me.priv, concat(HELLO_TAG, peerNonce, me.id, peerId));
