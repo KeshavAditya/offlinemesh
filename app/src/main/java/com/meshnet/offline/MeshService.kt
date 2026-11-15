@@ -73,11 +73,18 @@ class MeshService : Service() {
         ble = Switchable("ble") { BleL2capTransport(this, longRange) }
         lan = Switchable("lan") { LanTransport(LAN_PORT, emptyList(), prefix) }
         node = MeshNode(filesDir, ExecutorScheduler(), listOf(ble, lan, web))
-        node.addListener { if (it is MeshEvent.Reset) thread(name = "mesh-refresh") { refreshTransports() } }
+        var selfId: String? = null
+        node.addListener { if (it is MeshEvent.Reset) thread(name = "mesh-refresh") {
+            // A panic wipe (new identity, unlike a peer revoke) also forgets the saved hotspot password.
+            val id = node.snapshot().self.id
+            if (selfId != null && id != selfId) getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("inviteSsid").remove("invitePass").apply()
+            selfId = id
+            refreshTransports()
+        } }
         ui = UiServer(node, UI_PORT) { guest }
         dms = DmNotifier(this, node).also { node.addListener(it::onEvent) }
         thread(name = "mesh-start") {
-            node.start()
+            node.start(); selfId = node.snapshot().self.id
             longRange = codedOk && node.snapshot().profileValues.longRange
             applyPrefs()
             // Profile changes raise no event; only a coded-capable adapter needs to follow them.

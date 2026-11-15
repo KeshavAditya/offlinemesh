@@ -19,7 +19,8 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <application android:label="OfflineMesh" android:theme="@android:style/Theme.Material.Light"
+    <application android:label="OfflineMesh" android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules" android:fullBackupContent="@xml/backup_rules" android:theme="@android:style/Theme.Material.Light"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
