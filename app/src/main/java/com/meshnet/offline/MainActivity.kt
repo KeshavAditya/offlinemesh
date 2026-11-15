@@ -2,8 +2,10 @@ package com.meshnet.offline
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -16,6 +18,9 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
+import androidx.core.content.FileProvider
+import java.io.File
+import java.security.MessageDigest
 
 /** Settings row (transport switches + status) above a WebView of the node's UI on 127.0.0.1:8080. */
 class MainActivity : Activity() {
@@ -39,6 +44,7 @@ class MainActivity : Activity() {
             addView(toggle("Bluetooth", "ble", true)); addView(toggle("Wi-Fi LAN", "lan", false))
             addView(toggle("Guest mode", "guest", false))
             addView(Button(this@MainActivity).apply { text = "QR hop"; setOnClickListener { startActivity(Intent(this@MainActivity, QrActivity::class.java)) } })
+            addView(Button(this@MainActivity).apply { text = "Share app"; setOnClickListener { shareApp() } })
             addView(status)
         }
         // A fold or rotation recreates the activity; the service keeps running and the page re-renders from /ws's snapshot.
@@ -88,6 +94,24 @@ class MainActivity : Activity() {
         startForegroundService(Intent(this, MeshService::class.java))
         MeshService.onListening = { runOnUiThread { load() } }
         if (MeshService.listening || MeshService.failed != null) load()
+    }
+
+    /** Shows this APK's signing-cert SHA-256 (the recipient compares it with theirs), then sends the APK through the share sheet (Quick Share, Bluetooth: no internet). */
+    private fun shareApp() {
+        val cert = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo!!.apkContentsSigners[0]
+        val sha = MessageDigest.getInstance("SHA-256").digest(cert.toByteArray()).joinToString(":") { "%02X".format(it) }
+        android.util.Log.i(TAG, "share app: cert sha256 $sha")
+        AlertDialog.Builder(this).setTitle("Share OfflineMesh")
+            .setView(TextView(this).apply { text = "Signing certificate SHA-256 (must match on both phones):\n\n$sha";setTextIsSelectable(true); setPadding(48, 24, 48, 0) })
+            .setNegativeButton("Close", null)
+            .setPositiveButton("Share APK") { _, _ ->
+                val apk = File(cacheDir, "apk").apply { mkdirs() }.resolve("OfflineMesh.apk")
+                File(applicationInfo.sourceDir).copyTo(apk, overwrite = true)
+                val uri = FileProvider.getUriForFile(this, "$packageName.files", apk)
+                val send = Intent(Intent.ACTION_SEND).setType("application/vnd.android.package-archive")
+                    .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                startActivity(Intent.createChooser(send, "Share OfflineMesh"))
+            }.show()
     }
 
     private fun load() {
