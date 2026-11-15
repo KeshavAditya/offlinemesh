@@ -564,7 +564,7 @@ function render() {
   $('back').hidden = !stack.length;
   $('title').textContent = convo ? (gq ? gname(open.id) : name(open.id)) : cur === 'info' ? (gq ? 'Group info' : 'Contact info') : TITLE[cur];
   $('chatVf').hidden = !(convo && c.verified);
-  $('sub').textContent = !convo ? '' : gq ? (g ? g.members.length + ' members' : 'You left this group') : route(c) + (c.verified ? ' · verified' : ' · not verified');
+  $('sub').textContent = !convo ? '' : gq ? (g ? g.members.length + ' members' : 'You are no longer in this group') : route(c) + (c.verified ? ' · verified' : ' · not verified');
   $('infoBtn').hidden = !convo; $('nlinks').hidden = convo;
   $('chatWarn').textContent = !convo ? '' : gq ? late(g) : flags(c);
   $('nlinks').textContent = linksText();
@@ -626,7 +626,7 @@ function renderChats() {
     if (when(r) < 0 && !fresh) { fresh = true; ul.appendChild(el('li', 'In range, no chat yet', 'sub')); }
     b.onclick = () => openChat(r.kind, r.id);
     // Second line: the last message, or (no message yet) how far away the person is
-    const prev = m ? (m.mine ? 'You: ' : gq ? name(m.from) + ': ' : '') + cap(said(m), 80) : !gq ? route(c) : g ? g.members.length + ' members' : 'You left this group';
+    const prev = m ? (m.mine ? 'You: ' : gq ? name(m.from) + ': ' : '') + cap(said(m), 80) : !gq ? route(c) : g ? g.members.length + ' members' : 'You are no longer in this group';
     const nm = el('b', r.title);
     if (c.verified) nm.appendChild(vf());
     add(b, add(el('span', null, 'main'),
@@ -720,7 +720,7 @@ function sw(label, hint, checked, onchange) {
 function renderInfo() {
   const id = open.id, gq = open.kind === 'group', g = gq && grp(id), c = !gq && contact(id) || {};
   $('iName').replaceChildren(gq ? gname(id) : name(id), ...c.verified ? [vf()] : []);
-  $('iSub').textContent = gq ? (g ? 'Group · ' + g.members.length + ' members' : 'You left this group') : route(c) + ' · ' + (c.linked ? 'linked' : 'not linked');
+  $('iSub').textContent = gq ? (g ? 'Group · ' + g.members.length + ' members' : 'You are no longer in this group') : route(c) + ' · ' + (c.linked ? 'linked' : 'not linked');
   $('iWarn').textContent = flags(c);
   $('iContact').hidden = gq; $('iGroup').hidden = !gq;
   if (!gq) {
