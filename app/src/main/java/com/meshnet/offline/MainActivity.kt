@@ -46,10 +46,12 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         secure(window)
-        // System bars in the page's light background (Theme.Material.Light keeps the WebView's colour scheme light).
-        window.statusBarColor = Color.WHITE; window.navigationBarColor = Color.WHITE
+        // System bars in the page's background (--bg in index.html) for the scheme the WebView shows; a night switch recreates the activity.
+        val night = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val bars = if (night) Color.rgb(0x0f, 0x15, 0x14) else Color.WHITE
+        window.statusBarColor = bars; window.navigationBarColor = bars
         @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        window.decorView.systemUiVisibility = if (night) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         val prefs = getSharedPreferences(MeshService.PREFS, MODE_PRIVATE)
         status = TextView(this).apply { setPadding(48, 48, 48, 48); visibility = View.GONE }   // only until the page is up
         // A fold or rotation recreates the activity; the service keeps running and the page re-renders from /ws's snapshot.
