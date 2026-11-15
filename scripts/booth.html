@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OfflineMesh Booth</title>
+<!-- Three node UIs side by side for the projector. Opened by scripts/booth.sh; ports come from ?p=8081,8082,8083. -->
+<style>
+  :root { --paper: #f7f4ec; --ink: #13161b; --muted: #4a4f58; --accent: #d9481c; --rule: #d9d3c4; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif; padding: 12px 16px; height: 100vh; display: flex; flex-direction: column; }
+  h1 { font-size: 22px; font-weight: 800; letter-spacing: -.3px; margin-bottom: 10px; }
+  h1 span { color: var(--accent); }
+  h1 small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 10px; }
+  main { flex: 1; min-height: 0; display: flex; gap: 20px; justify-content: center; }
+  section { display: flex; flex-direction: column; width: 400px; max-width: calc((100vw - 72px) / 3); min-width: 0; }
+  h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px; }
+  h2 a { font-size: 13px; font-weight: 400; color: var(--muted); }
+  iframe { flex: 1; width: 100%; min-height: 0; border: 3px solid var(--ink); border-radius: 18px; background: #fff; }
+</style>
+</head>
+<body>
+<h1>Offline<span>Mesh</span><small>three nodes, live</small></h1>
+<main id="nodes"></main>
+<script>
+  const ports = (new URLSearchParams(location.search).get("p") || "8081,8082,8083").split(",").filter(p => /^\d+$/.test(p)).slice(0, 3);
+  const labels = ["A", "B relay", "C"];
+  for (const [i, p] of ports.entries()) {
+    const url = `http://127.0.0.1:${p}/`;
+    const s = document.createElement("section");
+    s.innerHTML = `<h2>${labels[i]} <a href="${url}" target="_blank">:${p}</a></h2><iframe src="${url}" title="Node ${labels[i]}"></iframe>`;
+    document.getElementById("nodes").append(s);
+  }
+</script>
+</body>
+</html>
