@@ -170,6 +170,9 @@ label.sw { display: inline-flex; align-items: center; gap: 8px; min-height: 44px
 .sw input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); }
 .sw input:checked { background: var(--acc); }
 .sw input:checked::after { left: 19px; }
+/* Me > Settings (Android app only): one .set-row per native switch or screen */
+.set-row + .set-row { border-top: 1px solid var(--line); }
+.set-row .chat { min-height: 60px; padding: 8px; border-radius: 0; font-size: 15px; }
 .guest { border: 1px solid var(--acc); border-radius: 12px; padding: 12px; margin-top: 16px; }
 .guest h2 { margin-top: 0; }
 .guest b.mono { font-size: 22px; letter-spacing: .15em; }
@@ -225,7 +228,7 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
       <button data-s="me" onclick="show('me')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20.500c0-4 3.6-6.5 8-6.500s8 2.5 8 6.5"/></svg>Me<span class="n" id="n-me"></span></button>
     </nav>
   </div>
-  <div id="conn" role="status" hidden>Reconnecting…</div>
+  <div id="conn" role="status" hidden></div>
   <button id="alert" onclick="goSec()" aria-label="Open the security log" hidden></button>
 </header>
 
@@ -274,6 +277,11 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
     </div>
     <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
     <img id="myQr" class="qr" width="176" height="176" alt="QR code of my fingerprint">
+  </div>
+  <!-- Android app only (NAT in the script): the switches and screens that live in native code. Hidden in a browser. -->
+  <div id="nat" hidden>
+    <h2>Settings</h2>
+    <ul id="natRows" class="box"></ul>
   </div>
   <div id="guest"></div>
   <div id="bundle" hidden>
@@ -495,6 +503,7 @@ function push(s, kind, id, replace) {
   nav();
 }
 function back() { history.state && history.state.n === stack.length ? history.back() : (stack.pop(), nav()); }   // our history entry: let popstate close it
+function omBack() { return !!stack.length && (back(), true); }   // Android system Back (MainActivity): false means leave the app
 onpopstate = e => { const n = e.state && e.state.n || 0; if (n < stack.length) { stack.length = n; nav(); } };
 function openChat(kind, id, replace) { $('dmErr').textContent = ''; push('convo', kind, id, replace); if (matchMedia('(pointer: fine)').matches) $('dmText').focus(); }
 function info(kind = open.kind, id = open.id) { $('gView').open = false; push('info', kind, id); }
@@ -944,8 +953,26 @@ function guest() {
 }
 setInterval(guest, 3000); guest();
 
-// Data-mule bundle. Hidden in the app's WebView ("; wv)" in its user agent): it has no download handler and native Bundle buttons.
-$('bundle').hidden = !backend.bundle || /; wv\)/.test(navigator.userAgent);
+// Android app only: MainActivity gives the page OMNative { state() -> JSON, set(key, on), open(what) }. In a browser Settings stays hidden.
+const NAT = window.OMNative;
+let up = true, blocker = '';   // blocker: why the mesh cannot run ("Turn on Bluetooth."), from the app
+function bar() { $('conn').textContent = up ? blocker : 'Reconnecting…'; $('conn').hidden = up && !blocker; }
+function omNative() {   // the app calls this when a switch or the blocker changed on its side
+  const st = JSON.parse(NAT.state());
+  for (const c of $('natRows').querySelectorAll('input')) c.checked = !!st[c.name];
+  blocker = st.status || ''; bar();
+}
+if (NAT) {
+  $('natRows').replaceChildren(
+    ...[['ble', 'Bluetooth'], ['lan', 'Wi-Fi LAN'], ['guest', 'Guest mode'], ['secure', 'Block screenshots']]
+      .map(([k, t]) => { const l = sw(t, '', false, on => NAT.set(k, on)); l.firstChild.name = k; return add(el('li', null, 'set-row'), l); }),
+    ...[['invite', 'Invite guests'], ['qr', 'QR hop'], ['share', 'Share app'], ['bundle', 'Bundle'], ['keepalive', 'Keep alive']]
+      .map(([k, t]) => { const b = el('button', null, 'chat'); b.onclick = () => NAT.open(k); return add(el('li', null, 'set-row'), add(b, el('span', t, 'main'), chev())); }));
+  $('nat').hidden = false; omNative();
+}
+
+// Data-mule bundle in the page. Not in the app: its WebView has no download handler, and Settings has the native Bundle row.
+$('bundle').hidden = !backend.bundle || !!NAT;
 function importBundle(inp) {
   const f = inp.files[0]; inp.value = '';
   if (!f) return;
@@ -954,7 +981,7 @@ function importBundle(inp) {
     e => m.textContent = e.message);
 }
 
-backend.onState(up => $('conn').hidden = up);
+backend.onState(u => { up = u; bar(); });
 backend.onEvent(ev => { apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'net') renderStats(); else if (cur === 'security') renderBlocked(); });   // stats every 2 s: do not rebuild the switches
 show(tab);
 backend.connect();
