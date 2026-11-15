@@ -67,6 +67,12 @@ class MeshNode(
     internal var broadcastMode = C.BROADCAST_MODE
     private val missing = HashMap<String, ArrayDeque<Pair<LinkId, Int>>>()   // U9: unseen msgId -> links that announced it with their hops, oldest first
     private var fullSends = 0; private var ihaveIds = 0; private var grafts = 0; private var prunes = 0
+    // U1 counters, touched only on the loop, reset on restart.
+    private var originated = 0; private var relayed = 0; private var dupes = 0; private var skipped = 0
+    private var bytesOut = 0L; private var bytesIn = 0L; private var powMsLast = 0L
+    private var syncRounds = 0; private var syncRecovered = 0; private var linkUps = 0; private var linkDowns = 0
+    private val rtts = ArrayDeque<Long>()   // last 64 DM-to-ACK times
+    private val drops = SecKind.values().associateTo(LinkedHashMap()) { it.name to 0 }
 
     /** U9 counters and per-link tree state, for the U1 statistics page. */
     internal data class TreeStats(val mode: BroadcastMode, val fullSends: Int, val ihaveIds: Int, val grafts: Int, val prunes: Int, val links: Map<LinkId, String>)
@@ -306,7 +312,14 @@ class MeshNode(
             DebugState(DebugFlag.TAMPER_RELAY in debug, DebugFlag.DROP_RELAY in debug),
             groups.values.map { it.info() },
             all.filter { it.group != null }.groupBy { it.group!! },
+            stats(),
         )
+    }
+
+    /** U1: counters since start; per-link tree state is on [LinkInfo.tree]. */
+    fun stats(): Stats = synchronized(lock) {
+        Stats(originated, relayed, dupes, skipped, bytesOut, bytesIn, rtts.lastOrNull() ?: 0, rtts.sorted().getOrNull(rtts.size / 2) ?: 0,
+            powMsLast, syncRounds, syncRecovered, linkUps, linkDowns, fullSends, ihaveIds, grafts, prunes, LinkedHashMap(drops))
     }
 
     fun addListener(l: (MeshEvent) -> Unit) { listeners += l }
@@ -329,6 +342,7 @@ class MeshNode(
 
     private fun sec(kind: SecKind, detail: String, l: Link?, src: String?, link: LinkId? = l?.id) {
         val s = Sec(now(), kind, detail, link, src)
+        drops.merge(kind.name, 1, Int::plus)
         secLog.addLast(s)
         if (secLog.size > 500) secLog.removeFirst()
         emit(MeshEvent.SecurityLogged(s))
@@ -336,8 +350,8 @@ class MeshNode(
 
     private fun listenerFor(t: Transport) = object : TransportListener {
         override fun onLinkUp(link: LinkId, description: String) = loop { linkUp(t, link, description) }
-        override fun onFrame(link: LinkId, frame: ByteArray) = loop { links[link]?.let { it.lastRxMs = now(); onFrame(it, frame) } }
-        override fun onLinkDown(link: LinkId) = loop { if (links.remove(link) != null) { routes.dropLink(link); emitNet() } }
+        override fun onFrame(link: LinkId, frame: ByteArray) = loop { links[link]?.let { bytesIn += frame.size; it.lastRxMs = now(); onFrame(it, frame) } }
+        override fun onLinkDown(link: LinkId) = loop { links.remove(link)?.let { if (it.authed) linkDowns++; routes.dropLink(link); emitNet() } }
     }
 
     // ---- 5.5 handshake ----
@@ -360,7 +374,7 @@ class MeshNode(
         if (l.peer in muted) return
         when (f) {
             is Frame.Env -> ingress(l, f.env)
-            is Frame.SyncOffer -> onOffer(l, f.ids)
+            is Frame.SyncOffer -> { syncRounds++; onOffer(l, f.ids) }
             is Frame.SyncWant -> onWant(l, f.ids)
             is Frame.BanProof -> onBanProof(l, f.a, f.b)
             // U9 rule 8: a FLOOD node answers IHAVE like SYNC_OFFER, GRAFT like SYNC_WANT, and ignores PRUNE.
@@ -387,6 +401,7 @@ class MeshNode(
         if (guard.refusedPeer(peer, now())) { sec(SecKind.LINK_CLOSED, "peer refused for 60 s", l, peer); closeLink(l); return }
         if (links.values.any { it !== l && it.authed && it.peer == peer }) { closeLink(l); return }
         l.authed = true
+        linkUps++
         l.peer = peer
         // 5.5 step 6
         myPresence?.let { give(l, it) }
@@ -396,10 +411,11 @@ class MeshNode(
         emitNet()
     }
 
-    private fun frame(l: Link, f: Frame) = l.transport.send(l.id, Codec.encodeFrame(f))
+    private fun frame(l: Link, f: Frame) = tx(l, Codec.encodeFrame(f))
+    private fun tx(l: Link, b: ByteArray) = l.transport.send(l.id, b).also { if (it) bytesOut += b.size }
 
     private fun closeLink(l: Link) {
-        if (links[l.id] === l) { links.remove(l.id); routes.dropLink(l.id); emitNet() }
+        if (links[l.id] === l) { links.remove(l.id); if (l.authed) linkDowns++; routes.dropLink(l.id); emitNet() }
         l.transport.close(l.id)
     }
 
@@ -408,7 +424,7 @@ class MeshNode(
     // ---- 5.6 ingress ----
 
     private fun penalize(l: Link, delta: Int, kind: SecKind?, detail: String, src: String?) {
-        kind?.let { sec(it, detail, l, src) }
+        if (kind != null) sec(kind, detail, l, src) else drops.merge(SecKind.MALFORMED.name, 1, Int::plus)   // unlogged sanity failure
         l.score += delta
         if (l.score < 0 && links[l.id] === l) {
             l.peer?.let { guard.refused[it] = now() + C.REFUSE_MS }
@@ -426,9 +442,10 @@ class MeshNode(
             it.have += l.id; routes.learn(hex(e.srcId), l.id, e.hops, now(), first = false)
             if (!asked && treeOn(e)) prune(l)   // U9 rule 3
             if (asked && treeOn(e) && e.ttl > it.ttl) betterCopy(e, it)
+            dupes++
             return
         }
-        if (guard.accepted.containsKey(mid)) return   // replay of a POST/DM already evicted from the seen LRU
+        if (guard.accepted.containsKey(mid)) { dupes++; return }   // replay of a POST/DM already evicted from the seen LRU
         val src = hex(e.srcId)
         val now = now()
         if (guard.banned(src, now)) return
@@ -444,6 +461,7 @@ class MeshNode(
         if (!asked && !l.takeToken(now)) return penalize(l, C.SCORE_OVER_RATE, SecKind.LINK_FLOOD, "over 30 envelopes per 10 s", src)
         if (!asked && treeOn(e)) l.eager = true   // Plumtree: the link that pushed the first copy is in the tree
         val ann = missing.remove(mid)
+        if (asked) syncRecovered++   // pulled by SYNC_WANT, or by GRAFT in TREE mode
         accept(e, l, now, replay = false)
         // The announcers have it, so the forward skips them.
         val s = seen[mid] ?: return
@@ -527,6 +545,9 @@ class MeshNode(
                 store.dropRelay(dmId)
                 if (dst == me) {
                     groupAck(dmId, emit = !replay)
+                    msgs[dmId]?.takeIf { !replay && it.mine && it.status != MsgStatus.DELIVERED }?.let {
+                        rtts.addLast(now - it.tsMs); if (rtts.size > 64) rtts.removeFirst()
+                    }
                     if (msgs[dmId]?.mine == true) setStatus(dmId, MsgStatus.DELIVERED, e.hops + 1, l?.peer, emit = !replay)
                 } else if (!replay) {
                     // Walk the DM's path backwards; if that link is gone the ACK is dropped (sender stays SENT).
@@ -623,7 +644,8 @@ class MeshNode(
     }
 
     private fun send(l: Link, o: Out) {
-        val ok = l.transport.send(l.id, Codec.encodeFrame(Frame.Env(o.wire)))
+        val ok = tx(l, Codec.encodeFrame(Frame.Env(o.wire)))
+        if (ok && !o.own) relayed++
         if (ok && (o.wire.type == EnvType.POST || o.wire.type == EnvType.PRESENCE)) fullSends++
         val shown = fanout[o.mid] ?: o.mid
         if (ok && o.own && msgs[shown]?.status == MsgStatus.QUEUED) setStatus(shown, MsgStatus.SENT, 0, null)
@@ -644,7 +666,9 @@ class MeshNode(
     private fun targets(e: Envelope, s: SeenEntry): List<Link> {
         if (naiveFlood) return links.values.filter { it.id != s.firstLink }
         val r = if (e.isBroadcast) null else routes.fresh(hex(e.dst), now())?.let { links[it.link] }?.takeIf { live(it) && it.id !in s.have }
-        return r?.let { listOf(it) } ?: links.values.filter { it.id !in s.have }
+        if (r != null) return listOf(r)
+        skipped += links.values.count { it.id in s.have && it.id != s.firstLink }   // known to have it, not just the sender
+        return links.values.filter { it.id !in s.have }
     }
 
     private fun forward(e: Envelope) {
@@ -767,7 +791,12 @@ class MeshNode(
 
     private fun mine(type: Int, dst: ByteArray, lam: Long, ep: Long, slot: Int, ttl: Int, body: ByteArray, text: String, img: String? = null, gm: String? = null) {
         val ident = id
-        offLoop { val e = Envelope.create(ident, type, dst, lam, ep, slot, ttl, body); loop { originate(e, text, img, gm) } }
+        offLoop {
+            val t0 = System.nanoTime()
+            val e = Envelope.create(ident, type, dst, lam, ep, slot, ttl, body)
+            val ms = (System.nanoTime() - t0) / 1_000_000
+            loop { powMsLast = ms; originate(e, text, img, gm) }
+        }
     }
 
     private fun originate(e: Envelope, text: String, img: String?, gm: String?) {
@@ -775,6 +804,7 @@ class MeshNode(
         val dst = if (e.isBroadcast) null else hex(e.dst)
         val s = SeenEntry(null, dst, e.type)
         seen[mid] = s
+        originated++
         guard.accepted[mid] = e.epoch
         store.put(e, now(), relayOnly = false, log = true)
         if (gm == null) addMsg(Msg(mid, me, dst, text, e.lamport, now(), true, MsgStatus.QUEUED, 0, null, img), emit = true)
@@ -884,7 +914,7 @@ class MeshNode(
         }
     }
 
-    private fun linkList() = links.values.map { LinkInfo(it.id, it.peer, it.transport.name, it.authed) }
+    private fun linkList() = links.values.map { LinkInfo(it.id, it.peer, it.transport.name, it.authed, if (!it.authed) null else if (it.eager) "eager" else "lazy") }
 
     private fun fitName(s: String, blank: String = "node-${me.take(4)}"): String {
         var n = s.ifBlank { blank }

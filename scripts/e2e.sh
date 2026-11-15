@@ -170,4 +170,7 @@ else
 fi
 result 5 "$r5"
 
+# U1: print the live counters; never changes pass/fail.
+for p in "${PORTS[@]}"; do echo "stats $p: $(curl -s --max-time 5 "http://127.0.0.1:$p/api/stats")"; done || true
+
 exit $FAILED

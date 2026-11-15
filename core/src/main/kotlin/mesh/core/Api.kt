@@ -70,7 +70,18 @@ data class Contact(
 )
 
 @Serializable
-data class LinkInfo(val link: String, val peer: String?, val transport: String, val authed: Boolean)
+data class LinkInfo(val link: String, val peer: String?, val transport: String, val authed: Boolean,
+                    val tree: String? = null)   // U1/U9: "eager" or "lazy" once authenticated, else null
+
+/** U1: live counters kept by MeshNode since start; [drops] has every SecKind name. */
+@Serializable
+data class Stats(
+    val originated: Int = 0, val relayed: Int = 0, val duplicatesDropped: Int = 0, val forwardsSkipped: Int = 0,
+    val bytesOut: Long = 0, val bytesIn: Long = 0, val ackRttMsLast: Long = 0, val ackRttMsMedian: Long = 0,
+    val powMsLast: Long = 0, val syncRounds: Int = 0, val syncRecovered: Int = 0, val linkUps: Int = 0, val linkDowns: Int = 0,
+    val fullSends: Int = 0, val ihaveIds: Int = 0, val grafts: Int = 0, val prunes: Int = 0,
+    val drops: Map<String, Int> = SecKind.values().associate { it.name to 0 },
+)
 
 @Serializable
 data class SelfInfo(val id: String, val name: String)
@@ -93,6 +104,8 @@ data class Snapshot(
     val debug: DebugState,
     val groups: List<Group> = emptyList(),             // 13.2: live groups only
     val gdms: Map<String, List<Msg>> = emptyMap(),     // 13.2: groupId -> messages, history kept after leaving
+    val stats: Stats = Stats(),                        // U1
+    val profile: String = "STANDARD",                  // U3 later
 )
 
 sealed interface MeshEvent {

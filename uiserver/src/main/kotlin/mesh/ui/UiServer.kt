@@ -23,6 +23,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -34,6 +35,7 @@ import kotlinx.serialization.json.put
 import mesh.core.MeshEvent
 import mesh.core.MeshNode
 import mesh.core.Snapshot
+import mesh.core.Stats
 import java.util.concurrent.CopyOnWriteArraySet
 
 /** What the UI needs from a node. MeshNode is a final class, so a fake for UI work implements this instead. */
@@ -41,12 +43,14 @@ interface UiNode {
     fun snapshot(): Snapshot
     fun addListener(l: (MeshEvent) -> Unit)
     fun exec(c: Cmd)
+    fun stats(): Stats = snapshot().stats
 }
 
 fun MeshNode.asUiNode(): UiNode = object : UiNode {
     override fun snapshot() = this@asUiNode.snapshot()
     override fun addListener(l: (MeshEvent) -> Unit) = this@asUiNode.addListener(l)
     override fun exec(c: Cmd) = this@asUiNode.exec(c)
+    override fun stats() = this@asUiNode.stats()
 }
 
 /**
@@ -78,6 +82,7 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
             }
             routing {
                 get("/") { call.respondText(page, ContentType.Text.Html) }
+                get("/api/stats") { call.respondText(json.encodeToString(Stats.serializer(), node.stats()), ContentType.Application.Json) }
                 get("/api/snapshot") { call.respondText(snapshotJson(), ContentType.Application.Json) }
                 post("/api/cmd") {
                     val cmd = try { parseCmd(call.receiveText()) } catch (e: IllegalArgumentException) {
@@ -103,6 +108,7 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
                     try {
                         send(Frame.Text(snapshotJson()))
                         launch { for (s in q) send(Frame.Text(s)); this@webSocket.cancel() }
+                        launch { while (true) { delay(2_000); q.trySend(statsJson()) } }   // U1; through q so sends never interleave
                         for (f in incoming) if (f is Frame.Text) {
                             try { node.exec(parseCmd(f.readText())) } catch (_: IllegalArgumentException) {}
                         }
@@ -118,6 +124,8 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
     fun stop() {
         server?.stop(500, 1000)
     }
+
+    private fun statsJson() = buildJsonObject { put("t", "stats"); put("stats", json.encodeToJsonElement(node.stats())) }.toString()
 
     private fun snapshotJson() =
         JsonObject(mapOf("t" to JsonPrimitive("snapshot")) + json.encodeToJsonElement(node.snapshot()).jsonObject).toString()
