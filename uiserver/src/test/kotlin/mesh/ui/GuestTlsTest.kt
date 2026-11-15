@@ -16,8 +16,9 @@ class GuestTlsTest {
     private val node = object : UiNode {
         override fun snapshot() = Snapshot(SelfInfo("aaaaaaaaaaaaaaaa", "B"), emptyList(), emptyList(), emptyList(), emptyMap(), emptyList(), DebugState(false, false))
         override fun addListener(l: (MeshEvent) -> Unit) {}
-        override fun exec(c: Cmd) {}
+        override fun exec(c: Cmd) { execs++ }
     }
+    @Volatile private var execs = 0
     private val port = ServerSocket(0).use { it.localPort }
     private val server = GuestServer(node, port).apply { start() }
 
@@ -73,5 +74,41 @@ class GuestTlsTest {
             Thread.sleep(50)
         }
         assertTrue(reply.startsWith("HTTP/1.1 200"), "slots not released after close")
+    }
+
+    private fun raw(p: Int, req: String): String = Socket("127.0.0.1", p).use { s ->
+        s.soTimeout = 5_000
+        s.getOutputStream().apply { write(req.toByteArray()); flush() }
+        s.getInputStream().readBytes().decodeToString()
+    }
+
+    // Security review: a call Ktor cannot map to a guest IP is refused, never treated as 127.0.0.1; spliced calls still work.
+    @Test fun unmappedCallIsRefusedAndSplicedCallKeepsItsIp() {
+        val body = """{"name":"g","text":"hi"}"""
+        val post = { p: Int -> raw(p, "POST /api/guest-post?pin=${server.pin} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n" +
+            "Content-Type: application/json\r\nContent-Length: ${body.length}\r\n\r\n$body") }
+        assertTrue(raw(server.inner, "GET /lite HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").startsWith("HTTP/1.1 403"))
+        assertTrue(post(server.inner).startsWith("HTTP/1.1 403"))
+        assertEquals(0, execs)
+        assertTrue(post(port).startsWith("HTTP/1.1 200"))
+        assertEquals(1, execs)
+        assertTrue(post(port).startsWith("HTTP/1.1 429"), "same guest IP must share one post bucket")
+    }
+
+    // Security review: sockets that send one byte and stall are closed by the pre-response deadline and free their slots.
+    @Test fun stalledSocketsCloseWithinDeadlineAndFreeSlots() {
+        val t0 = System.nanoTime()
+        val held = List(MAX_CONNS_PER_IP) { Socket("127.0.0.1", port).apply { soTimeout = FIRST_REPLY_MS + 5_000; getOutputStream().write('G'.code) } }
+        held.forEach { s -> assertEquals(-1, try { s.getInputStream().read() } catch (e: java.io.IOException) { -1 }) }
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        held.forEach { it.close() }
+        assertTrue(ms in FIRST_REPLY_MS - 1_000..FIRST_REPLY_MS + 3_000, "stalled sockets closed after $ms ms")
+        var reply = ""
+        val deadline = System.currentTimeMillis() + 3_000
+        while (System.currentTimeMillis() < deadline && !reply.startsWith("HTTP/1.1 200")) {
+            reply = try { getLite() } catch (e: java.io.IOException) { "" }
+            Thread.sleep(50)
+        }
+        assertTrue(reply.startsWith("HTTP/1.1 200"), "slots not released after deadline")
     }
 }

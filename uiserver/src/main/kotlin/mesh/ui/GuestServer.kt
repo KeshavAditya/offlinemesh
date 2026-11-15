@@ -5,6 +5,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.call
 import io.ktor.server.application.install
@@ -24,6 +25,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.util.AttributeKey
 import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
@@ -83,11 +85,19 @@ class GuestServer(
     private var server: EmbeddedServer<*, *>? = null
     private var front: ServerSocket? = null
     private val peers = ConcurrentHashMap<Int, String>() // source port of a spliced loopback connection -> guest IP
+    internal var inner = 0; private set // Ktor's loopback port, for tests
 
     fun start() {
         // Ktor listens on loopback only; [front] owns the guest port (see [splice]).
         server = embeddedServer(CIO, port = 0, host = "127.0.0.1") {
             install(WebSockets) { maxFrameSize = C.MAX_FRAME.toLong() }
+            // Fail closed: a call whose guest IP is unknown (not spliced by [front], or mapping gone) never counts as 127.0.0.1.
+            install(createApplicationPlugin("GuestIp") {
+                onCall { call ->
+                    val ip = peers[call.request.origin.remotePort]
+                    if (ip == null) call.respondText("forbidden", status = HttpStatusCode.Forbidden) else call.attributes.put(GUEST_IP, ip)
+                }
+            })
             routing {
                 // Route-scoped so the PIN check runs for whatever path the router matched to /mesh; 403 before the upgrade.
                 if (web != null) route("/mesh") {
@@ -141,7 +151,7 @@ class GuestServer(
                 get("{...}") { call.respondRedirect("/") }
             }
         }.start(wait = false)
-        val inner = runBlocking { server!!.engine.resolvedConnectors().first().port }
+        inner = runBlocking { server!!.engine.resolvedConnectors().first().port }
         val f = try { ServerSocket(port, 50, InetAddress.getByName("0.0.0.0")) } catch (e: IOException) { stop(); throw e }
         front = f
         thread(isDaemon = true, name = "guest-accept") {
@@ -165,15 +175,23 @@ class GuestServer(
         // Idle timeout per direction reclaims half-open sockets; a live /mesh link has traffic both ways well inside 45 s.
         c.soTimeout = IDLE_MS
         Socket(InetAddress.getLoopbackAddress(), inner).use { s ->
-            s.soTimeout = IDLE_MS
+            // Pre-response deadline: a real request or WS upgrade is answered in ms, so a stalled one frees its slot fast.
+            s.soTimeout = FIRST_REPLY_MS
             peers[s.localPort] = c.inetAddress.hostAddress
             try {
-                thread(isDaemon = true, name = "guest-up") {
-                    // On error or timeout close both so the other direction's read ends too; on EOF half-close like TCP.
-                    try { s.getOutputStream().write(first); c.getInputStream().copyTo(s.getOutputStream()); s.shutdownOutput() }
-                    catch (e: IOException) { s.close(); c.close() }
+                val up = thread(isDaemon = true, name = "guest-up") {
+                    // EOF or error: half-close toward Ktor only, so its response can still drain down to the guest.
+                    try { s.getOutputStream().write(first); c.getInputStream().copyTo(s.getOutputStream()) } catch (e: IOException) {}
+                    try { s.shutdownOutput() } catch (e: IOException) {}
                 }
-                try { s.getInputStream().copyTo(c.getOutputStream()) } catch (e: IOException) {}
+                try {
+                    val buf = ByteArray(8192)
+                    var n = s.getInputStream().read(buf)
+                    s.soTimeout = IDLE_MS
+                    while (n >= 0) { c.getOutputStream().write(buf, 0, n); n = s.getInputStream().read(buf) }
+                } catch (e: IOException) {}
+                c.close() // Ktor is done (or the guest is gone): end the upward read too
+                up.join()
             } finally { peers.remove(s.localPort) }
         }
     }
@@ -196,7 +214,7 @@ class GuestServer(
         server = null
     }
 
-    private fun ip(call: ApplicationCall) = peers[call.request.origin.remotePort] ?: call.request.origin.remoteAddress
+    private fun ip(call: ApplicationCall) = call.attributes[GUEST_IP]
 
     private fun pinOk(call: ApplicationCall) = guard.check(ip(call), call.request.queryParameters["pin"] ?: "")
 
@@ -210,10 +228,13 @@ class GuestServer(
 }
 
 private const val MAX_BODY = 4096
-// Above WebTransport's 16-link cap plus ~6 page/asset loads, so the link cap (1013) stays reachable; 2 threads per socket.
+// Above WebTransport's 16-link cap plus ~6 page/asset loads, so the link cap (1013) stays reachable.
 internal const val MAX_CONNS_PER_IP = 24
-internal const val MAX_CONNS = 96
+// 2 threads per socket: 512 daemon threads at the cap (~0.5-1 MB reserved stack each, mostly untouched) is fine on Android.
+internal const val MAX_CONNS = 256
 private const val FIRST_BYTE_MS = 5_000
+internal const val FIRST_REPLY_MS = 10_000
+private val GUEST_IP = AttributeKey<String>("guestIp")
 private const val IDLE_MS = 120_000
 private val JS = listOf("webbackend.js", "meshnode.js", "meshcore.js", "noble.js")
 private val APK_TYPE = ContentType.parse("application/vnd.android.package-archive")
