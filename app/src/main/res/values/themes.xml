@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_bg">#1F6F5C</color>
+    <!-- DayNight so the WebView reports prefers-color-scheme from the system setting; bars follow the theme background. -->
+    <style name="Theme.OfflineMesh" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:statusBarColor">?android:attr/colorBackground</item>
+        <item name="android:navigationBarColor">?android:attr/colorBackground</item>
+        <item name="android:windowLightStatusBar">?android:attr/isLightTheme</item>
+        <item name="android:windowLightNavigationBar">?android:attr/isLightTheme</item>
+    </style>
+    <!-- For the ui-plain merge (page draws its own header). -->
+    <style name="Theme.OfflineMesh.NoActionBar">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
