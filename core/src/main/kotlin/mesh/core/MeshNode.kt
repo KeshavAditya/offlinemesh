@@ -46,6 +46,7 @@ class MeshNode(
     private val contacts = HashMap<String, Peer>()
     private val muted = HashSet<String>()
     private val verified = HashSet<String>()
+    private val impLogged = HashMap<String, Long>()          // U8: contact id -> last NAME_IMPERSONATION log time
     private val msgs = LinkedHashMap<String, Msg>()
     private val groups = LinkedHashMap<String, Grp>()
     private val posted = HashSet<String>()                  // groups I have sent in (sendGroup; rebuilt from own GROUP_TEXT on replay)
@@ -277,6 +278,7 @@ class MeshNode(
 
     fun setVerified(nodeIdHex: String, verified: Boolean) = loop {
         if (verified) this.verified += nodeIdHex else this.verified -= nodeIdHex
+        if (verified) contacts.keys.toList().forEach { checkImpersonation(it, now()) }
         emitNet()
     }
 
@@ -569,6 +571,7 @@ class MeshNode(
         }
         val n = e.body[0].toInt() and 0xff
         contacts[src] = Peer(String(e.body, 1, n, Charsets.UTF_8), e.srcPub, now, e.lamport, e)
+        checkImpersonation(src, now)
         emitNet()
     }
 
@@ -905,12 +908,29 @@ class MeshNode(
     private fun held(mid: String): Envelope? = store.envs[mid]?.env
         ?: (sequenceOf(myPresence) + contacts.values.asSequence().map { it.presence }).firstOrNull { it != null && hex(it.msgId) == mid }
 
+    private fun normName(s: String) = s.trim().lowercase()
+    /** U8: the verified contact whose name an unverified contact [cid] shares, if any. Names can be copied, keys cannot. */
+    private fun impersonated(cid: String): String? {
+        if (cid in verified) return null
+        val n = normName(contacts[cid]?.name ?: return null)
+        return verified.firstOrNull { it != cid && contacts[it]?.let { v -> normName(v.name) == n } == true }
+    }
+
+    /** U8: logs NAME_IMPERSONATION at most once per key per 10 minutes. No ban: a shared name is not proof of malice. */
+    private fun checkImpersonation(cid: String, now: Long) {
+        val v = impersonated(cid) ?: return
+        if (impLogged[cid]?.let { now - it < IMPERSONATION_LOG_MS } == true) return
+        if (impLogged.size >= MAX_CONTACTS) impLogged.entries.removeIf { now - it.value >= IMPERSONATION_LOG_MS }
+        impLogged[cid] = now
+        sec(SecKind.NAME_IMPERSONATION, v, null, cid)
+    }
+
     private fun contactList(): List<Contact> {
         val now = now()
         return contacts.map { (cid, p) ->
             val r = routes.fresh(cid, now)
             Contact(cid, p.name, cid in verified, r?.let { it.hops + 1 }, r?.let { links[it.link]?.peer },
-                links.values.any { it.authed && it.peer == cid }, cid in muted, p.lastSeen)
+                links.values.any { it.authed && it.peer == cid }, cid in muted, p.lastSeen, impersonated(cid) != null)
         }
     }
 
@@ -922,7 +942,7 @@ class MeshNode(
         return n
     }
 
-    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4; const val MAX_MISSING = 512 }
+    private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4; const val MAX_MISSING = 512; const val IMPERSONATION_LOG_MS = 10 * 60_000L }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */

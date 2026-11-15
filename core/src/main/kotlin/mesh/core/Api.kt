@@ -33,7 +33,7 @@ enum class Attack { FLOOD, SPOOF, REPLAY }
 // UI-facing data, field names match the JSON UI protocol in section 6 so uiserver can encode them directly.
 
 enum class MsgStatus { QUEUED, SENT, DELIVERED, RECEIVED }
-enum class SecKind { MALFORMED, BAD_POW, BAD_SIGNATURE, STALE, RATE_EQUIVOCATION, LINK_FLOOD, LINK_CLOSED, BANNED, ROUTE_FAILED }
+enum class SecKind { MALFORMED, BAD_POW, BAD_SIGNATURE, STALE, RATE_EQUIVOCATION, LINK_FLOOD, LINK_CLOSED, BANNED, ROUTE_FAILED, NAME_IMPERSONATION, PEER_REVOKED }
 
 @Serializable
 data class Msg(
@@ -67,6 +67,7 @@ data class Contact(
     val linked: Boolean,
     val muted: Boolean,
     val lastSeenMs: Long,
+    val suspect: Boolean = false,   // U8: unverified, with the same name as a verified contact
 )
 
 @Serializable
