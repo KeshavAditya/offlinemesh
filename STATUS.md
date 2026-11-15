@@ -56,3 +56,4 @@
 [ui] [16:52] done: e2e.sh mutes C from every node past the 3rd (lifted for items 7-8), 4 emulators and 4 desktop nodes pass 1-8; page autofocuses the message box only on fine pointers
 [ui] [19:06] v2 done: merged main, link desc shown
 [android] [19:05] v2 done: U6 QR screens (QrActivity from 'QR hop' in settings row; show post/DM as byte-mode QR, scan via zxing-android-embedded -> importEnvelope). QrTest: encode->decode 500 bytes round-trips exactly. Emulator: QR drawn (shots/v2-qr-show.png), scanner opens/cancels; a live scan needs real phones.
+[android] [19:18] v2 done: final 4-emulator check: build ok; e2e.sh 8081-8084 items 1-8 PASS, no manual mutes, no e2e.sh change; 10 DMs B->D delivered, linkUps unchanged on all 4 (3,3,4,4); Network tab on B shows 'ble <mac> rssi 20' per link (shots/v2-final-b.png). Note: fresh deploy left A and B with 0 links (L2CAP read failed) until a BT off/on on all 4 emulators

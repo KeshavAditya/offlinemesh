@@ -12,7 +12,7 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 | `scripts/e2e.sh` on 3 Android emulators (API 36, emulated Bluetooth) | items 1-6 PASS |
 | `scripts/e2e.sh` on 5 desktop nodes (`NODES=5`, TCP, one laptop, in a line) | items 1-8 PASS; item 7 (group of all 5) showed `Delivered to 4 of 4` in about 1 s |
 | `scripts/e2e.sh` on 4 Android emulators | items 1-8 PASS (fresh deploy, no manual mutes; group notification shown on C) |
-| v2 on 4 emulators: `e2e.sh` + persistent-link check (10 DMs A to C, `linkUps` must not rise) | **TODO: being measured now by another helper, fill in here** |
+| v2 on 4 emulators: `e2e.sh` + persistent-link check (10 DMs, `linkUps` must not rise) | items 1-8 PASS (fresh deploy, no manual mutes; item 7 delivered 3 of 3 in 2 s, item 6 C caught up in 3 s). 10 DMs B to D (A is banned on B after item 5), all DELIVERED: `linkUps`/`linkDowns` A 3/0, B 3/0, C 4/1, D 4/1 before and after, so no relinks (C/D's extra up/down happened at startup, before e2e). Network tab shows each link as `ble <mac> rssi 20` (emulator rssi is constant) |
 | `scripts/e2e.sh` on the 3 real phones | **not run yet** |
 
 ## Broadcast cost (simulator, real core code, virtual time)
@@ -73,7 +73,6 @@ A group message is sent as one ordinary DM to each other member, so it costs **(
 ## Still to measure
 
 - PoW time on each real phone.
-- v2 on 4 emulators with the persistent-link check (TODO above).
 - `e2e.sh` on the three real phones, and real Bluetooth range and timing.
 
 ## Forwarding benchmark in plain words
