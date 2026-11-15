@@ -55,6 +55,7 @@ A group message is sent as one ordinary DM to each other member, so it costs **(
 - So on the laptop: 3 members about 30 ms, 5 members about 60 ms, the 16-member cap (15 DMs) about 0.2 to 0.3 s of mining in total (estimate).
 - On the network, each of those DMs follows its own route, so the transmissions are the sum of the hop counts to each member.
 - Phones: not measured; expect several times slower (estimate).
+- A group photo (kind 5, U-C) is one ~40 KB DM per other member, each mined on its own at 22 bits: measured 0.4 to 1.2 s per DM on the laptop (4 sends, `powMsLast`, desktop nodes), so a 3-member group pays about 1 to 2 s of mining and the 16-member cap (15 DMs) about 6 to 18 s (estimate). Each copy also crosses every hop, so a photo costs (members - 1) x 40 KB x hops on the air.
 
 ## Bluetooth LE L2CAP (emulators, netsim)
 

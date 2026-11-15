@@ -1120,12 +1120,13 @@ The protocol already works for any number of nodes (10.2 #9 runs 25 nodes; the r
 
 A group is an 8-byte `groupId` (shown as hex) bound to its owner: `groupId` = first 8 bytes of SHA-256(`ownerNodeId` (8 bytes) ‖ `salt` (8 random bytes)). It also has a name (32 bytes or less), an owner (the creator's NodeId) and a member list of 16 NodeIds or fewer, including the owner. Groups exist only on member devices.
 
-**No new envelope type, frame, crypto or ingress rule.** Every group message is sent as one ordinary DM (5.3, 5.4) to each other member, so relays see only DMs and each copy is end-to-end encrypted and ACKed on its own. DM plaintext `kind` gains two values:
+**No new envelope type, frame, crypto or ingress rule.** Every group message is sent as one ordinary DM (5.3, 5.4) to each other member, so relays see only DMs and each copy is end-to-end encrypted and ACKed on its own. DM plaintext `kind` gains three values:
 
 | kind | Name | Data after the kind byte |
 |---|---|---|
 | 2 | GROUP_INVITE | `8B groupId` `8B salt` `u8 nameLen` `name` `u8 count` then `count` × (`u8 pubLen` `pub`) |
 | 3 | GROUP_TEXT | `8B groupId` `8B groupMsgId` then UTF-8 text, 1,000 bytes or less |
+| 5 | GROUP_IMAGE (U-C) | `8B groupId` `8B groupMsgId` then one JPEG (`FF D8 FF`), 39,983 bytes or less, so the data still fits the 39,999 bytes of a DM. Sent, ACK-counted, de-duplicated and member-checked exactly like GROUP_TEXT; the browser downscales it like a photo DM. Non-JPEG or oversize: malformed, not stored or ACKed. |
 
 - **Create:** the owner sends GROUP_INVITE to every other member. The invite carries each member's public key, so every member can encrypt to every other member at once; member ids are derived from the keys (5.1), so a key cannot be swapped for another id. Member keys stay inside the group record (for fan-out encryption and reopening own DMs); they are never added to contacts.
 - **Membership changes:** only the owner can change the list, by sending a new GROUP_INVITE to every old and new member. A receiver drops an invite unless `groupId` = SHA-256(`srcId` ‖ `salt`)[0..8] and the sender is in the list, so only the owner can create or claim a `groupId`; a change to an existing group is accepted only from its recorded owner. Caps: 32 live groups normally, 64 hard, and at most 4 per owner unless that owner is verified; invites over a cap are dropped silently. A member left out of the new list removes the group's live state, keeps its history, and gets no further messages because nobody sends to it.
