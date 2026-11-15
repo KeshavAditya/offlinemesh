@@ -103,4 +103,24 @@ class PanicWipeTest {
         c.restart()
         check(c.node.snapshot())
     }
+    @Test fun revokedMemberLeavesGroupsSoMessagesReachAllOthers() {
+        val net = SimNetwork()
+        listOf("A", "B", "C", "D").forEach { net.node(it) }
+        net.link("A", "B"); net.link("B", "C"); net.link("C", "D"); net.link("D", "A")
+        net.runFor(10_000)
+        val (a, b, c, d) = listOf("A", "B", "C", "D").map { net.nodes.getValue(it) }
+        val g = a.node.createGroup("g", listOf(b.id, c.id, d.id))
+        net.runFor(10_000)
+        assertEquals(4, b.node.snapshot().groups.single { it.id == g }.members.size)
+        val oldD = d.id
+        d.node.panicWipe()
+        net.runFor(10_000)
+        assertFalse(oldD in b.node.snapshot().groups.single { it.id == g }.members, "old-D still in B's group")
+        a.node.sendGroup(g, "from a"); b.node.sendGroup(g, "from b")
+        net.runFor(10_000)
+        for ((n, text) in listOf(a to "from a", b to "from b")) {
+            val own = n.node.snapshot().gdms.getValue(g).single { it.text == text }
+            assertEquals(2, own.total, text); assertEquals(2, own.delivered, text)
+        }
+    }
 }

@@ -220,7 +220,7 @@ class MeshNode(
         posted += groupId
         val gm = Crypto.randomBytes(8)
         val uid = me + hex(gm)
-        val others = g.members.filterKeys { it != me }
+        val others = g.members.filterKeys { it != me && it !in revoked }
         addMsg(Msg(uid, me, null, text, ++lamport, now(), true, if (others.isEmpty()) MsgStatus.SENT else MsgStatus.QUEUED, 0, null,
             group = groupId, delivered = 0, total = others.size), emit = true)
         val plain = byteArrayOf(3) + Crypto.unhex(groupId) + gm + body
@@ -303,7 +303,7 @@ class MeshNode(
         if (src == me) { fanout[mid] = uid; posted += gid }
         if (g == null || src !in g.members || uid in msgs) return true
         if (src == me) addMsg(Msg(uid, me, null, text, e.lamport, now, true, MsgStatus.QUEUED, 0, null,
-            group = gid, delivered = 0, total = g.members.size - 1), emit = false)
+            group = gid, delivered = 0, total = g.members.keys.count { it != me && it !in revoked }), emit = false)
         else addMsg(Msg(uid, src, null, text, e.lamport, now, false, MsgStatus.RECEIVED, hops, via, group = gid), emit)
         return true
     }
@@ -669,7 +669,13 @@ class MeshNode(
         msgs.values.removeIf { if (it.group == null) it.to != null && (it.from == x || it.to == x) else it.from == x || it.group in gone }
         gone.forEach { groups.remove(it) }
         revoked += x
-        if (replay) return
+        if (replay) return   // my re-invites below are in the log and replay on their own
+        // My groups drop x like a removed member, so the others stop fanning out to that key too.
+        for (o in groups.values.filter { it.owner == me && x in it.members }) {
+            val g = Grp(o.id, o.salt, o.name, me, LinkedHashMap(o.members).apply { remove(x) })
+            groups[g.id] = g
+            invite(g, g.members)
+        }
         sec(SecKind.PEER_REVOKED, "peer wiped its node", null, x)
         emit(MeshEvent.Reset)
     }
