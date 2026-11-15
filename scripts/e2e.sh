@@ -180,6 +180,9 @@ else
 fi
 result 5 "$r5"
 
+# Mutes are saved on disk, so lift the ones set at the top: a restarted node must not come back with A and C cut apart.
+cmd $PA "{\"t\":\"mute\",\"id\":\"$IC\",\"on\":false}"; cmd $PC "{\"t\":\"mute\",\"id\":\"$IA\",\"on\":false}"; mute_rest false
+
 # U1: print the live counters; never changes pass/fail.
 for p in "${PORTS[@]}"; do echo "stats $p: $(curl -s --max-time 5 "http://127.0.0.1:$p/api/stats")"; done || true
 
