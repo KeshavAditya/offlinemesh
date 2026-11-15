@@ -9,18 +9,19 @@ Tabs (bottom bar on phones, row under the top bar from 600 px)
 ├─ Chats  (home)   search + New chat; conversations newest first; then "In range, no chat yet"
 │   ├─ New chat          New group (name + members) · list of people in range
 │   └─ Conversation      name, verified mark, route line; Photo / Message / Send (I'm safe in groups)
-│       └─ Info          Contact info: Message, fingerprint, Verified, Muted, route
+│       └─ Info          Contact info: Message, route (words and the mesh map), fingerprint, Verified, Muted
 │                        Group info:   Message, members, Edit members (owner only)
 ├─ Feed            one line saying posts are public; posts; compose bar
 ├─ People          everyone the node knows about, with verified / muted / suspect / revoked
 │   └─ Contact info      (same screen as above)
 └─ Me              name, my fingerprint, my QR, Settings (Android app only), guest PIN and QR (while guest mode is on)
-    ├─ Security and demo attacks   tamper / drop switches, flood / spoof / replay, event log
-    ├─ Network and statistics      links (tree, description), mission profile, statistics
+    ├─ Security and demo attacks   Demo guide switch, tamper / drop switches, flood / spoof / replay, event log
+    ├─ Network and statistics      mesh map, links (tree, description), mission profile, statistics
     └─ Panic wipe                  bottom of the screen, behind typing WIPE
 
 Over everything: first-run welcome (name, fingerprint, two lines on what the app does),
-"Reconnecting…" bar, and a strip showing the newest unseen security event (tap: opens the log).
+"Reconnecting…" bar, a strip showing the newest unseen security event as a sentence (tap: opens the log),
+and the Demo guide card when it is switched on.
 ```
 
 The attack console is two taps from anywhere (Me, then Security and demo attacks). A caught attack is zero taps: the strip appears under the top bar on every screen and the Me tab gets a badge.
@@ -112,3 +113,14 @@ Every screen and feature in the sitemap; the bottom tab bar with icon and label;
 - Checked in headless Chromium against the fake node at 390 px light and dark, 320 px and 1280 px, twelve screens each: no horizontal overflow, no control under 44 px, no page errors. Text contrast is 5.3:1 or better in both themes (worked out from the colour tokens, not measured on screen). A scripted run covers welcome, New chat, a DM with its receipt, contact info and the Verified switch, Back, a post, "I'm safe", the attack console, reduced motion, and the browser guest client (`webbackend.js`). Screenshots: `.playwright-mcp/ui-modern/` in the main project folder (`before-*`, `after-*`, `sheet-*`).
 - The detector's one remaining finding is the QR `<img>` without a `src` in the markup; the script sets it, and hides the image when the backend has no QR.
 - Not checked: the Android WebView and iPhone Safari (no emulator or phone was used). Look first at the `<dialog>` welcome screen, the compose bar above the keyboard, and the safe-area padding of the tab bar.
+
+## Demo boosters (branch `ui-boosters`)
+
+Page only, for the live demo. Same style as the modern pass; nothing new on Chats.
+
+- **Mesh map** (Network, and Contact info under Route, one tap from a conversation). You in the middle, contacts at one hop on the inner ring, everyone farther on the outer ring half a step beside the neighbour they are reached through (`via`): solid line at two hops, dashed when more relays follow. A ring holds 12 and then one "+N" node. Names sit outside the ring and are cut short before the next node or the edge. The drawing is only as tall as its content, so a three-phone mesh is a short strip. Placement is by each contact's hop count, not by which links exist.
+- **Live path.** When one of my DMs is delivered, or a DM or group message arrives, a dot runs once along the path on whichever map is showing (300 ms per stop, at most 900 ms), and the receipt under that bubble spells the route for four seconds ("You → Bob → Carol", sliding in with the push keyframes) before going back to "2 hops via Bob". Opening Network or Contact info within a minute replays the dot. Only hops this phone knows are drawn: itself, the `via` neighbour, the far end; further relays stay a dashed line and "+1" in the words. Never queued (dropped while one runs), nothing moves under `prefers-reduced-motion`. My own group messages have no path (the node reports only "delivered to 2 of 3").
+- **Demo guide.** Off until switched on at the top of Security (kept in `localStorage.omGuide`). A `<details>` card docked under the top bar, so it cannot cover the compose or tab bar; it folds to one row. Five steps from docs/DEMO.md, each ticked ("Done") by an event this phone sees after switching on: 1 a `status` event DELIVERED with 2 or more hops (the sender), 2 statistics `relayed` above zero, with the live count in the hint (a relay), 3 a `BAD_SIGNATURE` event (the receiver), 4 a `RATE_EQUIVOCATION` event (the phones that ban), 5 `syncRecovered` rising after `linkDowns` changed or the page lost its node (the phone that was away). Reset clears the ticks. Limit: `relayed` counts beacons and posts too, so step 2 ticks on any phone that relays, with or without a DM.
+- **Try it** (browser guest client). The same card with three steps, on from the start: pick a name (Start on the welcome screen, or Save in Me), post to the feed, send the host a private message (DELIVERED at one hop).
+- **Readable labels.** The alert strip says what happened ("Someone is using Bea's name: d441", "Forged message blocked, via Bob"); the Security log keeps the code and detail. Statistics and profile rows read "Duplicates dropped"; the field name is the row's `title`. The header's link count is blank while the bar says "Reconnecting…". A group you were removed from keeps its last known name (`localStorage.omGN`, so only in a browser that saw the name). The welcome screen waits until the node is linked, so a guest with a wrong PIN gets the PIN prompt first. Replay leaves a one-line note under the attack buttons. QR codes are shifted 20 px left in light mode, where their own white margin read as an indent.
+- Page size: 58,605 bytes on `v2`, 59,594 with the six QA fixes, 66,411 with the boosters.

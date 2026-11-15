@@ -109,14 +109,14 @@ Independent QA on branch `ui-qa-fixes` = `origin/v2` + `origin/ui-modern` (4a238
 ## Open (not attempted: larger than a page fix, or by design)
 
 - **Verified and Muted do not survive a node restart**: core keeps them in memory only (MeshNode.verified is a HashSet; the data dir holds identity, messages, name). Seen on desktop: B verified Alice, after restart Alice is unverified. Not a page bug.
-- **Mesh map crowds with 4+ direct neighbours**: names of side-by-side nodes overlap; needs bigger rings or a legend, which is a layout redesign.
+- ~~**Mesh map crowds with 4+ direct neighbours**~~ Closed on `ui-boosters`: two rings with names outside, cut to fit, "+N" beyond 12 per ring; checked with 4, 6, 9, 12 and 14 direct neighbours at 390 px, and 6 and 12 also in dark mode and at 1280 px.
 - **After a panic wipe the phone lists its own old ID as a contact in range**: on C: "Carol · e82a, 2 hops via Bob", not flagged revoked there (it wiped that knowledge). Core. The public feed also syncs back in (11 posts), which is expected for public posts.
-- **A removed member sees the group as "Group"**: the name is dropped with the group record; history stays under the generic title.
+- ~~**A removed member sees the group as "Group"**~~ Closed on `ui-boosters`: the page keeps the last known name (localStorage), also after a reload. A browser that never saw the name still shows "Group".
 - **Browser Back after a reload or a tab switch needs extra presses**: old history entries stay behind and do nothing. Desktop browsers only; Android uses omBack() and is fine.
-- **Alert bar and security log show raw codes**: e.g. "NAME_IMPERSONATION 79893a11d2337016", "BAD_SIGNATURE msg a121…": no sender name in the bar.
-- **Guest with a wrong PIN sees the welcome dialog before the PIN prompt**: works, order is odd.
-- **Replay has no log line of its own**: it only raises "Duplicates dropped" on the neighbour.
-- **Small polish**: QR looks indented about 18 px in light mode (white quiet zone); statistics use raw names (duplicatesDropped); header keeps "1 link" while "Reconnecting…"; Chats search matches the title and the last message only.
+- ~~**Alert bar shows raw codes**~~ Closed on `ui-boosters` for the bar: a sentence with the name ("Someone is using Alice's name: ecbf", "Forged message blocked, via Bob · 7361"). The log keeps the code and detail on purpose; LINK_FLOOD, LINK_CLOSED, STALE, MALFORMED, BAD_POW and PEER_REVOKED still show as code plus detail in the bar.
+- ~~**Guest with a wrong PIN sees the welcome dialog before the PIN prompt**~~ Closed on `ui-boosters`: the welcome screen waits for the link, so the PIN prompt comes first.
+- ~~**Replay has no log line of its own**~~ Closed on `ui-boosters` with a local note under the attack buttons ("Replay sent: receivers drop it as a duplicate, see Duplicates dropped"); core still logs nothing.
+- **Small polish**: Chats search matches the title and the last message only. Closed on `ui-boosters`: the QR indent in light mode, raw statistics names, and "1 link" in the header while "Reconnecting…".
 
 ## Not tested
 
