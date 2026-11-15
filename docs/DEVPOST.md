@@ -95,12 +95,17 @@ No. Direct messages are routed: each phone learns from signed beacons which neig
 - Android only; iPhones join as browser guests.
 - On a desk all phones are in range, so the demo forces two hops in software.
 
-## What's next
+## Roadmap (not in the demo build)
 
-- A full test on the three real phones, with range and timing.
-- Forward secrecy without a server: rotating signed encryption keys gossiped in presence, which also separates the signing and encryption keys.
-- Keys in Android Keystore or StrongBox.
-- Long-range Bluetooth mode where the phone supports it; not range-tested.
+Planned work. None of it is in the demo build, and none of it is claimed to work.
+
+- **Real-phone runs:** a full test on the three real phones, with Bluetooth range (including long-range mode where the phone has it) and proof-of-work timing.
+- **Phase B, protocol upgrades (planned):** a sync fingerprint so in-sync neighbours skip the ID exchange; separate signing and encryption keys; forward secrecy through rotating signed encryption keys; per-link encryption between neighbours; Sender Keys so a group message is one ciphertext instead of one DM per member; a post-quantum hybrid (ML-KEM-768 + P-256) for DMs.
+- **Phase C, platform work (planned):** identity keys in the Android hardware keystore (StrongBox where present); Wi-Fi Aware as a faster phone-to-phone link; store readiness (current targetSdk, F-Droid metadata, a licence).
+- **iPhone as a full node (not started):** iPhones join as browser guests today and cannot relay. A native app needs a Mac and Core Bluetooth.
+- **`extras/` (code present, untested on hardware):** not in any Gradle build, never run on a device.
+  - `extras/portal-box/`: captive-portal Wi-Fi for guests. ESP32 sketch (serves the web client, cannot host the mesh) and a Raspberry Pi setup script (hostapd + captive dnsmasq + desktop node as a service).
+  - `extras/lora-bridge/`: a `Transport` over a Meshtastic radio's serial API that bridges signed public posts only. Its framing, chunking and filter have a self-test that runs without a radio (`extras/lora-bridge/run-selftest.sh`).
 
 ## Built with
 
