@@ -29,6 +29,7 @@ class FailoverTest {
         assertEquals(1, failed.size, "ROUTE_FAILED logged ${failed.size} times")
         assertEquals("sim:${bad.name}", failed[0].link); assertEquals(d.id, failed[0].src)
         assertEquals(1, d.added().size)
+        assertEquals(good.id, a.node.snapshot().dms.getValue(d.id).single().rerouteVia, "rerouteVia lost after delivery")
         assertTrue(listOf(a, b, c, d).all { n -> n.security().none { it.kind == SecKind.BANNED } })
 
         // The failed first link stays avoided: the next DM goes straight to the backup.
