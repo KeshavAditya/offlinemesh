@@ -138,10 +138,9 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
   // ---- what the UI reads ----
 
   function contactList() {
-    const norm = (s) => s.trim().toLowerCase();
     return [...contacts].map(([id, c]) => {
       const fresh = authed && now() - c.heardAt < ROUTE_MS;
-      const suspect = !verified.has(id) && [...verified].some((v) => v !== id && contacts.get(v) && norm(contacts.get(v).name) === norm(c.name));
+      const suspect = !verified.has(id) && [...verified].some((v) => v !== id && contacts.get(v) && M.normName(contacts.get(v).name) === M.normName(c.name));
       return { id, name: c.name, verified: verified.has(id), hops: fresh ? c.hops : null, via: fresh ? host : null, linked: authed && id === host,
         muted: muted.has(id), lastSeenMs: c.lastSeen, suspect, revoked: revoked.has(id) };
     });
@@ -210,6 +209,8 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
       if (f?.t === 'hello') onHello(f); else if (f?.t === 'helloAuth') onHelloAuth(f);
       return;   // 5.5 step 4: nothing else before authentication
     }
+    // T3: one handshake per link; a second HELLO/HELLO_AUTH is a re-binding attempt, as in core.
+    if (f?.t === 'hello' || f?.t === 'helloAuth') { sec('LINK_CLOSED', 'handshake frame on a bound link', host); return ws.close(); }
     if (muted.has(host)) return;
     switch (f?.t) {
       case 'env': ingress(f.env); break;

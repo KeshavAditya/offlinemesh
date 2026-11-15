@@ -11,6 +11,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -29,6 +30,15 @@ class LanTransportTest {
     @AfterTest fun tearDown() = started.forEach { it.stop() }
 
     private fun <T> LinkedBlockingQueue<T>.next(): T = assertNotNull(poll(5, TimeUnit.SECONDS), "timed out")
+
+    @Test fun beaconTagIsRandomPerInstanceAndTieBreakIsSymmetric() {
+        val ts = List(50) { LanTransport(0, emptyList(), ByteArray(4)) }
+        assertTrue(ts.all { it.tag.size == 4 })
+        assertEquals(50, ts.map { it.tag.toList() }.toSet().size)   // a repeat in 50 draws of 32 bits means the tag is not random
+        val (a, b) = ts.map { it.tag }
+        assertTrue(ts[0].lessUnsigned(a, b) != ts[0].lessUnsigned(b, a))   // exactly one side dials
+        assertFalse(ts[0].lessUnsigned(a, a))                                 // never dials its own beacon
+    }
 
     @Test fun staticPeerFramesBothWaysThenLinkDown() {
         val rb = Rec(); val b = LanTransport(0).also { started += it }; b.start(rb)

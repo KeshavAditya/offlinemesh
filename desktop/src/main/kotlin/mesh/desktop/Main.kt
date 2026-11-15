@@ -48,7 +48,7 @@ fun main(argv: Array<String>) {
         System.err.println(e.message); System.err.println(USAGE); exitProcess(2)
     }
     val identity = Identity.loadOrCreate(args.data)
-    val lan = LanTransport(args.listen, args.peers, if (args.discovery) identity.nodeId.copyOf(4) else null)
+    val lan = LanTransport(args.listen, args.peers, if (args.discovery) ByteArray(0) else null)
     val web = WebTransport()
     val node = MeshNode(args.data, ExecutorScheduler(), listOf(lan, web))
     val guest = args.guestPort?.let { GuestServer(node, it, web, args.apk) }
