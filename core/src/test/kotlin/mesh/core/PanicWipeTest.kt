@@ -81,6 +81,47 @@ class PanicWipeTest {
         assertTrue(b.node.snapshot().contacts.any { it.id == a.id && it.linked })
         assertTrue(c.node.snapshot().contacts.any { it.id == a.id && !it.revoked })
         assertClean(a.dir, needles)
+
+        // B still holds old-A's PRESENCE and replays it: on A the old id is never a contact, a route or a DM target again.
+        s.net.runFor(60_000)
+        assertTrue(b.node.snapshot().contacts.any { it.id == oldA }, "B forgot old-A, so the replay is not exercised")
+        assertTrue(a.node.snapshot().contacts.none { it.id == oldA }, "A lists its own old id")
+        s.net.inject("B", "A", Codec.encodeFrame(Frame.Env(Envelope.create(old, EnvType.PRESENCE, ByteArray(8), 500_000,
+            Math.floorDiv(s.net.nowMs(), C.EPOCH_SECONDS * 1000L), 0, C.TTL_PRESENCE, byteArrayOf(1, 'A'.code.toByte())))))
+        s.net.runFor(1_000)
+        assertTrue(a.node.snapshot().contacts.none { it.id == oldA }, "a fresh PRESENCE of the old id made it a contact")
+        assertTrue(a.security().none { it.src == oldA }, "old id penalised or logged")
+        assertTrue(a.node.snapshot().links.single().authed, "the link that carried the old PRESENCE was closed")
+    }
+
+    @Test fun verifiedAndMutedSurviveRestartAndAreGoneAfterWipe() {
+        val net = SimNetwork()
+        listOf("A", "B", "C").forEach { net.node(it) }
+        net.link("A", "B"); net.link("B", "C")
+        net.runFor(10_000)
+        val a = net.nodes.getValue("A"); val b = net.nodes.getValue("B"); val c = net.nodes.getValue("C")
+        a.node.setVerified(b.id, true); a.node.setMuted(c.id, true)
+        a.node.setVerified(c.id, true); a.node.setVerified(c.id, false)   // unset is persisted too
+        net.runFor(100)
+        fun marks() = a.node.snapshot().contacts.associate { it.id to (it.verified to it.muted) }
+        assertEquals(mapOf(b.id to (true to false), c.id to (false to true)), marks())
+
+        net.linkOf("A", "B").down()
+        net.runFor(100)
+        a.restart()
+        net.linkOf("A", "B").up()
+        net.runFor(40_000)
+        assertEquals(mapOf(b.id to (true to false), c.id to (false to true)), marks())
+
+        a.node.panicWipe()
+        net.runFor(5_000)
+        assertFalse(File(a.dir, "marks.txt").exists())
+        net.linkOf("A", "B").up()
+        net.runFor(40_000)
+        assertEquals(mapOf(b.id to (false to false), c.id to (false to false)), marks())
+        a.restart()
+        net.runFor(100)
+        assertTrue(a.node.snapshot().contacts.none { it.verified || it.muted })
     }
 
     @Test fun revokeRemovesOldGroupMessagesAndSurvivesRestart() {

@@ -53,6 +53,7 @@ class MeshNode(
     private val muted = HashSet<String>()
     private val verified = HashSet<String>()
     private val revoked = HashSet<String>()                  // U2: keys whose owner wiped; their DMs are dropped (kept via the logged revoke)
+    private val former = HashSet<String>()                   // my own ids from before a wipe: never a contact or route here again
     private var gen = 0                                       // U2: bumped by a wipe so timers of the old identity stop
     private var revokesLeft = 0; private val revokeIds = HashSet<String>()   // U2: own revoke DMs not yet handed to a link
     private val impLogged = HashMap<String, Long>()          // U8: contact id -> last NAME_IMPERSONATION log time
@@ -118,6 +119,8 @@ class MeshNode(
         name = fitName(File(dataDir, "name.txt").takeIf { it.exists() }?.readText()?.trim() ?: "node-${me.take(4)}")
         profile = File(dataDir, "profile.txt").takeIf { it.exists() }?.readText()?.trim()
             ?.let { n -> Profile.values().firstOrNull { it.name == n } } ?: Profile.STANDARD
+        // before the replay: the group table rules ask who is verified
+        File(dataDir, MARKS).takeIf { it.exists() }?.forEachLine { (if (it.startsWith("v ")) verified else muted) += it.drop(2) }
         store = Store(File(dataDir, "messages.log")).also { it.relayCap = profile.relayStoreCap }
         store.replay { e, _ -> logPubs[hex(e.srcId)] = e.srcPub }
         store.replay { e, at -> if (!seen.containsKey(hex(e.msgId))) accept(e, null, at, replay = true) }
@@ -261,7 +264,7 @@ class MeshNode(
         gen++
         links.values.toList().forEach { it.transport.close(it.id) }   // transports redial; peers re-handshake with the new key
         links.clear()
-        for (f in listOf("identity.bin", "identity.bin.tmp", "messages.log", "messages.log.tmp", "name.txt")) File(dataDir, f).delete()
+        for (f in listOf("identity.bin", "identity.bin.tmp", "messages.log", "messages.log.tmp", "name.txt", MARKS)) File(dataDir, f).delete()
         listOf(contacts, msgs, groups, fanout, logPubs, seen, missing, impLogged).forEach { it.clear() }
         listOf(muted, verified, revoked, posted, revokeIds).forEach { it.clear() }
         secLog.clear(); rtts.clear(); drops.keys.forEach { drops[it] = 0 }
@@ -269,6 +272,9 @@ class MeshNode(
         originated = 0; relayed = 0; dupes = 0; skipped = 0; bytesOut = 0; bytesIn = 0; powMsLast = 0
         syncRounds = 0; syncRecovered = 0; linkUps = 0; linkDowns = 0; fullSends = 0; ihaveIds = 0; grafts = 0; prunes = 0
         lamport = 0; postEpoch = -1; postSlots = 0; myPresence = null; revokesLeft = 0
+        // shortcut: kept in memory only, because the wiped data dir must not name the old id. A restart inside the 1 h freshness
+        // window can list it again from a neighbour's cached PRESENCE; persist a keyed hash if that ever matters.
+        former += me
         id = Identity.loadOrCreate(dataDir)
         me = id.idHex
         name = fitName("")
@@ -445,14 +451,19 @@ class MeshNode(
 
     fun setMuted(nodeIdHex: String, muted: Boolean) = loop {
         if (muted) this.muted += nodeIdHex else this.muted -= nodeIdHex
+        saveMarks()
         emitNet()
     }
 
     fun setVerified(nodeIdHex: String, verified: Boolean) = loop {
         if (verified) this.verified += nodeIdHex else this.verified -= nodeIdHex
         if (verified) contacts.keys.toList().forEach { checkImpersonation(it, now()) }
+        saveMarks()
         emitNet()
     }
+
+    /** Verified and muted ids survive a restart: one line each, "v <id>" or "m <id>". Deleted by a panic wipe. */
+    private fun saveMarks() = File(dataDir, MARKS).writeText((verified.map { "v $it" } + muted.map { "m $it" }).joinToString("\n"))
 
     fun setDebug(flag: DebugFlag, on: Boolean) = loop { if (on) debug += flag else debug -= flag }
 
@@ -635,6 +646,8 @@ class MeshNode(
         if ((e.type == EnvType.POST || e.type == EnvType.DM) && !Pow.verify(e)) return penalize(l, C.SCORE_BAD_POW, SecKind.BAD_POW, "msg $mid", src)
         if (!Crypto.verify(e.srcPub, e.core, e.sig)) return penalize(l, C.SCORE_BAD_SIG, SecKind.BAD_SIGNATURE, "msg $mid", src)
         if (!guard.fresh(e.epoch, epochNow())) return sec(SecKind.STALE, "epoch ${e.epoch}", l, src)
+        // My identity from before a wipe: not shown, stored, routed or relayed. Remembered as handled so sync stops asking for it.
+        if (src in former) { guard.accepted[mid] = e.epoch; return }
         if (!typeRules(l, e, src, mid, now)) {
             // U9: a signed PRESENCE refused by the 10 s rate rule counts as seen, or every IHAVE for it would GRAFT it again.
             if (treeOn(e) && e.type == EnvType.PRESENCE) seen[mid] = SeenEntry(l.id, null, e.type, e.ttl, e.hops + 1).also { it.have += l.id }
@@ -1170,7 +1183,7 @@ class MeshNode(
         // U8: Cyrillic a e o p c y x i j s d palochka, Greek alpha omicron nu rho tau iota kappa upsilon, then 0 l 1, after lowercase
         const val LOOKALIKE_FROM = "аеорсухіјѕԁӏαονρτικυ0l1"
         const val LOOKALIKE_TO = "aeopcyxijsdiaovptikuoii"
-        const val REVOKE = "revoke"; const val REVOKE_WAIT_MS = 3_000L; const val FLUSH_MS = 500L }
+        const val REVOKE = "revoke"; const val MARKS = "marks.txt"; const val REVOKE_WAIT_MS = 3_000L; const val FLUSH_MS = 500L }
 }
 
 /** Real [Scheduler]: one daemon thread runs every mesh task in order. */
