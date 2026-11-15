@@ -29,7 +29,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
   const listeners = new Set(), timers = new Set();
   let me, name, lamport, startEpoch, postEpoch, postSlots, gen = 0;
   let contacts, msgs, groups, outbox, seen, verified, muted, revoked, ledger, lastPresence, bans, security, stats;
-  let ws = null, conn = 0, authed = false, host = null, hostPub = null, myNonce = null, lastRx = 0, backoff = 1000, stopped = false;
+  let ws = null, conn = 0, authed = false, host = null, hostPub = null, myNonce = null, lastRx = 0, backoff = 1000, stopped = false, retryT = null;
   const wanted = new Set(), outQ = [];
   let tokens = SEND_BUCKET, tokAt = now(), drainT = null, saveT = null, powChain = Promise.resolve();
   const rtts = [];
@@ -175,6 +175,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
     conn++; authed = false; host = null; hostPub = null; myNonce = M.randomBytes(16); lastRx = now();
     wanted.clear(); outQ.length = 0;
     for (const o of outbox.values()) o.served = false;
+    later(5_000, () => { if (ws === s && !authed) drop(); });   // WebKit 308073: ws:// to a LAN IP can stay CONNECTING for ever
     s.onopen = () => { if (ws === s) frame({ t: 'hello', pub: me.pub, nonce: myNonce }); };
     s.onmessage = (ev) => {
       if (ws !== s || typeof ev.data === 'string') return;   // text messages are ignored, as on the host
@@ -187,10 +188,27 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
       if (authed) stats.linkDowns++;
       authed = false;
       emitNet();
-      later(backoff, connect);
+      retryT = later(backoff, connect);
       backoff = Math.min(backoff * 2, 30_000);
     };
     emitNet();
+  }
+
+  /** Close the current socket ourselves (its onclose is skipped) and retry after [backoff]. */
+  function drop(ms = backoff) {
+    const s = ws;
+    if (s) { ws = null; if (authed) stats.linkDowns++; authed = false; s.close(); emitNet(); }
+    clearTimeout(retryT); timers.delete(retryT);
+    retryT = later(ms, connect);
+    backoff = Math.min(backoff * 2, 30_000);
+  }
+
+  /** Page came back (visible, pageshow, online, timer gap): reconnect now unless the link is live (ADVANCES_2 #2). */
+  function wake() {
+    if (stopped) return;
+    backoff = 1000;
+    if (ws && (authed ? now() - lastRx < SYNC_MS + 5_000 : now() - lastRx < 3_000)) return;   // live, or a fresh try
+    drop(0);
   }
 
   function frame(f) {
@@ -558,7 +576,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
     gen++; drainT = null;   // the old identity's timers no longer fire
     reset(M.createIdentity());
     save(true);
-    if (ws) ws.close(); else connect();   // the host re-handshakes with the new key
+    drop(0);   // the host re-handshakes with the new key
     emit(snapshot());
   }
 
@@ -634,6 +652,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
     snapshot: () => JSON.parse(JSON.stringify(snapshot())),
     onEvent(fn) { listeners.add(fn); try { fn(JSON.parse(JSON.stringify(snapshot()))); } catch (e) { console.error(e); } return () => listeners.delete(fn); },
     cmd,
+    wake,
     stop() {
       stopped = true;
       loops.forEach(clearInterval); timers.forEach(clearTimeout); timers.clear();

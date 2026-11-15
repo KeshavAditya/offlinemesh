@@ -37,12 +37,14 @@
 
   // Counts link attempts that close before the host authenticated us: a wrong or rotated PIN gets a 403 the browser
   // cannot see, so after 3 in a row stop (each try costs one of the host's PIN attempts) and ask for the PIN.
+  // Sockets the node closes itself (stuck or stale after sleep) and failures while offline do not count.
   const Counted = class extends WebSocket {
     constructor(u) {
       super(u);
       const g = gen;
-      this.addEventListener('close', () => { if (g !== gen) return; if (node?.connected) fails = 0; else if (++fails >= 3) ask(); });
+      this.addEventListener('close', () => { if (g !== gen || this.mine || !navigator.onLine) return; if (node?.connected) fails = 0; else if (++fails >= 3) ask(); });
     }
+    close(...a) { this.mine = true; super.close(...a); }
   };
 
   function start() {
@@ -51,7 +53,7 @@
       if (g !== gen) return;
       const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/mesh?pin=' + encodeURIComponent(pin);
       node = createWebNode({ url, storage, powMine, WebSocket: Counted });
-      node.onEvent((ev) => { if (ev.t === 'net') up(node.connected); if (ev.t !== 'error') evs.forEach((f) => f(ev)); });
+      node.onEvent((ev) => { if (ev.t === 'net') up(node.connected); if (ev.t === 'msg') alert(ev.msg); if (ev.t !== 'error') evs.forEach((f) => f(ev)); });
     }, (e) => { console.error('webbackend: meshnode.js failed to load', e); up(false); });
   }
 
@@ -79,6 +81,52 @@
   const prof = $('profile');
   for (const x of [prof.previousElementSibling, prof, prof.nextElementSibling, $('tamper').closest('fieldset')]) x.hidden = true;
 
+  // Back from sleep or a hidden tab: reconnect at once instead of waiting out the backoff (ADVANCES_2 #2).
+  // The 1 s tick notices a frozen page (timers stopped for over 5 s) on browsers that fire no event.
+  const wake = () => { if (!document.hidden) node?.wake(); };
+  for (const e of ['pageshow', 'online', 'focus']) addEventListener(e, wake);
+  for (const e of ['visibilitychange', 'resume']) document.addEventListener(e, wake);
+  let tick = Date.now();
+  setInterval(() => { if (Date.now() - tick > 5_000) wake(); tick = Date.now(); }, 1_000);
+
+  // Plain HTTP has no Notifications, so a DM or group message to a hidden tab shows in the title and vibrates (Android).
+  const title = document.title;
+  let unread = 0;
+  function alert(m) {
+    if (!document.hidden || m.mine || !(m.to || m.group)) return;
+    document.title = '(' + ++unread + ') ' + title;
+    try { navigator.vibrate?.(200); } catch {}
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { unread = 0; document.title = title; } });
+  const keep = document.createElement('p');
+  keep.className = 'mut'; keep.textContent = 'Keep this tab open to receive messages.';
+  document.querySelector('main').prepend(keep);
+
+  // One tab per stored identity (ADVANCES_2 #13): two tabs on one key would send with the same counters and look like an
+  // equivocator. A new tab asks on a BroadcastChannel; a running tab answers 'taken'. "Use here" makes the old tab stop
+  // (it saves first) and answer 'free'. BroadcastChannel needs no secure context; Web Locks does.
+  // shortcut: two tabs opened within 300 ms can both start; fine for a guest opening one link.
+  let bc = null;
+  try { bc = new BroadcastChannel('offlinemesh'); } catch {}
+  const busy = document.createElement('div');
+  busy.className = 'box'; busy.hidden = true;
+  busy.innerHTML = '<p>OfflineMesh is open in another tab.</p><p><button class="pri">Use here</button></p>';
+  document.querySelector('main').prepend(busy);
+  const ask1 = (t, ms) => new Promise((res) => {
+    if (!bc) return res(null);
+    const on = (e) => { if (e.data === 'taken' || e.data === 'free') { bc.removeEventListener('message', on); res(e.data); } };
+    bc.addEventListener('message', on);
+    bc.postMessage(t);
+    setTimeout(() => { bc.removeEventListener('message', on); res(null); }, ms);
+  });
+  if (bc) bc.onmessage = (e) => {
+    if (!node) return;
+    if (e.data === 'here') bc.postMessage('taken');
+    if (e.data === 'take') { gen++; node.stop(); node = null; up(false); busy.hidden = false; bc.postMessage('free'); }
+  };
+  const run = () => { busy.hidden = true; pin ? start() : ask(); };
+  busy.querySelector('button').onclick = () => ask1('take', 1_000).then(run);
+
   const qr = (text) => '/api/qr?text=' + encodeURIComponent(text);
 
   // App download (GuestServer puts OM_APK = { sha256 } in the page when it has the APK).
@@ -95,7 +143,7 @@
     powVia: null,
     onEvent: (f) => evs.push(f),
     onState: (f) => sts.push(f),
-    connect: () => (pin ? start() : ask()),
+    connect: () => ask1('here', 300).then((r) => (r === 'taken' ? (busy.hidden = false, up(false)) : run())),
     send(cmd) {
       if (!node) return Promise.reject(new Error('not joined yet'));
       const r = node.cmd(cmd);
