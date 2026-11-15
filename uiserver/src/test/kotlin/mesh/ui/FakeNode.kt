@@ -84,6 +84,7 @@ class FakeNode : UiNode {
                 .also { groups[it.id] = it; emit(MeshEvent.GroupChanged(it)) }
             is Cmd.GroupMembers -> groups[cmd.id]?.takeIf { it.owner == self.id }
                 ?.copy(members = (listOf(self.id) + cmd.members).distinct())?.also { groups[it.id] = it; emit(MeshEvent.GroupChanged(it)) }
+            is Cmd.Profile -> Unit
             is Cmd.GroupMsg -> groups[cmd.group]?.let { g ->
                 val n = g.members.size - 1
                 val m = msg(self.id, null, cmd.text, true, MsgStatus.QUEUED, 0, null).copy(group = g.id, delivered = 0, total = n)

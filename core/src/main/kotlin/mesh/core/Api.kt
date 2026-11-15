@@ -106,8 +106,26 @@ data class Snapshot(
     val groups: List<Group> = emptyList(),             // 13.2: live groups only
     val gdms: Map<String, List<Msg>> = emptyMap(),     // 13.2: groupId -> messages, history kept after leaving
     val stats: Stats = Stats(),                        // U1
-    val profile: String = "STANDARD",                  // U3 later
+    val profile: String = "STANDARD",                  // U3
+    val profileValues: ProfileValues = Profile.STANDARD.info(),
 )
+
+/**
+ * U3 mission profiles: local timers and limits only, never a value another node validates (TTL caps, PoW bits,
+ * epoch length, slots, max age, frame limits), so nodes on different profiles interoperate.
+ * [longRange] is read by the Android app for coded-PHY advertising (U5).
+ */
+enum class Profile(val presenceMs: Long, val syncMs: Long, val jitterMinMs: Long, val jitterMaxMs: Long, val maxLinks: Int, val relayStoreCap: Int, val longRange: Boolean) {
+    STANDARD(C.PRESENCE_INTERVAL_MS, C.SYNC_INTERVAL_MS, C.JITTER_MIN_MS, C.JITTER_MAX_MS, C.MAX_LINKS, C.RELAY_STORE_CAP, false),
+    CROWD(60_000, 30_000, 50, 200, 4, 256, false),
+    TUNNEL(15_000, 5_000, 0, 20, 5, 512, true),
+    SPARSE(15_000, 10_000, 30, 100, 5, 512, true);   // SPARSE also syncs at every link-up, as every profile does
+
+    fun info() = ProfileValues(presenceMs, syncMs, jitterMinMs, jitterMaxMs, maxLinks, relayStoreCap, longRange)
+}
+
+@Serializable
+data class ProfileValues(val presenceMs: Long, val syncMs: Long, val jitterMinMs: Long, val jitterMaxMs: Long, val maxLinks: Int, val relayStoreCap: Int, val longRange: Boolean)
 
 sealed interface MeshEvent {
     data class MessageAdded(val msg: Msg) : MeshEvent

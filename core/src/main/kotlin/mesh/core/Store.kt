@@ -11,12 +11,13 @@ internal class Stored(val env: Envelope, val atMs: Long, val relayOnly: Boolean)
 /** 5.11: POST/DM envelopes (for sync) and the append-only messages.log: u32 length, envelope, u64 receivedAtMs. */
 internal class Store(private val file: File) {
     val envs = LinkedHashMap<String, Stored>()   // msgId hex, oldest first
+    var relayCap = C.RELAY_STORE_CAP             // U3: set from the profile
 
     fun put(e: Envelope, at: Long, relayOnly: Boolean, log: Boolean) {
         envs[Crypto.hex(e.msgId)] = Stored(e, at, relayOnly)
-        if (relayOnly && envs.values.count { it.relayOnly } > C.RELAY_STORE_CAP)
+        if (relayOnly) while (envs.values.count { it.relayOnly } > relayCap)   // while: a lowered cap trims down on the next relay
             envs.remove(envs.entries.first { it.value.relayOnly }.key)
-        if (envs.size > KEEP_CAP + C.RELAY_STORE_CAP) envs.remove(envs.keys.first())
+        while (envs.size > KEEP_CAP + relayCap) envs.remove(envs.keys.first())
         if (log) append(e, at)
     }
 

@@ -24,6 +24,7 @@ sealed interface Cmd {
     data class Group(val name: String, val members: List<String>) : Cmd                    // 13.2
     data class GroupMembers(val id: String, val members: List<String>) : Cmd
     data class GroupMsg(val group: String, val text: String) : Cmd
+    data class Profile(val p: mesh.core.Profile) : Cmd                                       // U3
 }
 
 private val NODE_ID = Regex("[0-9a-f]{16}")
@@ -70,6 +71,7 @@ fun parseCmd(body: String): Cmd {
         "group" -> Cmd.Group(text("name", 32), members())
         "group-members" -> Cmd.GroupMembers(id("id"), members())
         "gmsg" -> Cmd.GroupMsg(id("group"), text("text", 1_000))
+        "profile" -> str("name").let { n -> Cmd.Profile(mesh.core.Profile.values().firstOrNull { it.name == n } ?: throw IllegalArgumentException("unknown profile")) }
         else -> throw IllegalArgumentException("unknown t '$t'")
     }
 }
@@ -86,4 +88,5 @@ fun MeshNode.exec(c: Cmd) = when (c) {
     is Cmd.Group -> { createGroup(c.name, c.members); Unit }
     is Cmd.GroupMembers -> setGroupMembers(c.id, c.members)
     is Cmd.GroupMsg -> sendGroup(c.group, c.text)
+    is Cmd.Profile -> setProfile(c.p)
 }

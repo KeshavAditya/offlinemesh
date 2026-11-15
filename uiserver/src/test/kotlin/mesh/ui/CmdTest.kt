@@ -22,6 +22,7 @@ class CmdTest {
         assertEquals(Cmd.Group("G", listOf(id)), parseCmd("""{"t":"group","name":"G","members":["$id","$id"]}"""))
         assertEquals(Cmd.GroupMembers(id, listOf()), parseCmd("""{"t":"group-members","id":"$id","members":[]}"""))
         assertEquals(Cmd.GroupMsg(id, "hi"), parseCmd("""{"t":"gmsg","group":"$id","text":"hi"}"""))
+        assertEquals(Cmd.Profile(mesh.core.Profile.TUNNEL), parseCmd("""{"t":"profile","name":"TUNNEL"}"""))
     }
 
     @Test fun rejectsBadInput() {
@@ -36,6 +37,7 @@ class CmdTest {
             """{"t":"group","name":"G","members":[${(0..16).joinToString(",") { "\"%016x\"".format(it) }}]}""",
             """{"t":"group-members","id":"x","members":[]}""", """{"t":"gmsg","group":"$id","text":"${"x".repeat(1001)}"}""",
             """{"t":"debug","flag":"evil","on":true}""", """{"t":"attack","kind":"nuke"}""",
+            """{"t":"profile","name":"tunnel"}""", """{"t":"profile","name":"FAST"}""", """{"t":"profile"}""",
         )
         for (b in bad) assertFailsWith<IllegalArgumentException>(b) { parseCmd(b) }
     }

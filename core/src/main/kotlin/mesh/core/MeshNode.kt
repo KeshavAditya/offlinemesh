@@ -41,6 +41,7 @@ class MeshNode(
     private var postEpoch = -1L
     private var postSlots = 0
     private var myPresence: Envelope? = null
+    private var profile = Profile.STANDARD
 
     private val links = LinkedHashMap<LinkId, Link>()
     private val contacts = HashMap<String, Peer>()
@@ -93,7 +94,9 @@ class MeshNode(
         id = Identity.loadOrCreate(dataDir)
         me = id.idHex
         name = fitName(File(dataDir, "name.txt").takeIf { it.exists() }?.readText()?.trim() ?: "node-${me.take(4)}")
-        store = Store(File(dataDir, "messages.log"))
+        profile = File(dataDir, "profile.txt").takeIf { it.exists() }?.readText()?.trim()
+            ?.let { n -> Profile.values().firstOrNull { it.name == n } } ?: Profile.STANDARD
+        store = Store(File(dataDir, "messages.log")).also { it.relayCap = profile.relayStoreCap }
         store.replay { e, _ -> logPubs[hex(e.srcId)] = e.srcPub }
         store.replay { e, at -> if (!seen.containsKey(hex(e.msgId))) accept(e, null, at, replay = true) }
         logPubs.clear()
@@ -271,6 +274,13 @@ class MeshNode(
         sendPresence()
     }
 
+    /** U3: local timers and limits only. Scheduled timers pick it up at their next reschedule; extra links stay open. */
+    fun setProfile(p: Profile) = loop {
+        profile = p
+        store.relayCap = p.relayStoreCap
+        File(dataDir, "profile.txt").writeText(p.name)
+    }
+
     fun setMuted(nodeIdHex: String, muted: Boolean) = loop {
         if (muted) this.muted += nodeIdHex else this.muted -= nodeIdHex
         emitNet()
@@ -315,6 +325,8 @@ class MeshNode(
             groups.values.map { it.info() },
             all.filter { it.group != null }.groupBy { it.group!! },
             stats(),
+            profile.name,
+            profile.info(),
         )
     }
 
@@ -359,7 +371,7 @@ class MeshNode(
     // ---- 5.5 handshake ----
 
     private fun linkUp(t: Transport, linkId: LinkId, desc: String) {
-        if (links.size >= C.MAX_LINKS || linkId in links) { t.close(linkId); return }
+        if (links.size >= profile.maxLinks || linkId in links) { t.close(linkId); return }
         val l = Link(linkId, t, desc, now())
         links[linkId] = l
         frame(l, Frame.Hello(id.publicDer, l.myNonce))
@@ -494,7 +506,7 @@ class MeshNode(
         if (first == null) return
         val proof = Frame.BanProof(first, second)
         // after the forward jitter, so posts already queued for a neighbour reach it before the ban (10.2 test 6)
-        later(C.JITTER_MAX_MS + 1) { links.values.filter { live(it) && it !== l && it.peer != src }.forEach { frame(it, proof) } }
+        later(profile.jitterMaxMs + 1) { links.values.filter { live(it) && it !== l && it.peer != src }.forEach { frame(it, proof) } }
     }
 
     private fun onBanProof(l: Link, a: Envelope, b: Envelope) {
@@ -682,7 +694,7 @@ class MeshNode(
     private fun forward(e: Envelope) {
         if (e.ttl < 2) return
         val mid = hex(e.msgId)
-        later(rnd.nextLong(C.JITTER_MIN_MS, C.JITTER_MAX_MS + 1)) {
+        later(rnd.nextLong(profile.jitterMinMs, profile.jitterMaxMs + 1)) {
             val s = seen[mid] ?: return@later
             broadcast(e, targets(e, s))
         }
@@ -855,7 +867,7 @@ class MeshNode(
     private fun presenceLoop() {
         sendPresence()
         guard.evict(now(), epochNow())
-        later(C.PRESENCE_INTERVAL_MS) { presenceLoop() }
+        later(profile.presenceMs) { presenceLoop() }
     }
 
     // ---- 5.8 sync ----
@@ -871,7 +883,8 @@ class MeshNode(
         if (!live(l)) return
         val ep = epochNow()
         val ids = store.envs.values.toList().asReversed().asSequence().filter { offerable(it.env, ep) }.take(512).map { it.env.msgId }.toList()
-        if (ids.isNotEmpty()) frame(l, Frame.SyncOffer(ids))
+        // empty offer as keepalive when our presence (CROWD 60 s) is slower than peers' 45 s silent-link limit
+        if (ids.isNotEmpty() || profile.presenceMs > C.PRESENCE_INTERVAL_MS) frame(l, Frame.SyncOffer(ids))
     }
 
     /**
@@ -880,7 +893,7 @@ class MeshNode(
      * shortcut: links to peers we muted are exempt (a muted pair sends nothing by design); a one-sided mute
      * still lets the unmuted side close the link after 45 s, fine since the demo mutes both ways.
      */
-    private fun syncLoop(l: Link): Unit = later(C.SYNC_INTERVAL_MS) {
+    private fun syncLoop(l: Link): Unit = later(profile.syncMs) {
         if (links[l.id] !== l) return@later
         if (l.peer !in muted && now() - l.lastRxMs > 3 * C.SYNC_INTERVAL_MS) { sec(SecKind.LINK_CLOSED, "silent for 45 s", l, l.peer); closeLink(l); return@later }
         offer(l); syncLoop(l)
