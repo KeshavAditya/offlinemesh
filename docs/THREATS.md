@@ -44,7 +44,7 @@ Where things were tested is in "How far this is tested" below. In short: the sim
 | Relay that drops DMs (black hole) | The sender keeps a backup route through a different first link. No ACK within 3 s + 1 s per hop: the same envelope is resent on the backup (or flooded once if there is none), at most twice, and `ROUTE_FAILED` is logged. | U10 |
 | My phone is about to be taken | Panic wipe (type `WIPE`): a revoke DM (kind 4) goes to every DM contact and group member, then the node deletes its identity, message log and contacts and starts with a new ID. A peer that gets the revoke deletes its DMs with that key and its group messages, drops groups that key owns, and logs `PEER_REVOKED`. The browser client has the same button. | U2 |
 | Carry a message past a jammed radio | A short envelope (500 bytes or less) can be shown as a QR code on one phone and scanned on another (Android "QR hop" screen). The import runs the full ingress pipeline, so signature and proof of work are still checked. | U6 |
-| Track a phone by its Bluetooth advert | The scan response carries a 4-byte tag drawn at random each time the Bluetooth transport starts, not the node ID. Identity is proven only inside the link (`HELLO_AUTH`). See the limits below. | plan 8 |
+| Track a phone by what it broadcasts | The Bluetooth scan response and the LAN UDP discovery beacon each carry a 4-byte tag drawn at random each time that transport starts, not the node ID. Identity is proven only inside the link (`HELLO_AUTH`). See the limits below. | plan 8 |
 | Read or plant files through the guest web server | The guest server answers only its fixed pages, scripts and the APK. Path traversal, odd paths, `POST` to the APK and `Range` headers never return another file, and pages never write mesh data as HTML (T8). | 5.13 |
 | Hand someone a malicious copy of the app | The "Share app" dialog shows the app's signing-certificate SHA-256 to compare between phones; the guest page shows the APK file's SHA-256 next to the download. See the limits below: the download is plain HTTP and a fake app can print any fingerprint. | offline sharing |
 
@@ -74,7 +74,7 @@ We say these out loud. They are not hidden.
 - **Distance from timing.** A relay can time a DM against its ACK to estimate how many hops away the recipient is.
 - **Sync shows what I carry.** Any peer that completes the handshake gets a `SYNC_OFFER` listing the IDs of up to 512 envelopes I hold from the last hour, and can ask for them. DMs stay encrypted, but the list shows what I have carried.
 - **Bluetooth advert tag.** The random tag is new each time the Bluetooth transport starts (app start, and each restart of the transport, for example after a panic wipe), so sessions cannot be linked by it. Within one session it stays fixed, along with the channel number (PSM), even when the phone's Bluetooth address rotates. Anyone who connects learns the node ID in the handshake.
-- **The LAN beacon still carries a NodeId prefix.** UDP discovery on a LAN broadcasts the first 4 bytes of the node ID, so anyone on the same Wi-Fi can follow a node across sessions. Only the Bluetooth advert was changed.
+- **LAN beacon.** UDP discovery on a LAN also carries a random 4-byte tag per transport start, not the node ID. The same limits apply: fixed within a session, and anyone who connects learns the node ID.
 
 ### Seizure and devices
 
@@ -98,7 +98,7 @@ We say these out loud. They are not hidden.
 - It only warns. Nothing is banned, because sharing a name is not proof of malice.
 - It only protects names of contacts you marked verified.
 - The look-alike list covers common cases, not every Unicode confusable.
-- The browser client does not run this check. A browser guest sees no warning.
+- The browser client runs the same name check, ported to JavaScript.
 
 ### DM failover (U10)
 
@@ -159,7 +159,7 @@ We say these out loud. They are not hidden.
 
 ### How far this is tested
 
-- **Simulator and unit tests:** `./gradlew test` runs 145 tests, all passing (core 121, of which 29 are red-team; uiserver 16, including the 4 guest-server attack tests; app 4; lan 2; desktop 2).
+- **Simulator and unit tests:** `./gradlew test` runs 146 tests, all passing (core 121, of which 29 are red-team; uiserver 16, including the 4 guest-server attack tests; app 4; lan 3; desktop 2).
 - **Desktop and emulators:** all eight acceptance checks (`scripts/e2e.sh`) pass on 3, 4 and 5 desktop nodes and on four Android emulators over emulated Bluetooth, including the R8 release APK and a browser guest.
 - **Real phones, one run:** OPPO and A52s over Bluetooth plus a laptop node over LAN (no Fold 7) passed checks 1, 2, 3, 4, 6 and 7. Check 5 failed because the OPPO went silent mid-test: Android's battery saving or ColorOS stopped the app. So OEM battery killing is observed, not hypothetical. The app now asks to be exempt from battery optimisation on first run and has a "Keep alive" checklist per brand; that fix has not been re-run on the OPPO. Keep demo phones on chargers.
 - **Not tested on real phones:** Bluetooth range, long-range Bluetooth (U5, guarded code only), the QR hop between two phones, and PoW time on each phone.

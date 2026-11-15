@@ -143,7 +143,7 @@ One slide. Every figure is copied from `docs/NUMBERS.md`; the label says where i
 | A **59,990-byte** frame over Bluetooth L2CAP in **4 to 6 s** | emulator |
 | One Bluetooth DM between two real phones: **560 ms**; **6 of 7** checks passed (the 7th failed when the OPPO's battery saving stopped the app) | real phone |
 | A post's proof of work: **6 to 9 ms** on one laptop core | laptop |
-| **145** automated tests; **14** of them reproduce published attacks on other mesh apps (T1-T8, T11) | tests |
+| **146** automated tests; **14** of them reproduce published attacks on other mesh apps (T1-T8, T11) | tests |
 
 Do not add phone PoW times or Bluetooth range: they have not been measured.
 

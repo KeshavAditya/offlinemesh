@@ -17,7 +17,7 @@ Secure messaging for phones with no internet and no server. Phones pass messages
 ## Build and test
 
 ```
-./gradlew test                       # 145 tests (core 121 incl. 29 red-team, uiserver 16, app 4, lan 2, desktop 2)
+./gradlew test                       # 146 tests (core 121 incl. 29 red-team, uiserver 16, app 4, lan 3, desktop 2)
 ./gradlew :app:assembleRelease       # Android APK, R8-shrunk
 ./gradlew :core:bench                # forwarding benchmark, writes docs/NUMBERS.md
 scripts/run-3-desktop.sh             # three desktop nodes A <-> B <-> C, UIs on 8081..8083

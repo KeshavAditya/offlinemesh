@@ -6,7 +6,7 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 
 | What | Result |
 |---|---|
-| `./gradlew test` (v2 branch, counted from the test reports) | 145 tests, all pass, none ignored: core 121, uiserver 16, app 4, lan 2, desktop 2 |
+| `./gradlew test` (v2 branch, counted from the test reports) | 146 tests, all pass, none ignored: core 121, uiserver 16, app 4, lan 3, desktop 2 |
 | of which red-team (`core/src/test/kotlin/mesh/redteam/`) | 29, all pass (RedTeamTest 26 incl. T1-T7 and T11, BroadcastCostTest 2, PowTimingTest 1); plus 4 guest-server attack tests (T8) in uiserver |
 | Browser client tests (`node --test`) | meshcore.js vectors 6/6 against the Kotlin core both ways; browser node against 2 desktop nodes 11/11 |
 | `scripts/e2e.sh` on 3 desktop nodes (TCP, one laptop) | items 1-6 PASS (run twice) |

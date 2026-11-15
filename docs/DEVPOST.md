@@ -18,7 +18,7 @@ The apps people reached for have broken in public. Bridgefy could be taken down 
 - **Direct messages are encrypted end to end** (ECDH + AES-256-GCM). The phones that relay them cannot read them.
 - **Length padding:** every DM is padded to a size bucket, so relays see sender, recipient, timing and a size bucket, never content or exact length.
 - **Panic wipe:** type `WIPE` and the phone sends a signed revoke to its contacts, deletes its identity and messages, and starts over with a new ID. Contacts delete their conversation with the old key. It is a request, not a guarantee; the limits are in `docs/THREATS.md`.
-- **No tracking handle in the Bluetooth advert:** the advert carries a random tag that changes every session, not the node ID.
+- **No tracking handle in what a phone broadcasts:** the Bluetooth advert and the LAN discovery beacon carry a random tag that changes every session, not the node ID.
 - **Group chats** of up to 16 people. A group message goes out as one encrypted DM to each member, so relays still see only DMs.
 
 **Detects threats**
@@ -52,7 +52,7 @@ No. Direct messages are routed: each phone learns from signed beacons which neig
 - **Web client:** the protocol rewritten in JavaScript with the noble crypto library vendored in, because a plain-HTTP page gets no WebCrypto. Test vectors are checked byte for byte against the Kotlin core in both directions, and a browser node passes 11 of 11 interop checks against desktop nodes.
 - **Desktop node** over TCP, used as the fallback demo and for testing.
 - **Simulator:** an in-memory network with virtual time runs the real core code.
-- **Tests:** 145 automated tests. 14 of them reproduce published attacks on other mesh apps: fuzzed and length-lying frames, relaying before checking, re-running the handshake on a live link, re-encoded signatures, cloned keys and restarts, failed decryption as an oracle, look-alike names, a stored key being overwritten, and path tricks against the guest download server. Two of them found gaps that we fixed: a second handshake on a live link, and look-alike names.
+- **Tests:** 146 automated tests. 14 of them reproduce published attacks on other mesh apps: fuzzed and length-lying frames, relaying before checking, re-running the handshake on a live link, re-encoded signatures, cloned keys and restarts, failed decryption as an oracle, look-alike names, a stored key being overwritten, and path tricks against the guest download server. Two of them found gaps that we fixed: a second handshake on a live link, and look-alike names.
 - **Benchmark:** `./gradlew :core:bench` compares plain flooding, our routing and the tree on four topologies and writes the table into `docs/NUMBERS.md`, so every figure we quote traces to code.
 - One acceptance script (`scripts/e2e.sh`) drives three or more nodes over HTTP and checks eight goals: two-hop DM, relay cannot read it, post arrives once, tampering rejected, flood banned, catch-up after reconnect, group message delivered to every member, post reaches every node.
 
@@ -90,7 +90,6 @@ No. Direct messages are routed: each phone learns from signed beacons which neig
 - One key does both signing and encryption. Keys are software keys in app storage, not in the phone's hardware keystore.
 - A browser guest trusts the host phone for its code, over plain HTTP, and keeps its key in browser storage.
 - A first install shared over the hotspot is only as safe as the hotspot password and an independent fingerprint check.
-- The LAN discovery beacon still carries part of the node ID.
 - Failover only guarantees a different first hop.
 - A 2.4 GHz jammer stops Bluetooth. We need no cell tower or GPS, and the fallbacks are the LAN transport on a 5 GHz hotspot and the QR hop.
 - Android only; iPhones join as browser guests.
@@ -101,7 +100,6 @@ No. Direct messages are routed: each phone learns from signed beacons which neig
 - A full test on the three real phones, with range and timing.
 - Forward secrecy without a server: rotating signed encryption keys gossiped in presence, which also separates the signing and encryption keys.
 - Keys in Android Keystore or StrongBox.
-- A random tag in the LAN beacon too.
 - Long-range Bluetooth mode where the phone supports it; not range-tested.
 
 ## Built with
