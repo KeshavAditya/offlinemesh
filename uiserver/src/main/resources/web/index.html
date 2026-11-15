@@ -68,11 +68,11 @@ button:disabled { opacity: .45; cursor: default; }
 button.pri { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
 button.pri:active { background: var(--fg); border-color: var(--fg); }
 button.bad { background: var(--red); border-color: var(--red); color: var(--bg); }
-input[type=text], select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+input[type=text], input[type=number], select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
 ::placeholder { color: var(--mut); opacity: 1; }
 select { width: auto; }
 :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
-input[type=text]:focus { outline: 2px solid var(--acc); outline-offset: -1px; border-color: transparent; }
+input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--acc); outline-offset: -1px; border-color: transparent; }
 ul { list-style: none; padding: 0; margin: 0; }
 .mut, small { color: var(--mut); font-size: 13px; }
 .lb { display: block; font-size: 13px; font-weight: 600; color: var(--mut); margin-bottom: 4px; }
@@ -126,6 +126,14 @@ ul { list-style: none; padding: 0; margin: 0; }
 .path .hn { padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
 .path .hn.me { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
 .path .hn.end { border-color: var(--acc); color: var(--acc); }
+#topo { display: block; width: 100%; max-width: 400px; margin: 0 auto; overflow: visible; }
+#topo line { stroke: var(--acc); stroke-width: 2; }
+#topo line.far { stroke: var(--mut); stroke-dasharray: 4 4; }
+#topo .ring { fill: none; stroke: var(--line); }
+#topo .node { fill: var(--bg); stroke: var(--acc); stroke-width: 2; }
+#topo .node.me { fill: var(--acc); }
+#topo text { fill: var(--fg); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; font-size: 14px; font-weight: 500; text-anchor: middle; }
+#topo text.h { fill: var(--acc); font-size: 12px; font-weight: 700; }
 .path .hl { width: 20px; border-top: 2px solid var(--acc); }
 .path.none .hl { border-top-style: dashed; border-color: var(--mut); }
 #chatWarn { padding-bottom: 8px; }
@@ -292,6 +300,7 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
   <ul id="msgs" class="msgs" aria-live="polite"></ul>
   <div class="compose">
     <div class="row">
+      <button id="safeBtn" title="Tell the group you are safe (adds what you typed as a note)" onclick="sendSafe()" hidden>I'm safe</button>
       <button id="photoBtn" title="Send a photo" onclick="$('photoIn').click()">Photo</button><input type="file" id="photoIn" accept="image/*" aria-label="Photo to send" hidden onchange="photo(this)">
       <input type="text" id="dmText" placeholder="Message" aria-label="Message text" data-max="39999" data-btn="dmBtn" data-count="dmCount">
       <button id="dmBtn" class="pri" disabled onclick="sendDm()">Send</button>
@@ -319,7 +328,9 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
   </div>
   <div id="iGroup">
     <h2>Members <small id="iCount"></small></h2>
+    <p id="iLate" class="err" role="alert"></p>
     <ul id="iMembers" class="box"></ul>
+    <label class="row" style="margin-top:8px"><small>Alert after</small> <input type="number" id="safeN" min="1" max="1440" style="width:6em" onchange="setSafeN(this.value)"> <small>minutes without an "I'm safe"</small></label>
     <details id="gView" hidden><summary>Edit members</summary><div id="gMem" class="pick" role="group" aria-label="Members"></div>
       <button id="gSave" class="pri" onclick="saveMembers()">Save members</button></details>
   </div>
@@ -347,6 +358,8 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
 </section>
 
 <section id="net">
+  <h2>Map <small id="nMap"></small></h2>
+  <svg id="topo" viewBox="0 0 400 400" role="img" aria-label="Mesh map: you in the middle, direct links on the first ring, contacts farther out by hop count"></svg>
   <h2>Links <small id="nLinks"></small></h2>
   <ul id="links"></ul>
   <h2>Mission profile</h2>
@@ -597,7 +610,7 @@ function render() {
   $('chatAv').hidden = !convo; $('chatAv').textContent = av(title).textContent; $('chatAv').className = 'av' + (gq ? ' g' : '');
   $('infoBtn').hidden = !convo; $('nlinks').hidden = convo;
   $('chatPath').hidden = !convo || gq; if (convo && !gq) path('chatPath', c, open.id);
-  $('chatWarn').textContent = convo && !gq ? flags(c) : '';
+  $('chatWarn').textContent = !convo ? '' : gq ? late(g) : flags(c);
   const nl = S.links.filter(l => l.authed).length;
   $('nlinks').textContent = nl ? nl + (nl === 1 ? ' link' : ' links') : 'no links';
   $('nlinks').classList.toggle('on', nl > 0);
@@ -702,7 +715,7 @@ function path(div, c, id) {
 
 function renderConvo() {
   const id = open.id, gq = open.kind === 'group', g = gq && grp(id);
-  $('photoBtn').hidden = gq; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes, no photos (13.2)
+  $('photoBtn').hidden = gq; $('safeBtn').hidden = !g; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes, no photos (13.2)
   document.querySelector('#convo .compose').hidden = gq && !g;
   const ul = $('msgs'); ul.replaceChildren();
   const list = [...((gq ? S.gdms : S.dms)[id] || [])].sort(byOrder).slice(-MAX);
@@ -718,6 +731,38 @@ function renderConvo() {
       el('span', hhmm(m.tsMs) + ' · ' + (m.mine ? status(m) : route(m)), 'meta')));
   }
 }
+
+// "I'm safe" roll call (ADVANCES row 9): a normal group message that starts with SAFE. Each is signed by its sender,
+// so the roster keys on the verified sender, never on the text: nobody can check in for someone else.
+const SAFE = '\u2705 SAFE';
+const sendSafe = () => open && send({ t: 'gmsg', group: open.id, text: (SAFE + ' ' + val('dmText')).trim() }, 'dmText', 'dmErr');
+let safeN = {};
+try { safeN = JSON.parse(localStorage.omSafeN || '{}') || {}; } catch (e) {}
+const lateMin = gid => +safeN[gid] >= 1 ? +safeN[gid] : 30;
+function setSafeN(v) {   // not open.id in the onchange attribute: there "open" is document.open
+  const gid = open.id;
+  v = Math.round(+v); if (!(v >= 1 && v <= 1440)) return render();
+  safeN[gid] = v; try { localStorage.omSafeN = JSON.stringify(safeN); } catch (e) {}
+  render();
+}
+// last: member id -> newest check-in time; first: the group's first check-in (0 = no roll call yet, so no alert).
+function rollCall(gid) {
+  const last = {}; let first = 0;
+  for (const m of S.gdms[gid] || []) if (typeof m.text === 'string' && m.text.startsWith(SAFE)) {
+    const who = m.mine ? S.self.id : m.from;
+    last[who] = Math.max(last[who] || 0, m.tsMs); first = first ? Math.min(first, m.tsMs) : m.tsMs;
+  }
+  return { last, first };
+}
+// A member who never checked in counts from the group's first check-in.
+function late(g) {
+  if (!g) return '';
+  const rc = rollCall(g.id), n = lateMin(g.id), cut = Date.now() - n * 60000;
+  const miss = rc.first ? g.members.filter(m => (rc.last[m] || rc.first) < cut) : [];
+  return miss.length ? 'No "I\'m safe" for ' + n + ' min from ' + miss.map(m => m === S.self.id ? 'you' : name(m)).join(', ') : '';
+}
+// Time alone can raise the alert, so redraw an open group every 20 s.
+setInterval(() => open && open.kind === 'group' && (cur === 'convo' || cur === 'info') && render(), 20000);
 
 function sw(label, hint, checked, onchange) {
   const l = el('label', null, 'sw'), c = el('input'); c.type = 'checkbox'; c.checked = checked; c.onchange = () => onchange(c.checked);
@@ -740,10 +785,13 @@ function renderInfo() {
     path('iPath', c, id); $('iRoute').textContent = route(c);
     return;
   }
-  const own = g && g.owner === S.self.id, mem = g ? g.members : [];
+  const own = g && g.owner === S.self.id, mem = g ? g.members : [], rc = rollCall(id), cut = Date.now() - lateMin(id) * 60000;
   count('iCount', mem.length);
+  $('iLate').textContent = late(g);
+  if (document.activeElement !== $('safeN')) $('safeN').value = lateMin(id);
   $('iMembers').replaceChildren(...mem.map(m => add(el('li', null, 'rowc'), av(name(m), m === S.self.id ? 'me' : ''),
-    add(el('div', null, 'main'), el('b', name(m)), m === S.self.id ? el('span', 'You', 'tag') : '', m === g.owner ? el('span', 'Owner', 'tag') : ''))));
+    add(el('div', null, 'main'), el('b', name(m)), m === S.self.id ? el('span', 'You', 'tag') : '', m === g.owner ? el('span', 'Owner', 'tag') : '', el('br'),
+      el('small', rc.last[m] ? 'safe at ' + hhmm(rc.last[m]) : rc.first ? 'no "I\'m safe" yet' : '', rc.first && (rc.last[m] || rc.first) < cut ? 'err' : '')))));
   $('gView').hidden = !own;
   if (own && !$('gView').open) picker('gMem', mem);   // rebuilt only while closed, so events do not undo ticks
 }
@@ -780,9 +828,42 @@ function renderNet() {
       el('b', l.peer ? name(l.peer) : l.link), ' ', el('span', l.peer ? fp(l.peer) : '', 'mono'), el('br'),
       el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting') + (l.tree ? ' · tree ' + l.tree : '')), l.desc ? el('br') : '', l.desc ? el('small', cap(l.desc, 200)) : '')));
   }
+  renderTopo();
   if (document.activeElement !== $('profile')) $('profile').value = S.profile || 'STANDARD';
   kv('profVals', S.profileValues || {});
   renderStats();
+}
+// Mesh map: you in the middle, ring h = h hops away (3 and more share the outer ring). A line joins each contact to its
+// first relay when known (dashed when more relays follow), else a dashed line to you. Names go in with textContent.
+function renderTopo() {
+  const NS = 'http://www.w3.org/2000/svg', C = 200, R = 52;
+  const mk = (tag, a, text) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (text != null) e.textContent = text; return e; };
+  const direct = new Set(S.links.filter(l => l.authed && l.peer && l.peer !== S.self.id).map(l => l.peer));
+  const hop = new Map(others().map(c => [c.id, direct.has(c.id) ? 1 : c.hops]));
+  for (const id of direct) hop.set(id, 1);
+  const pos = new Map([[S.self.id, { x: C, y: C, a: -Math.PI / 2 }]]), lines = [];
+  for (const k of [1, 2, 3]) {
+    const ring = [...hop].filter(([, h]) => h != null && Math.min(h, 3) === k).map(([id]) => id).slice(0, 40)
+      .map(id => { const c = contact(id) || {}, p = k > 1 && c.via && pos.get(c.via); return { id, p, a: p ? p.a : 9 }; })
+      .sort((x, y) => x.a - y.a || (x.id < y.id ? -1 : 1));
+    const a0 = ring.length && ring[0].p ? ring[0].a : -Math.PI / 2;
+    ring.forEach((n, i) => {
+      const a = a0 + i * 2 * Math.PI / ring.length;
+      pos.set(n.id, { x: C + R * k * Math.cos(a), y: C + R * k * Math.sin(a), a });
+      lines.push([n.p || pos.get(S.self.id), pos.get(n.id), k === 1 || (k === 2 && n.p) ? '' : 'far']);
+    });
+  }
+  const kids = [1, 2, 3].map(k => mk('circle', { cx: C, cy: C, r: R * k, class: 'ring' }));
+  for (const [p, q, cls] of lines) kids.push(mk('line', { x1: p.x, y1: p.y, x2: q.x, y2: q.y, class: cls }));
+  for (const [id, p] of pos) {
+    const me = id === S.self.id;
+    kids.push(mk('circle', { cx: p.x, cy: p.y, r: 12, class: 'node' + (me ? ' me' : '') }));
+    if (!me) kids.push(mk('text', { x: p.x, y: p.y + 4, class: 'h' }, String(hop.get(id))));
+    kids.push(mk('text', { x: p.x, y: p.y + 30 }, me ? 'You' : cap(name(id), 16)));
+  }
+  $('topo').replaceChildren(...kids);
+  const none = [...hop.values()].filter(h => h == null).length;
+  $('nMap').textContent = (pos.size - 1) + ' reachable' + (none ? ' · ' + none + ' no route' : '');
 }
 // Two-column table of key → value; drops{kind:n} becomes one row per kind seen so far (core lists every kind).
 function kv(id, o) {
