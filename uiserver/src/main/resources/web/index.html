@@ -796,13 +796,15 @@ function renderTopo() {
       lines.push([n.p || pos.get(S.self.id), pos.get(n.id), k === 1 || (k === 2 && n.p) ? '' : 'far']);
     });
   }
-  const kids = [1, 2, 3].map(k => mk('circle', { cx: C, cy: C, r: R * k, class: 'ring' }));
+  const kids = [1, 2, 3].map(k => mk('circle', { cx: C, cy: C, r: R * k, class: 'ring' })), n1 = [...hop.values()].filter(h => h === 1).length;
   for (const [p, q, cls] of lines) kids.push(mk('line', { x1: p.x, y1: p.y, x2: q.x, y2: q.y, class: cls }));
   for (const [id, p] of pos) {
     const me = id === S.self.id;
     kids.push(mk('circle', { cx: p.x, cy: p.y, r: 12, class: 'node' + (me ? ' me' : '') }));
     if (!me) kids.push(mk('text', { x: p.x, y: p.y + 4.5 }, String(hop.get(id))));
-    kids.push(mk('text', { x: p.x, y: p.y + 30 }, me ? 'You' : cap(name(id), 16)));
+    // Name under the node; beside it when the node's links run up and down, where a line would cross the name.
+    const side = me ? (n1 && n1 % 2 === 0 ? -1 : 0) : Math.abs(Math.cos(p.a)) < 0.5 ? (p.x < C - 1 ? -1 : 1) : 0;
+    kids.push(mk('text', { x: p.x + side * (me ? 16 : 18), y: p.y + (!side ? 30 : me ? 26 : 4.5), style: side ? 'text-anchor:' + (side > 0 ? 'start' : 'end') : '' }, me ? 'You' : cap(name(id), 16)));
   }
   $('topo').replaceChildren(...kids);
   const none = [...hop.values()].filter(h => h == null).length;
