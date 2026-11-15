@@ -34,7 +34,8 @@ h1 { margin: 0; display: flex; align-items: center; font-size: 17px; font-weight
 #alert b { margin-right: 8px; }
 /* Demo guide, docked under the top bar */
 #guide { margin: 0; border-top: 1px solid var(--line); max-height: 60vh; overflow: auto; }
-@media (max-height: 520px) { #guide { max-height: 30vh; } }   /* keyboard open: the conversation keeps most of the room */
+/* shortcut: a height guess for "keyboard open" (phones show 460 to 610 px then, 670 px or more without); the conversation keeps most of the room */
+@media (max-height: 660px) { #guide { max-height: 30vh; } }
 #guide li { padding: 4px 0; }
 #guide button { margin: 4px 0 8px; }
 .bad > b, .bad td + td { color: var(--red); }
