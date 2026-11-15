@@ -859,7 +859,7 @@ function renderTopo() {
     const me = id === S.self.id;
     kids.push(mk('circle', { cx: p.x, cy: p.y, r: 12, class: 'node' + (me ? ' me' : '') }));
     if (!me) kids.push(mk('text', { x: p.x, y: p.y + 4, class: 'h' }, String(hop.get(id))));
-    kids.push(mk('text', { x: p.x, y: p.y + 30 }, me ? 'You' : cap(name(id), 12)));
+    kids.push(mk('text', { x: p.x, y: p.y + 30 }, me ? 'You' : cap(name(id), 16)));
   }
   $('topo').replaceChildren(...kids);
   const none = [...hop.values()].filter(h => h == null).length;
