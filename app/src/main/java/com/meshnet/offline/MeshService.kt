@@ -46,7 +46,7 @@ class MeshService : Service() {
     lateinit var ble: Switchable; private set
     lateinit var lan: Switchable; private set
     private var multicast: WifiManager.MulticastLock? = null
-    @Volatile private var guest: GuestServer? = null
+    @Volatile var guest: GuestServer? = null; private set
     private val web = WebTransport()   // browser mesh nodes via the guest server's /mesh; links only exist while guest mode is on
     @Volatile private var prefix = ByteArray(4)   // NodeId prefix the LAN beacon carries (BLE uses a random tag); changes on panic wipe (U2)
     @Volatile private var longRange = false        // U5: profile wants coded PHY and the adapter supports it
