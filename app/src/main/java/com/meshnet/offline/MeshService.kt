@@ -48,7 +48,7 @@ class MeshService : Service() {
     private var multicast: WifiManager.MulticastLock? = null
     @Volatile private var guest: GuestServer? = null
     private val web = WebTransport()   // browser mesh nodes via the guest server's /mesh; links only exist while guest mode is on
-    @Volatile private var prefix = ByteArray(4)   // NodeId prefix the transports advertise; changes on panic wipe (U2)
+    @Volatile private var prefix = ByteArray(4)   // NodeId prefix the LAN beacon carries (BLE uses a random tag); changes on panic wipe (U2)
     @Volatile private var longRange = false        // U5: profile wants coded PHY and the adapter supports it
     private var codedOk = false
 
@@ -70,7 +70,7 @@ class MeshService : Service() {
         codedOk = bt != null && bt.isLeCodedPhySupported && bt.isLeExtendedAdvertisingSupported
         Log.i(TAG, "ble isLeCodedPhySupported=${bt?.isLeCodedPhySupported} isLeExtendedAdvertisingSupported=${bt?.isLeExtendedAdvertisingSupported}")
         prefix = Identity.loadOrCreate(filesDir).nodeId.copyOf(4)
-        ble = Switchable("ble") { BleL2capTransport(this, prefix, longRange) }
+        ble = Switchable("ble") { BleL2capTransport(this, longRange) }
         lan = Switchable("lan") { LanTransport(LAN_PORT, emptyList(), prefix) }
         node = MeshNode(filesDir, ExecutorScheduler(), listOf(ble, lan, web))
         node.addListener { if (it is MeshEvent.Reset) thread(name = "mesh-refresh") { refreshTransports() } }
