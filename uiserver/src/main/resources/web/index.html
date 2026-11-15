@@ -437,7 +437,7 @@ function renderNetwork() {
   for (const l of S.links.slice(0, MAX)) {
     lt.appendChild(add(el('li', null, 'rowc'), add(el('div', null, 'main'),
       el('b', l.peer ? name(l.peer) : l.link), ' ', el('span', l.peer ? fp(l.peer) : '', 'mono'), el('br'),
-      el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting') + (l.tree ? ' · tree ' + l.tree : '')))));
+      el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting') + (l.tree ? ' · tree ' + l.tree : '')), l.desc ? el('br') : '', l.desc ? el('small', l.desc) : '')));
   }
   if (document.activeElement !== $('profile')) $('profile').value = S.profile || 'STANDARD';
   kv('profVals', S.profileValues || {});

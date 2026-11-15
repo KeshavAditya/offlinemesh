@@ -1069,7 +1069,7 @@ class MeshNode(
         }
     }
 
-    private fun linkList() = links.values.map { LinkInfo(it.id, it.peer, it.transport.name, it.authed, if (!it.authed) null else if (it.eager) "eager" else "lazy") }
+    private fun linkList() = links.values.map { LinkInfo(it.id, it.peer, it.transport.name, it.authed, if (!it.authed) null else if (it.eager) "eager" else "lazy", it.desc) }
 
     private fun fitName(s: String, blank: String = "node-${me.take(4)}"): String {
         var n = s.ifBlank { blank }

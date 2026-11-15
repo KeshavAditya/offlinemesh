@@ -73,7 +73,8 @@ data class Contact(
 
 @Serializable
 data class LinkInfo(val link: String, val peer: String?, val transport: String, val authed: Boolean,
-                    val tree: String? = null)   // U1/U9: "eager" or "lazy" once authenticated, else null
+                    val tree: String? = null,   // U1/U9: "eager" or "lazy" once authenticated, else null
+                    val desc: String? = null)   // transport's onLinkUp description, e.g. "ble .. rssi -60 phy coded"
 
 /** U1: live counters kept by MeshNode since start; [drops] has every SecKind name. */
 @Serializable
