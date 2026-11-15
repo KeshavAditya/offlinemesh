@@ -33,12 +33,18 @@ import kotlinx.serialization.json.encodeToJsonElement
 import mesh.core.C
 import mesh.core.MeshNode
 import java.io.File
+import java.io.IOException
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.NetworkInterface
+import java.net.ServerSocket
+import java.net.Socket
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
+import kotlinx.coroutines.runBlocking
 
 /**
  * Guest access (5.13): a second server on 0.0.0.0 for browsers on the host's hotspot. Read the feed and post through the
@@ -75,9 +81,12 @@ class GuestServer(
     }
     private val lastPost = ConcurrentHashMap<String, Long>()
     private var server: EmbeddedServer<*, *>? = null
+    private var front: ServerSocket? = null
+    private val peers = ConcurrentHashMap<Int, String>() // source port of a spliced loopback connection -> guest IP
 
     fun start() {
-        server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+        // Ktor listens on loopback only; [front] owns the guest port (see [splice]).
+        server = embeddedServer(CIO, port = 0, host = "127.0.0.1") {
             install(WebSockets) { maxFrameSize = C.MAX_FRAME.toLong() }
             routing {
                 // Route-scoped so the PIN check runs for whatever path the router matched to /mesh; 403 before the upgrade.
@@ -85,7 +94,7 @@ class GuestServer(
                     install(createRouteScopedPlugin("MeshPin") {
                         onCall { call -> if (!pinOk(call)) call.respondText("forbidden", status = HttpStatusCode.Forbidden) }
                     })
-                    webSocket { web.serve(this, call.request.origin.remoteAddress) }
+                    webSocket { web.serve(this, ip(call)) }
                 }
                 get("/") { call.respondText(if (web != null) full else lite, ContentType.Text.Html) }
                 get("/lite") { call.respondText(lite, ContentType.Text.Html) }
@@ -118,7 +127,7 @@ class GuestServer(
                         return@post call.respondText(e.message ?: "bad request", status = HttpStatusCode.BadRequest)
                     }
                     val now = System.currentTimeMillis()
-                    val ip = call.request.origin.remoteAddress
+                    val ip = ip(call)
                     val prev = lastPost.put(ip, now)
                     if (prev != null && now - prev < 5_000) {
                         lastPost[ip] = prev
@@ -132,15 +141,47 @@ class GuestServer(
                 get("{...}") { call.respondRedirect("/") }
             }
         }.start(wait = false)
+        val inner = runBlocking { server!!.engine.resolvedConnectors().first().port }
+        val f = try { ServerSocket(port, 50, InetAddress.getByName("0.0.0.0")) } catch (e: IOException) { stop(); throw e }
+        front = f
+        thread(isDaemon = true, name = "guest-accept") {
+            while (true) {
+                val c = try { f.accept() } catch (e: IOException) { break }
+                thread(isDaemon = true, name = "guest-conn") { splice(c, inner) }
+            }
+        }
+    }
+
+    /**
+     * Since Safari 18.2 iOS tries https:// first and falls back to http:// only when that fails (ADVANCES_2 #8). Ktor CIO
+     * would wait for a request line that never comes, so peek the first byte: 0x16 (TLS handshake record) closes at once;
+     * anything else is copied both ways to Ktor, with the guest's IP kept in [peers] for the PIN and rate limits.
+     */
+    private fun splice(c: Socket, inner: Int): Unit = c.use {
+        val first = try { c.soTimeout = 30_000; c.getInputStream().read() } catch (e: IOException) { -1 }
+        if (first == -1 || first == 0x16) return
+        c.soTimeout = 0
+        Socket(InetAddress.getLoopbackAddress(), inner).use { s ->
+            peers[s.localPort] = c.inetAddress.hostAddress
+            try {
+                thread(isDaemon = true, name = "guest-up") {
+                    try { s.getOutputStream().write(first); c.getInputStream().copyTo(s.getOutputStream()); s.shutdownOutput() } catch (e: IOException) {}
+                }
+                try { s.getInputStream().copyTo(c.getOutputStream()) } catch (e: IOException) {}
+            } finally { peers.remove(s.localPort) }
+        }
     }
 
     fun stop() {
+        front?.close()
+        front = null
         server?.stop(500, 1000)
         server = null
     }
 
-    private fun pinOk(call: ApplicationCall) =
-        guard.check(call.request.origin.remoteAddress, call.request.queryParameters["pin"] ?: "")
+    private fun ip(call: ApplicationCall) = peers[call.request.origin.remotePort] ?: call.request.origin.remoteAddress
+
+    private fun pinOk(call: ApplicationCall) = guard.check(ip(call), call.request.queryParameters["pin"] ?: "")
 
     /** Join URLs to show the host (5.13): one per IPv4 address on an ap*, swlan* or wlan* interface, or all non-loopback IPv4 if none. */
     fun urls(): List<String> {
