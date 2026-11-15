@@ -33,6 +33,13 @@ scripts/deploy-all.sh                # install and launch on every adb device
 - `docs/DEVPOST.md`: project write-up.
 - `OFFLINEMESH_COMPLETE_GUIDE.md`: the full specification.
 
+## Extras (untested on hardware)
+
+Code for hardware we did not have, in `extras/`. Not in any Gradle build, not part of the demo, never run on a device.
+
+- `extras/portal-box/`: captive-portal Wi-Fi for guests. ESP32 sketch (serves the web client, cannot host the mesh) and a Raspberry Pi setup script (hostapd + captive dnsmasq + desktop node as a service).
+- `extras/lora-bridge/`: a `Transport` over a Meshtastic radio's serial API that bridges signed public posts only. Its framing, chunking and filter have a self-test that runs without a radio (`extras/lora-bridge/run-selftest.sh`).
+
 ## Status
 
 The simulator, desktop nodes and four Android emulators pass all eight acceptance checks. One run on two real phones plus a laptop passed six of seven checks; the seventh failed because the phone's battery saving stopped the app. Details in `docs/NUMBERS.md`.
