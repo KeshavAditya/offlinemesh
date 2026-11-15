@@ -108,6 +108,12 @@ test('DM: seal/open, padding, plaintext kinds', () => {
   const gt = m.parsePlain(m.groupTextPlain(gid, Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8), 'yo'));
   assert.deepEqual([gt.kind, gt.text], [3, 'yo']);
   assert.equal(m.parsePlain(m.revokePlain()).kind, 4);
+  const jpg = m.concat(Uint8Array.of(0xff, 0xd8, 0xff), new Uint8Array(m.MAX_GROUP_JPEG - 3)), gm8 = Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8);
+  const gi = m.parsePlain(m.groupImagePlain(gid, gm8, jpg));
+  assert.deepEqual([gi.kind, gi.gid, gi.gm, gi.jpeg], [5, gid, gm8, jpg]);
+  assert.ok(m.sealDm(a, b.pub, m.groupImagePlain(gid, gm8, jpg)));                       // 17 + 39,983 = MAX_DM_PLAINTEXT
+  assert.equal(m.parsePlain(m.groupImagePlain(gid, gm8, m.concat(jpg, Uint8Array.of(0)))), null);   // one byte over
+  assert.equal(m.parsePlain(m.groupImagePlain(gid, gm8, Uint8Array.of(0x89, 0x50, 0x4e, 0x47))), null);   // PNG
   assert.equal(m.parsePlain(Uint8Array.of(1, 0, 0)), null);           // photo that is not a JPEG
   assert.equal(m.unpadDm(Uint8Array.of(0, 0, 9, 1)), null);
 });
@@ -125,6 +131,9 @@ test('cross-check with Kotlin, both directions', { skip: !!process.env.SKIP_GRAD
   const dm = m.createEnvelope(c, m.EnvType.DM, d.id, 9, ep, 0, 8, m.sealDm(c, d.pub, plain));
   Object.assign(v, { 'dm.frame': envF(dm), 'dm.msgId': m.hex(m.msgId(dm)), 'dm.plain': m.hex(plain) });
   v['ack.frame'] = envF(m.createAck(d, dm, 2, ep));
+  const gg = m.randomBytes(8), ggm = m.randomBytes(8), gj = Uint8Array.of(0xff, 0xd8, 0xff, 0xe0, 7);
+  v['gimg.frame'] = envF(m.createEnvelope(c, m.EnvType.DM, d.id, 10, ep, 0, 8, m.sealDm(c, d.pub, m.groupImagePlain(gg, ggm, gj))));
+  Object.assign(v, { 'gimg.gid': m.hex(gg), 'gimg.gm': m.hex(ggm), 'gimg.jpeg': m.hex(gj) });
   v.dmKey = m.hex(m.dmKey(d.priv, c.pub));
   const nonce = m.randomBytes(16);
   v['hello.frame'] = hexF({ t: 'hello', pub: c.pub, nonce });
@@ -167,6 +176,9 @@ function checkKotlin(kv) {
     assert.equal(m.hex(m.openDm(b, dm, a.pub)), kv['dm.plain'], k);
     assert.equal(m.parsePlain(m.openDm(a, dm, b.pub)).text, 'secret über kotlin');
   }
+  const gi = m.parsePlain(m.openDm(b, frame('gimg.frame').env, a.pub));
+  assert.equal(m.hex(m.groupImagePlain(gi.gid, gi.gm, gi.jpeg)), kv['gimg.plain']);
+  assert.deepEqual([gi.kind, m.hex(gi.gid), m.hex(gi.jpeg)], [5, '0101010101010101', 'ffd8ff09']);
   const ack = frame('ack.frame').env;
   assert.equal(m.checkEnvelope(ack), null);
   assert.equal(m.hex(ack.body), kv['dm.msgId']); assert.deepEqual(ack.dst, a.id);

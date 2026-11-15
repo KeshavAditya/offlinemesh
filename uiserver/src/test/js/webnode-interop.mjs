@@ -1,7 +1,7 @@
 // meshnode.js against real desktop nodes. One command, from the repo root (Node 22, java on PATH):
 //   node uiserver/src/test/js/webnode-interop.mjs
 // Builds :desktop:installDist (SKIP_BUILD=1 skips), starts desktop H (with --guest-port) and F wired H<->F on free ports
-// with temp data dirs, joins H as a browser leaf node over ws /mesh, checks posts, 2-hop DMs and groups both ways,
+// with temp data dirs, joins H as a browser leaf node over ws /mesh, checks posts, 2-hop DMs, groups and group photos both ways,
 // then kills both nodes. Exit code 0 only if every check passed.
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -131,6 +131,21 @@ try {
     await until('JS got H group text', () => seenEv((e) => e.t === 'msg' && e.msg.group === gid && e.msg.text === 'hgroup hi'));
     web.cmd({ t: 'gmsg', group: gid, text: 'hgroup reply from js' });
     await until('F got JS reply', async () => ((await f.snap()).gdms[gid] || []).some((m) => m.text === 'hgroup reply from js' && m.from === jsId));
+  });
+
+  await check('group photo (kind 5) both ways: JS -> H, F with gstatus 2/2; F -> JS', async () => {
+    web.cmd({ t: 'group', name: 'photos', members: [hId, fId] });
+    const gid = (await until('JS group event', () => seenEv((e) => e.t === 'group' && e.group.name === 'photos'))).group.id;
+    for (const n of [h, f]) await until('invite reached', async () => (await n.snap()).groups.some((g) => g.id === gid && g.members.length === 3));
+    const jpg = (seed) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(30_000, seed)]).toString('base64');
+    const fromJs = jpg(1), fromF = jpg(2);
+    web.cmd({ t: 'gmsg', group: gid, img: fromJs });
+    for (const n of [h, f]) await until('photo reached', async () => ((await n.snap()).gdms[gid] || []).some((m) => m.img === fromJs && m.from === jsId));
+    const own = seenEv((e) => e.t === 'msg' && e.msg.group === gid && e.msg.img === fromJs).msg;
+    await until('JS gstatus 2/2', () => seenEv((e) => e.t === 'gstatus' && e.id === own.id && e.delivered === 2 && e.total === 2));
+    await f.cmd({ t: 'gmsg', group: gid, img: fromF });
+    await until('JS got F photo', () => seenEv((e) => e.t === 'msg' && e.msg.group === gid && e.msg.img === fromF && e.msg.from === fId));
+    await until('F gstatus 2/2', async () => ((await f.snap()).gdms[gid] || []).some((m) => m.img === fromF && m.delivered === 2 && m.total === 2));
   });
 
   await check('refused commands give an error event', async () => {

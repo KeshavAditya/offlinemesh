@@ -396,7 +396,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
     if (p.kind === 0 && !msgs.has(mid)) addMsg(msg({ ...base, id: mid, text: p.text }));
     else if (p.kind === 1 && !msgs.has(mid)) addMsg(msg({ ...base, id: mid, text: PHOTO, img: b64(p.jpeg) }));
     else if (p.kind === 2) onInvite(src, p);
-    else if (p.kind === 3) onGroupText(src, p, { ...base, to: null });
+    else if (p.kind === 3 || p.kind === 5) onGroupText(src, p, { ...base, to: null });
     else if (p.kind === 4) onRevoke(src);
     const a = M.createAck(me, e, ++lamport, epochNow());
     remember(hex(M.msgId(a)), { type: T.ACK, dst: src });
@@ -454,7 +454,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
     offer();
   }
 
-  // ---- 13.2 groups: fan-out DMs of kinds 2 (invite) and 3 (text) ----
+  // ---- 13.2 groups: fan-out DMs of kinds 2 (invite), 3 (text) and 5 (photo) ----
 
   const pubOf = (id) => contacts.get(id)?.pub || [...groups.values()].map((g) => g.members.get(id)).find(Boolean);
   /** Self first, then the known ids (unknown keys are skipped), 16 at most. */
@@ -485,14 +485,15 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
     invite(g, new Map([...old.members, ...g.members]));   // a member left out gets the new list and drops the group
   }
 
-  function sendGroup(gid, text) {
+  /** Kind 3 text, or kind 5 when [jpeg] is given ([text] is then PHOTO). */
+  function sendGroup(gid, text, jpeg = null) {
     const g = groups.get(gid);
     if (!g) throw new Error('unknown group');
     const gm = M.randomBytes(8), uid = me.idHex + hex(gm);
     const others = [...g.members].filter(([m]) => m !== me.idHex && !revoked.has(m));
     addMsg(msg({ id: uid, from: me.idHex, text, lamport: ++lamport, tsMs: now(), mine: true, status: others.length ? 'QUEUED' : 'SENT',
-      group: gid, delivered: 0, total: others.length }));
-    const plain = M.groupTextPlain(unhex(gid), gm, text);
+      img: jpeg && b64(jpeg), group: gid, delivered: 0, total: others.length }));
+    const plain = jpeg ? M.groupImagePlain(unhex(gid), gm, jpeg) : M.groupTextPlain(unhex(gid), gm, text);
     for (const [m, pub] of others) dmTo(m, pub, plain, uid);
   }
 
@@ -524,7 +525,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
   function onGroupText(src, p, base) {
     const gid = hex(p.gid), uid = src + hex(p.gm);   // includes the sender, so one member cannot suppress another's message
     const g = groups.get(gid);
-    if (g && g.members.has(src) && !msgs.has(uid)) addMsg(msg({ ...base, id: uid, text: p.text, group: gid }));
+    if (g && g.members.has(src) && !msgs.has(uid)) addMsg(msg({ ...base, id: uid, text: p.jpeg ? PHOTO : p.text, img: p.jpeg ? b64(p.jpeg) : null, group: gid }));
   }
 
   /** U2: [x] wiped. Forget the DM conversation with x, x's group messages and x's groups; refuse x's key from now on. */
@@ -574,6 +575,13 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
       if (M.toUtf8(v).length > max) throw new Error(`'${k}' longer than ${max} bytes`);
       return v;
     };
+    const jpeg = (s, max) => {
+      if (s.length > 53_400) throw new Error("'img' too long");
+      let b; try { b = unb64(s); } catch { throw new Error("'img' is not base64"); }
+      if (b.length > max) throw new Error(`'img' larger than ${max.toLocaleString('en-US')} bytes`);
+      if (!M.isJpeg(b)) throw new Error("'img' is not a JPEG");
+      return b;
+    };
     const members = () => {
       if (!Array.isArray(c.members)) throw new Error("missing array field 'members'");
       const m = [...new Set(c.members.map((x) => { if (typeof x !== 'string' || !NODE_ID.test(x)) throw new Error("'members' must be 16-hex node ids"); return x; }))];
@@ -587,11 +595,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
         const to = id('to');
         let plain, txt = PHOTO, img = null;
         if ('img' in c) {
-          const s = str('img');
-          if (s.length > 53_400) throw new Error("'img' too long");
-          let b; try { b = unb64(s); } catch { throw new Error("'img' is not base64"); }
-          if (b.length > 39_999) throw new Error("'img' larger than 39,999 bytes");
-          if (!M.isJpeg(b)) throw new Error("'img' is not a JPEG");
+          const s = str('img'), b = jpeg(s, 39_999);
           plain = M.concat(Uint8Array.of(M.DmKind.PHOTO), b); img = s;
         } else { txt = text('text', 39_999); plain = M.textPlain(txt); }
         const pub = contacts.get(to)?.pub;
@@ -603,7 +607,7 @@ export function createWebNode({ url, storage, powMine, WebSocket: WS = globalThi
       case 'verify': (bool('on') ? verified.add(id('id')) : verified.delete(id('id'))); save(); return emitNet();
       case 'group': return void createGroup(text('name', M.C.MAX_NAME), members());
       case 'group-members': return setGroupMembers(id('id'), members());
-      case 'gmsg': return sendGroup(id('group'), text('text', M.C.MAX_POST_BODY));
+      case 'gmsg': return 'img' in c ? sendGroup(id('group'), PHOTO, jpeg(str('img'), M.MAX_GROUP_JPEG)) : sendGroup(id('group'), text('text', M.C.MAX_POST_BODY));
       case 'panic': if (str('confirm') !== 'WIPE') throw new Error("'confirm' must be WIPE"); return void panic();
       case 'debug': case 'attack': case 'profile': throw new Error(`'${t}' is not available on a browser node`);
       default: throw new Error(`unknown t '${t}'`);

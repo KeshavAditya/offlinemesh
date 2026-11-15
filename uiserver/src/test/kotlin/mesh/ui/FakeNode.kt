@@ -85,9 +85,10 @@ class FakeNode : UiNode {
             is Cmd.GroupMembers -> groups[cmd.id]?.takeIf { it.owner == self.id }
                 ?.copy(members = (listOf(self.id) + cmd.members).distinct())?.also { groups[it.id] = it; emit(MeshEvent.GroupChanged(it)) }
             is Cmd.Profile -> Unit
-            is Cmd.GroupMsg -> groups[cmd.group]?.let { g ->
+            is Cmd.GroupMsg, is Cmd.GroupImg -> groups[(cmd as? Cmd.GroupMsg)?.group ?: (cmd as Cmd.GroupImg).group]?.let { g ->
                 val n = g.members.size - 1
-                val m = msg(self.id, null, cmd.text, true, MsgStatus.QUEUED, 0, null).copy(group = g.id, delivered = 0, total = n)
+                val img = (cmd as? Cmd.GroupImg)?.let { java.util.Base64.getEncoder().encodeToString(it.jpeg) }
+                val m = msg(self.id, null, (cmd as? Cmd.GroupMsg)?.text ?: "(photo)", true, MsgStatus.QUEUED, 0, null).copy(group = g.id, delivered = 0, total = n, img = img)
                 gdms.getOrPut(g.id) { mutableListOf() } += m
                 emit(MeshEvent.MessageAdded(m))
                 ex.schedule({ gdms[g.id]?.replaceAll { if (it.id == m.id) it.copy(delivered = n) else it }; emit(MeshEvent.GroupStatusChanged(m.id, n, n)) }, 2, TimeUnit.SECONDS)

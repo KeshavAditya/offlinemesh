@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import mesh.core.Attack
 import mesh.core.DebugFlag
+import mesh.core.MAX_GROUP_JPEG
 import mesh.core.MeshNode
 import mesh.core.isJpeg
 import java.util.Base64
@@ -24,16 +25,17 @@ sealed interface Cmd {
     data class Group(val name: String, val members: List<String>) : Cmd                    // 13.2
     data class GroupMembers(val id: String, val members: List<String>) : Cmd
     data class GroupMsg(val group: String, val text: String) : Cmd
+    class GroupImg(val group: String, val jpeg: ByteArray) : Cmd                            // U-C
     data class Profile(val p: mesh.core.Profile) : Cmd                                       // U3
     object Panic : Cmd                                                                       // U2
 }
 
 private val NODE_ID = Regex("[0-9a-f]{16}")
 
-private fun jpeg(b64: String): ByteArray {
+private fun jpeg(b64: String, max: Int = 39_999): ByteArray {
     require(b64.length <= 53_400) { "'img' too long" }     // base64 of 39,999 bytes is 53,332 chars
     val b = Base64.getDecoder().decode(b64)                   // throws IllegalArgumentException on bad base64
-    require(b.size <= 39_999) { "'img' larger than 39,999 bytes" }
+    require(b.size <= max) { "'img' larger than %,d bytes".format(max) }
     require(isJpeg(b)) { "'img' is not a JPEG" }
     return b
 }
@@ -71,7 +73,7 @@ fun parseCmd(body: String): Cmd {
         )
         "group" -> Cmd.Group(text("name", 32), members())
         "group-members" -> Cmd.GroupMembers(id("id"), members())
-        "gmsg" -> Cmd.GroupMsg(id("group"), text("text", 1_000))
+        "gmsg" -> if ("img" in o) Cmd.GroupImg(id("group"), jpeg(str("img"), MAX_GROUP_JPEG)) else Cmd.GroupMsg(id("group"), text("text", 1_000))
         "profile" -> str("name").let { n -> Cmd.Profile(mesh.core.Profile.values().firstOrNull { it.name == n } ?: throw IllegalArgumentException("unknown profile")) }
         "panic" -> { require(str("confirm") == "WIPE") { "'confirm' must be WIPE" }; Cmd.Panic }
         else -> throw IllegalArgumentException("unknown t '$t'")
@@ -90,6 +92,7 @@ fun MeshNode.exec(c: Cmd) = when (c) {
     is Cmd.Group -> { createGroup(c.name, c.members); Unit }
     is Cmd.GroupMembers -> setGroupMembers(c.id, c.members)
     is Cmd.GroupMsg -> sendGroup(c.group, c.text)
+    is Cmd.GroupImg -> sendGroupImage(c.group, c.jpeg)
     is Cmd.Profile -> setProfile(c.p)
     Cmd.Panic -> panicWipe()
 }

@@ -543,11 +543,11 @@ function newGroup() {
 }
 const saveMembers = () => open && open.kind === 'group' && send({ t: 'group-members', id: open.id, members: picked('gMem') });
 
-// Stretch 2: downscale and re-encode until the JPEG fits one DM (39,999 bytes + 1 kind byte = MAX_DM_PLAINTEXT).
+// Stretch 2: downscale and re-encode until the JPEG fits one DM (39,999 bytes + 1 kind byte = MAX_DM_PLAINTEXT; a group photo leaves 16 of them for its ids).
 async function photo(input) {
   const f = input.files[0]; input.value = '';
-  if (!f || !open || open.kind !== 'dm') return;
-  const to = open.id, bmp = await createImageBitmap(f);
+  if (!f || !open) return;
+  const to = open.id, gq = open.kind === 'group', bmp = await createImageBitmap(f);
   const c = document.createElement('canvas');   // never shown, only used to re-encode
   let side = 640, q = 0.8, blob;
   for (;;) {
@@ -555,13 +555,13 @@ async function photo(input) {
     c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
     blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
-    if (blob && blob.size <= 39999) break;
+    if (blob && blob.size <= (gq ? 39983 : 39999)) break;
     if (q > 0.45) q -= 0.15; else { side = Math.round(side * 0.75); q = 0.8; }
     if (side < 32) { $('dmErr').textContent = 'Photo could not be made small enough'; return; }
   }
   let bin = '';
   for (const x of new Uint8Array(await blob.arrayBuffer())) bin += String.fromCharCode(x);
-  send({ t: 'dm', to, img: btoa(bin) }, null, 'dmErr');
+  send(gq ? { t: 'gmsg', group: to, img: btoa(bin) } : { t: 'dm', to, img: btoa(bin) }, null, 'dmErr');
 }
 
 function send(cmd, clearId, errId) {
@@ -730,7 +730,7 @@ function path(div, c, id) {
 
 function renderConvo() {
   const id = open.id, gq = open.kind === 'group', g = gq && grp(id);
-  $('photoBtn').hidden = gq; $('safeBtn').hidden = !g; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes, no photos (13.2)
+  $('safeBtn').hidden = !g; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes (13.2)
   document.querySelector('#convo .compose').hidden = gq && !g;
   const ul = $('msgs'); ul.replaceChildren();
   const list = [...((gq ? S.gdms : S.dms)[id] || [])].sort(byOrder).slice(-MAX);

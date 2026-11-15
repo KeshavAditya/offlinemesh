@@ -11,7 +11,9 @@ export const C = {
 export const EnvType = { PRESENCE: 1, POST: 2, DM: 3, ACK: 4 };
 export const FrameType = { ENVELOPE: 0x01, HELLO: 0x10, HELLO_AUTH: 0x11, SYNC_OFFER: 0x12, SYNC_WANT: 0x13, BAN_PROOF: 0x14, IHAVE: 0x15, GRAFT: 0x16, PRUNE: 0x17 };
 /** DM plaintext kinds (first byte before U7 padding). */
-export const DmKind = { TEXT: 0, PHOTO: 1, GROUP_INVITE: 2, GROUP_TEXT: 3, REVOKE: 4 };
+export const DmKind = { TEXT: 0, PHOTO: 1, GROUP_INVITE: 2, GROUP_TEXT: 3, REVOKE: 4, GROUP_IMAGE: 5 };
+/** U-C: a kind-5 JPEG shares the 39,999 data bytes with gid(8) | groupMsgId(8). */
+export const MAX_GROUP_JPEG = 40_000 - 17;
 export const BROADCAST = new Uint8Array(8);
 export { randomBytes };
 
@@ -281,7 +283,7 @@ export function decodeFrame(b) {
   });
 }
 
-// ---- DM plaintexts (kind + data, before padding). 13.2 groups are fan-out DMs of kinds 2 and 3.
+// ---- DM plaintexts (kind + data, before padding). 13.2 groups are fan-out DMs of kinds 2, 3 and 5.
 export const textPlain = (text) => concat(Uint8Array.of(DmKind.TEXT), utf8.encode(text));
 export const revokePlain = () => Uint8Array.of(DmKind.REVOKE);
 export const isJpeg = (b) => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
@@ -289,6 +291,8 @@ export const isJpeg = (b) => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && 
 export const gidOf = (ownerId, salt) => sha256(concat(ownerId, salt)).slice(0, 8);
 /** kind 3: gid(8) | groupMsgId(8) | text. */
 export const groupTextPlain = (gid, gm, text) => concat(Uint8Array.of(DmKind.GROUP_TEXT), gid, gm, utf8.encode(text));
+/** kind 5: gid(8) | groupMsgId(8) | JPEG. */
+export const groupImagePlain = (gid, gm, jpeg) => concat(Uint8Array.of(DmKind.GROUP_IMAGE), gid, gm, jpeg);
 /** kind 2: gid(8) | salt(8) | u8 nameLen | name | u8 n | n x (u8 len | SPKI pub). Members start with the owner. */
 export function invitePlain(gid, salt, name, memberPubs) {
   const w = new W().u8(DmKind.GROUP_INVITE).id(gid).id(salt).u8Bytes(presenceBody(name).subarray(1)).u8(memberPubs.length);
@@ -297,7 +301,7 @@ export function invitePlain(gid, salt, name, memberPubs) {
 }
 /**
  * Parses an opened DM plaintext; null if malformed (Kotlin does not store or ACK those).
- * { kind: 0, text } | { kind: 1, jpeg } | { kind: 2, gid, salt, name, members: [pub] } | { kind: 3, gid, gm, text } | { kind: 4 }.
+ * { kind: 0, text } | { kind: 1, jpeg } | { kind: 2, gid, salt, name, members: [pub] } | { kind: 3, gid, gm, text } | { kind: 4 } | { kind: 5, gid, gm, jpeg }.
  * Group policy (gid == gidOf(src, salt), src a member, owner unchanged) is the node's job.
  */
 export function parsePlain(p) {
@@ -317,6 +321,8 @@ export function parsePlain(p) {
     case DmKind.GROUP_TEXT:
       return p.length < 18 || p.length - 17 > C.MAX_POST_BODY ? null : { kind: 3, gid: p.slice(1, 9), gm: p.slice(9, 17), text: fromUtf8(p.subarray(17)) };
     case DmKind.REVOKE: return p.length === 1 ? { kind: 4 } : null;
+    case DmKind.GROUP_IMAGE:
+      return p.length - 17 > MAX_GROUP_JPEG || !isJpeg(p.subarray(17)) ? null : { kind: 5, gid: p.slice(1, 9), gm: p.slice(9, 17), jpeg: p.slice(17) };
     default: return null;
   }
 }

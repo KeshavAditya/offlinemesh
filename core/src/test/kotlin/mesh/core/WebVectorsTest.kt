@@ -48,6 +48,11 @@ class WebVectorsTest {
         val body = Crypto.seal(Crypto.dmKey(a.private, b.publicDer), a.nodeId + b.nodeId, Crypto.padDm(plain)!!)
         val dm = Envelope.create(a, EnvType.DM, b.nodeId, 10, ep, 0, C.TTL_DM, body)
         v["dm.frame"] = h(frame(dm)); v["dm.msgId"] = h(dm.msgId); v["dm.plain"] = h(plain)
+        // U-C: GROUP_IMAGE (kind 5) = gid | groupMsgId | JPEG, as sent by sendGroupImage.
+        val gimg = byteArrayOf(5) + ByteArray(8) { 1 } + ByteArray(8) { 2 } + byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 9)
+        v["gimg.frame"] = h(frame(Envelope.create(a, EnvType.DM, b.nodeId, 11, ep, 0, C.TTL_DM,
+            Crypto.seal(Crypto.dmKey(a.private, b.publicDer), a.nodeId + b.nodeId, Crypto.padDm(gimg)!!))))
+        v["gimg.plain"] = h(gimg)
         // A relayed copy: ttl/hops change but the signature and msgId still hold.
         v["dmRelayed.frame"] = h(frame(dm.copy(ttl = dm.ttl - 1, hops = 1)))
         v["ack.frame"] = h(frame(Envelope.create(b, EnvType.ACK, a.nodeId, 3, ep, 0, C.TTL_ACK, dm.msgId)))
@@ -90,6 +95,9 @@ class WebVectorsTest {
         val dm = env(v["dm.frame"])
         val opened = Crypto.open(Crypto.dmKey(d.private, c.publicDer), dm.srcId + dm.dst, dm.body)?.let(Crypto::unpadDm)
         assertContentEquals(u(v["dm.plain"]), opened)
+        val gimg = env(v["gimg.frame"])
+        val gp = assertNotNull(Crypto.open(Crypto.dmKey(d.private, c.publicDer), gimg.srcId + gimg.dst, gimg.body)?.let(Crypto::unpadDm), "gimg")
+        assertContentEquals(byteArrayOf(5) + u(v["gimg.gid"]) + u(v["gimg.gm"]) + u(v["gimg.jpeg"]), gp)
         val ack = env(v["ack.frame"])
         assertContentEquals(dm.msgId, ack.body); assertContentEquals(c.nodeId, ack.dst)
         assertEquals(v["dmKey"], h(Crypto.dmKey(c.private, d.publicDer)))

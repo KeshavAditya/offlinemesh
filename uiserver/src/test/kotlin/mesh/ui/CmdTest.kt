@@ -44,6 +44,16 @@ class CmdTest {
         for (b in bad) assertFailsWith<IllegalArgumentException>(b) { parseCmd(b) }
     }
 
+    @Test fun groupPhoto() {
+        val g = "00112233aabbccdd"
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) + ByteArray(mesh.core.MAX_GROUP_JPEG - 3)
+        fun cmd(b: ByteArray) = """{"t":"gmsg","group":"$g","img":"${java.util.Base64.getEncoder().encodeToString(b)}"}"""
+        val c = parseCmd(cmd(jpeg)) as Cmd.GroupImg
+        assertEquals(g, c.group); assertTrue(c.jpeg.contentEquals(jpeg))
+        assertFailsWith<IllegalArgumentException> { parseCmd(cmd(jpeg + 0)) }                                  // 16 bytes of header leave 39,983
+        assertFailsWith<IllegalArgumentException> { parseCmd(cmd(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47))) }
+    }
+
     @Test fun photoDm() {
         val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) + ByteArray(39_996)
         fun cmd(b: ByteArray) = """{"t":"dm","to":"$id","img":"${java.util.Base64.getEncoder().encodeToString(b)}"}"""
