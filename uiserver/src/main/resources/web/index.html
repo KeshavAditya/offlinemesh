@@ -276,6 +276,13 @@ fieldset .btns button[aria-pressed=true] { background: var(--red); border-color:
     <img id="myQr" class="qr" width="176" height="176" alt="QR code of my fingerprint">
   </div>
   <div id="guest"></div>
+  <div id="bundle" hidden>
+    <h2>Carry messages by hand</h2>
+    <p class="mut">Export a file of messages here, carry it to a phone that is out of range, and import it there.</p>
+    <div class="row"><a href="/api/bundle" download>Export messages (bundle)</a>
+      <button onclick="$('bundleIn').click()">Import bundle</button><input type="file" id="bundleIn" hidden onchange="importBundle(this)"></div>
+    <p id="bundleMsg" role="status"></p>
+  </div>
   <fieldset>
     <legend>Panic wipe</legend>
     <p class="mut">Tells contacts to delete your conversations, erases this phone's identity and messages, and starts again with a new ID.</p>
@@ -411,6 +418,14 @@ function httpBackend() {
     },
     qr: text => '/api/qr?text=' + encodeURIComponent(text),
     guest: () => fetch('/api/guest').then(r => r.json()),
+    // Optional member: a backend without it (webbackend.js) gets no bundle buttons. Resolves {from, accepted, duplicates, rejected}.
+    async bundle(file) {
+      const r = await fetch('/api/bundle', { method: 'POST', headers: { 'X-OM': '1' }, body: file });
+      if (r.status === 413) throw new Error('Too big');
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) throw new Error('Not a valid bundle');
+      return j;
+    },
   };
   return b;
 }
@@ -928,6 +943,16 @@ function guest() {
   }).catch(() => {});
 }
 setInterval(guest, 3000); guest();
+
+// Data-mule bundle. Hidden in the app's WebView ("; wv)" in its user agent): it has no download handler and native Bundle buttons.
+$('bundle').hidden = !backend.bundle || /; wv\)/.test(navigator.userAgent);
+function importBundle(inp) {
+  const f = inp.files[0]; inp.value = '';
+  if (!f) return;
+  const m = $('bundleMsg'); m.textContent = 'Importing…';
+  backend.bundle(f).then(r => m.textContent = 'From ' + name(r.from) + ': ' + r.accepted + ' accepted, ' + r.duplicates + ' duplicates, ' + r.rejected + ' rejected',
+    e => m.textContent = e.message);
+}
 
 backend.onState(up => $('conn').hidden = up);
 backend.onEvent(ev => { apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'net') renderStats(); else if (cur === 'security') renderBlocked(); });   // stats every 2 s: do not rebuild the switches
