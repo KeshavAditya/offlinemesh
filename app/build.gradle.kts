@@ -23,4 +23,8 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":lan"))
     implementation(project(":uiserver"))
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.embedded)
+    implementation(libs.androidx.core)
+    testImplementation(kotlin("test"))
 }

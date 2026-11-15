@@ -11,6 +11,8 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import android.widget.Button
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
@@ -35,7 +37,9 @@ class MainActivity : Activity() {
         val row = LinearLayout(this).apply {
             setPadding(24, 8, 24, 8)
             addView(toggle("Bluetooth", "ble", true)); addView(toggle("Wi-Fi LAN", "lan", false))
-            addView(toggle("Guest mode", "guest", false)); addView(status)
+            addView(toggle("Guest mode", "guest", false))
+            addView(Button(this@MainActivity).apply { text = "QR hop"; setOnClickListener { startActivity(Intent(this@MainActivity, QrActivity::class.java)) } })
+            addView(status)
         }
         // A fold or rotation recreates the activity; the service keeps running and the page re-renders from /ws's snapshot.
         web = WebView(this).apply { settings.javaScriptEnabled = true; settings.domStorageEnabled = true
@@ -50,7 +54,7 @@ class MainActivity : Activity() {
         }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(HorizontalScrollView(this@MainActivity).apply { addView(row) }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))   // the row is wider than a phone
             addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         })
     }
