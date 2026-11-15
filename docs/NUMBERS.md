@@ -13,6 +13,7 @@ Every number here was measured, unless it says "estimate". Where it ran is state
 | `scripts/e2e.sh` on 5 desktop nodes (`NODES=5`, TCP, one laptop, in a line) | items 1-8 PASS; item 7 (group of all 5) showed `Delivered to 4 of 4` in about 1 s |
 | `scripts/e2e.sh` on 4 Android emulators | items 1-8 PASS (fresh deploy, no manual mutes; group notification shown on C) |
 | v2 on 4 emulators: `e2e.sh` + persistent-link check (10 DMs, `linkUps` must not rise) | items 1-8 PASS (fresh deploy, no manual mutes; item 7 delivered 3 of 3 in 2 s, item 6 C caught up in 3 s). 10 DMs B to D (A is banned on B after item 5), all DELIVERED: `linkUps`/`linkDowns` A 3/0, B 3/0, C 4/1, D 4/1 before and after, so no relinks (C/D's extra up/down happened at startup, before e2e). Network tab shows each link as `ble <mac> rssi 20` (emulator rssi is constant) |
+| v2 final, R8 release APK (2.45 MB) on 4 emulators + guest web client | `e2e.sh` items 1-8 PASS (second run; the first failed 7 and 8 only because meshD's emulator Bluetooth stack crashed 10 s after boot, the app relinked once BT was re-enabled). Browser (Playwright, 390x844) at A's guest port: 1 web link on A next to its 2 BLE links (none refused); DM browser to C 3 hops via A and B DELIVERED, C's reply received. `/app.apk` SHA-256 = shown hash = installed base.apk = build output |
 | `scripts/e2e.sh` on the 3 real phones | **not run yet** |
 
 ## Broadcast cost (simulator, real core code, virtual time)
