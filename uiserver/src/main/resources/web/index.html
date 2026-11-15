@@ -87,6 +87,10 @@ fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 summary { padding: 12px 0; cursor: pointer; }
 .btn[hidden] { display: none; }
 .empty { color: var(--mut); padding: 16px 0; text-align: center; }
+select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); }
+table.kv { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
+.kv td { padding: 4px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.kv td + td { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; }
 </style>
 </head>
 <body>
@@ -132,6 +136,7 @@ summary { padding: 12px 0; cursor: pointer; }
       <button onclick="closeChat()" aria-label="Back to chats">‹ Chats</button>
       <div><b id="chatName"></b><br><small id="chatRoute"></small></div>
     </div>
+    <p id="chatWarn" class="err"></p>
     <details id="gView" hidden><summary>Members</summary><div id="gMem" class="pick"></div>
       <button id="gSave" class="pri" onclick="saveMembers()">Save members</button></details>
     <ul id="convo" class="msgs"></ul>
@@ -160,6 +165,19 @@ summary { padding: 12px 0; cursor: pointer; }
   <ul id="contacts"></ul>
   <h2>Links</h2>
   <ul id="links"></ul>
+  <h2>Profile</h2>
+  <select id="profile" aria-label="Mission profile" onchange="send({t:'profile',name:this.value})">
+    <option>STANDARD</option><option>CROWD</option><option>TUNNEL</option><option>SPARSE</option>
+  </select>
+  <table id="profVals" class="kv"></table>
+  <fieldset>
+    <legend>Panic wipe</legend>
+    <p class="mut">Tells contacts to delete your conversations, erases this phone's identity and messages, and starts with a new ID.</p>
+    <div class="row"><input type="text" id="wipeText" placeholder="Type WIPE" aria-label="Type WIPE to confirm" autocomplete="off">
+      <button id="wipeBtn" onclick="val('wipeText') === 'WIPE' ? send({t:'panic',confirm:'WIPE'}, 'wipeText') : $('wipeText').focus()">Panic wipe</button></div>
+  </fieldset>
+  <h2>Statistics</h2>
+  <table id="stats" class="kv"></table>
 </section>
 
 <section id="security">
@@ -183,7 +201,7 @@ summary { padding: 12px 0; cursor: pointer; }
 let S = null, cur = 'feed', open = null;           // open: {kind: 'dm'|'group', id} of the open conversation, or null for the list
 const unread = { feed: 0, security: 0 }, dmUnread = {};
 const MAX = 200;                                   // render at most the last 200 items of any list (A52s WebView)
-const BAD = ['BAD_SIGNATURE', 'BANNED', 'RATE_EQUIVOCATION'];
+const BAD = ['BAD_SIGNATURE', 'BANNED', 'RATE_EQUIVOCATION', 'NAME_IMPERSONATION'];   // the rest (ROUTE_FAILED, PEER_REVOKED, ...) amber
 const $ = id => document.getElementById(id);
 const val = id => $(id).value.trim();
 const fp = id => (id.match(/.{1,4}/g) || []).join(' ');
@@ -193,8 +211,9 @@ function name(id) {
   if (!id) return '';
   if (S && id === S.self.id) return S.self.name;
   const c = S && S.contacts.find(c => c.id === id);
-  return c && c.name ? c.name : id.slice(0, 8);
+  return c && c.name ? c.name + (c.verified ? '' : ' · ' + id.slice(0, 4)) : id.slice(0, 8);   // U8: names can be copied, keys cannot
 }
+const flags = c => [c.suspect ? 'same name as a verified contact' : '', c.revoked ? 'revoked' : ''].filter(x => x).join(' · ');
 const grp = id => S.groups.find(g => g.id === id);
 const uk = (kind, id) => kind + ':' + id;            // unread key: a group id may equal a contact id
 const isOpen = (kind, id) => cur === 'chats' && open && open.kind === kind && open.id === id;
@@ -203,6 +222,7 @@ function add(p, ...kids) { for (const k of kids) p.appendChild(typeof k === 'str
 function route(m) { return m.hops == null ? 'no route yet' : m.hops + (m.hops === 1 ? ' hop' : ' hops') + (m.via && m.hops > 1 ? ' via ' + name(m.via) : ''); }
 function status(m) {
   if (m.group) return m.total ? 'Delivered to ' + m.delivered + ' of ' + m.total : 'Sent ✓';
+  if (m.rerouteVia) return (m.status === 'DELIVERED' ? 'Delivered' : 'Sent') + ', rerouted via ' + name(m.rerouteVia);   // U10
   if (m.status === 'DELIVERED') return 'Delivered ✓✓ · ' + route(m);
   return { QUEUED: 'Queued •', SENT: 'Sent ✓' }[m.status] || '';
 }
@@ -279,6 +299,7 @@ function send(cmd, clearId, errId) {
       // No event reports these back, so keep the local copy in step.
       if (cmd.t === 'name') S.self.name = cmd.name;
       if (cmd.t === 'debug') S.debug[cmd.flag] = cmd.on;
+      if (cmd.t === 'profile' || cmd.t === 'panic') return fetch('/api/snapshot').then(r => r.json()).then(s => { apply(Object.assign(s, { t: 'snapshot' })); render(); });
       render();
     })
     .catch(e => fail(e));
@@ -291,7 +312,9 @@ function upsert(list, m) {
 }
 
 function apply(ev) {
-  if (ev.t === 'snapshot') { S = ev; S.groups = S.groups || []; S.gdms = S.gdms || {}; return; }
+  if (ev.t === 'snapshot') {
+    if (S && S.self.id !== ev.self.id) { open = null; unread.feed = unread.security = 0; for (const k in dmUnread) delete dmUnread[k]; }   // U2: wiped, new identity
+    S = ev; S.groups = S.groups || []; S.gdms = S.gdms || {}; return; }
   if (!S) return;
   if (ev.t === 'msg') {
     const m = ev.msg;
@@ -304,13 +327,14 @@ function apply(ev) {
     }
   } else if (ev.t === 'status') {
     for (const list of [S.feed, ...Object.values(S.dms)])
-      for (const m of list) if (m.id === ev.id) { m.status = ev.status; m.hops = ev.hops; m.via = ev.via; }
+      for (const m of list) if (m.id === ev.id) { m.status = ev.status; m.hops = ev.hops; m.via = ev.via; m.rerouteVia = ev.rerouteVia; }
   } else if (ev.t === 'gstatus') {
     for (const list of Object.values(S.gdms)) for (const m of list) if (m.id === ev.id) { m.delivered = ev.delivered; m.total = ev.total; }
   } else if (ev.t === 'group') {
     S.groups = S.groups.filter(g => g.id !== ev.group.id);
     if (ev.group.members.includes(S.self.id)) S.groups.push(ev.group);   // left out of the list: live state goes, history stays
   } else if (ev.t === 'net') { S.contacts = ev.contacts; S.links = ev.links; }
+  else if (ev.t === 'stats') S.stats = ev.stats;
   else if (ev.t === 'sec') { S.security.push(ev.event); if (cur !== 'security') unread.security++; }
 }
 
@@ -372,6 +396,7 @@ function renderConvo() {
   const id = open.id, gq = open.kind === 'group', c = S.contacts.find(c => c.id === id) || {}, g = gq && grp(id), own = g && g.owner === S.self.id;
   $('chatName').textContent = gq ? gname(id) : name(id);
   $('chatRoute').textContent = gq ? (g ? g.members.map(name).join(', ') : 'you left this group') : route(c) + (c.verified ? ' · verified' : '');
+  $('chatWarn').textContent = gq ? '' : flags(c);
   $('photoBtn').hidden = gq; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes, no photos (13.2)
   $('gView').hidden = !own; document.querySelector('#convoView .compose').hidden = gq && !g;
   if (own && !$('gView').open) picker('gMem', g.members);   // rebuilt only while closed, so events do not undo ticks
@@ -402,8 +427,8 @@ function renderNetwork() {
   if (!S.contacts.length) ct.appendChild(el('li', 'No contacts yet.', 'empty'));
   for (const c of S.contacts.slice(0, MAX)) {
     ct.appendChild(add(el('li', null, 'rowc'),
-      add(el('div', null, 'main'), el('b', c.name || c.id.slice(0, 8)), el('br'), el('span', fp(c.id), 'mono'), el('br'),
-        el('small', route(c) + ' · ' + (c.linked ? 'linked' : 'not linked'))),
+      add(el('div', null, 'main'), el('b', name(c.id)), el('br'), el('span', fp(c.id), 'mono'), el('br'),
+        el('small', route(c) + ' · ' + (c.linked ? 'linked' : 'not linked')), el('div', flags(c), 'err')),
       sw('Verified', c.verified, on => send({ t: 'verify', id: c.id, on })),
       sw('Muted', c.muted, on => send({ t: 'mute', id: c.id, on }))));
   }
@@ -412,9 +437,18 @@ function renderNetwork() {
   for (const l of S.links.slice(0, MAX)) {
     lt.appendChild(add(el('li', null, 'rowc'), add(el('div', null, 'main'),
       el('b', l.peer ? name(l.peer) : l.link), ' ', el('span', l.peer ? fp(l.peer) : '', 'mono'), el('br'),
-      el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting')))));
+      el('small', l.transport + ' · ' + (l.authed ? 'authenticated' : 'connecting') + (l.tree ? ' · tree ' + l.tree : '')))));
   }
+  if (document.activeElement !== $('profile')) $('profile').value = S.profile || 'STANDARD';
+  kv('profVals', S.profileValues || {});
+  renderStats();
 }
+// Two-column table of key → value; drops{kind:n} becomes one row per kind seen so far (core lists every kind).
+function kv(id, o) {
+  $(id).replaceChildren(...Object.entries(o).flatMap(([k, v]) => v && typeof v === 'object' ? Object.entries(v).filter(e => e[1]).map(([d, n]) => [k + ' ' + d, n]) : [[k, v]])
+    .map(([k, v]) => add(el('tr'), el('td', k), el('td', typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v)))));
+}
+const renderStats = () => kv('stats', S.stats || {});
 
 function renderSecurity() {
   const sec = $('sec'); sec.replaceChildren();
@@ -451,7 +485,7 @@ setInterval(guest, 3000); guest();
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => $('conn').hidden = true;
-  ws.onmessage = e => { apply(JSON.parse(e.data)); render(); };
+  ws.onmessage = e => { const ev = JSON.parse(e.data); apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'network') renderStats(); };   // stats every 2 s: do not rebuild the switches
   ws.onclose = () => { $('conn').hidden = false; setTimeout(connect, 2000); };
 }
 show('feed');

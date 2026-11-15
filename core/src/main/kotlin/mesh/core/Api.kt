@@ -130,7 +130,8 @@ data class ProfileValues(val presenceMs: Long, val syncMs: Long, val jitterMinMs
 
 sealed interface MeshEvent {
     data class MessageAdded(val msg: Msg) : MeshEvent
-    data class StatusChanged(val id: String, val status: MsgStatus, val hops: Int, val via: String?) : MeshEvent
+    data class StatusChanged(val id: String, val status: MsgStatus, val hops: Int, val via: String?,
+                             val rerouteVia: String? = null) : MeshEvent   // U10: Msg.rerouteVia
     data class NetworkChanged(val contacts: List<Contact>, val links: List<LinkInfo>) : MeshEvent
     data class SecurityLogged(val event: Sec) : MeshEvent
     data class GroupChanged(val group: Group) : MeshEvent                                   // 13.2; members without self = left

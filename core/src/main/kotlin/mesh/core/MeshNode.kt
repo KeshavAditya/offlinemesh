@@ -740,7 +740,7 @@ class MeshNode(
     private fun setStatus(mid: String, status: MsgStatus, hops: Int, via: String?, emit: Boolean = true) {
         val m = msgs[mid] ?: return
         msgs[mid] = m.copy(status = status, hops = hops, via = via)
-        if (emit) emit(MeshEvent.StatusChanged(mid, status, hops, via))
+        if (emit) emit(MeshEvent.StatusChanged(mid, status, hops, via, m.rerouteVia))
     }
 
     // ---- 5.7 routing ----
@@ -966,7 +966,10 @@ class MeshNode(
         val t = targets(e, s)
         t.forEach { give(it, e) }
         val b = routeUsed(dst, t)
-        if (b != null) msgs[mid]?.let { msgs[mid] = it.copy(rerouteVia = links[b.link]?.peer) }
+        if (b != null) msgs[mid]?.let { m ->
+            msgs[mid] = m.copy(rerouteVia = links[b.link]?.peer)
+            emit(MeshEvent.StatusChanged(mid, m.status, m.hops, m.via, links[b.link]?.peer))   // so the page shows "rerouted" live
+        }
         watchAck(e, b, resends + 1)
     }
 

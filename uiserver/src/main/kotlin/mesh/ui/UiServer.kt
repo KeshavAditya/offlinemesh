@@ -148,7 +148,7 @@ class UiServer(private val node: UiNode, private val port: Int, private val gues
     private fun eventJson(e: MeshEvent) = when (e) {
         is MeshEvent.MessageAdded -> buildJsonObject { put("t", "msg"); put("msg", json.encodeToJsonElement(e.msg)) }
         is MeshEvent.StatusChanged -> buildJsonObject {
-            put("t", "status"); put("id", e.id); put("status", e.status.name); put("hops", e.hops); put("via", e.via)
+            put("t", "status"); put("id", e.id); put("status", e.status.name); put("hops", e.hops); put("via", e.via); put("rerouteVia", e.rerouteVia)
         }
         is MeshEvent.NetworkChanged -> buildJsonObject {
             put("t", "net"); put("contacts", json.encodeToJsonElement(e.contacts)); put("links", json.encodeToJsonElement(e.links))
