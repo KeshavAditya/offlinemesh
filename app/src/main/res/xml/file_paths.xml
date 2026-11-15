@@ -1,3 +1,3 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only the copied APK is shared (Share app). -->
-<paths><cache-path name="apk" path="apk/" /></paths>
+<!-- Only the copied APK (Share app) and the exported bundle (Bundle) are shared. -->
+<paths><cache-path name="apk" path="apk/" /><cache-path name="omb" path="omb/" /></paths>
