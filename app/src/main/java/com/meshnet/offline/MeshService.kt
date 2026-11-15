@@ -5,14 +5,17 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.util.Log
+import mesh.core.Crypto
 import mesh.core.ExecutorScheduler
 import mesh.core.Identity
 import mesh.core.LinkId
+import mesh.core.MeshEvent
 import mesh.core.MeshNode
 import mesh.core.Transport
 import mesh.core.TransportListener
@@ -43,6 +46,9 @@ class MeshService : Service() {
     lateinit var lan: Switchable; private set
     private var multicast: WifiManager.MulticastLock? = null
     @Volatile private var guest: GuestServer? = null
+    @Volatile private var prefix = ByteArray(4)   // NodeId prefix the transports advertise; changes on panic wipe (U2)
+    @Volatile private var longRange = false        // U5: profile wants coded PHY and the adapter supports it
+    private var codedOk = false
 
     override fun onBind(intent: Intent?) = null
 
@@ -58,15 +64,24 @@ class MeshService : Service() {
             else prev?.uncaughtException(t, e)
         }
         startForeground(1, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        val prefix = Identity.loadOrCreate(filesDir).nodeId.copyOf(4)
-        ble = Switchable("ble") { BleL2capTransport(this, prefix) }
+        val bt = (getSystemService(BLUETOOTH_SERVICE) as BluetoothManager).adapter
+        codedOk = bt != null && bt.isLeCodedPhySupported && bt.isLeExtendedAdvertisingSupported
+        Log.i(TAG, "ble isLeCodedPhySupported=${bt?.isLeCodedPhySupported} isLeExtendedAdvertisingSupported=${bt?.isLeExtendedAdvertisingSupported}")
+        prefix = Identity.loadOrCreate(filesDir).nodeId.copyOf(4)
+        ble = Switchable("ble") { BleL2capTransport(this, prefix, longRange) }
         lan = Switchable("lan") { LanTransport(LAN_PORT, emptyList(), prefix) }
         node = MeshNode(filesDir, ExecutorScheduler(), listOf(ble, lan))
+        node.addListener { if (it is MeshEvent.Reset) thread(name = "mesh-refresh") { refreshTransports() } }
         ui = UiServer(node, UI_PORT) { guest }
         dms = DmNotifier(this, node).also { node.addListener(it::onEvent) }
         thread(name = "mesh-start") {
             node.start()
+            longRange = codedOk && node.snapshot().profileValues.longRange
             applyPrefs()
+            // Profile changes raise no event; only a coded-capable adapter needs to follow them.
+            if (codedOk) thread(name = "mesh-profile-watch", isDaemon = true) {
+                while (instance === this) { Thread.sleep(10_000); refreshTransports() }
+            }
             // Ktor binds inside start(wait=false) and throws if it cannot, so returning means our own server owns the port.
             // Never probe the port instead: another app squatting 8080 would answer and the WebView would load its page.
             try {
@@ -94,6 +109,20 @@ class MeshService : Service() {
         if (!lanOn) { multicast?.release(); multicast = null }
         setGuest(p.getBoolean("guest", false))
         Log.i(TAG, "transports ble=${ble.on} lan=${lan.on} guest=${guest != null}")
+    }
+
+    /** Rebuilds transports whose adverts are stale: a new NodeId after a wipe (U2), or a long-range profile switch (U5). */
+    @Synchronized private fun refreshTransports() {
+        val s = node.snapshot()
+        if (s.self.id.isEmpty()) return
+        val p = Crypto.unhex(s.self.id).copyOf(4)
+        val lr = codedOk && s.profileValues.longRange
+        val newId = !p.contentEquals(prefix)
+        if (!newId && lr == longRange) return
+        prefix = p; longRange = lr
+        Log.i(TAG, "transports refresh prefix=${s.self.id.take(8)} longRange=$lr")
+        if (ble.on) { ble.set(false); ble.set(true) }
+        if (newId && lan.on) { lan.set(false); lan.set(true) }
     }
 
     /** Guest mode (5.13): a separate 0.0.0.0:8090 server for hotspot browsers; each start gets a fresh PIN guard. */

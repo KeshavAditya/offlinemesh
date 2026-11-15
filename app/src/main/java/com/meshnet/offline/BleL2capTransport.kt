@@ -9,6 +9,9 @@ import android.bluetooth.BluetoothSocket
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
+import android.bluetooth.le.AdvertisingSet
+import android.bluetooth.le.AdvertisingSetCallback
+import android.bluetooth.le.AdvertisingSetParameters
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -49,9 +52,10 @@ fun prefixLess(a: ByteArray, b: ByteArray): Boolean {
  * Insecure LE L2CAP CoC links (plan 8, Agent B "BleL2capTransport details"), framed with Codec.writeFrame/readFrame.
  * Peer identity is core's job (5.5); this only moves frames. Caller must hold the Bluetooth runtime permissions.
  * @param prefix this node's 4-byte NodeId prefix, advertised for the dial tie-break.
+ * @param longRange U5: the profile asks for a coded-PHY advert and scan; used only if the adapter supports both.
  */
 @SuppressLint("MissingPermission")
-class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport {
+class BleL2capTransport(ctx: Context, private val prefix: ByteArray, longRange: Boolean = false) : Transport {
     override val name = "ble"
 
     private companion object {
@@ -70,6 +74,8 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
     private val pending = AtomicInteger()   // dialers not yet connected; a connected dialer is already in links
     private lateinit var listener: TransportListener
     @Volatile private var server: BluetoothServerSocket? = null
+    private val coded = longRange && adapter.isLeCodedPhySupported && adapter.isLeExtendedAdvertisingSupported
+    private val seen = ConcurrentHashMap<String, String>()   // address -> " rssi -61[ phy coded]" from its last scan result (U1)
 
     init { require(prefix.size == 4) }
 
@@ -83,6 +89,7 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
         running.set(false)
         runCatching { adapter.bluetoothLeScanner?.stopScan(scanCb) }
         runCatching { adapter.bluetoothLeAdvertiser?.stopAdvertising(advCb) }
+        if (coded) runCatching { adapter.bluetoothLeAdvertiser?.stopAdvertisingSet(codedCb) }
         runCatching { server?.close() }
         links.values.forEach { it.close() }
     }
@@ -128,6 +135,19 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
         val resp = AdvertiseData.Builder().setIncludeDeviceName(false)
             .addServiceData(MESH_SERVICE_UUID, encodeServiceData(prefix, psm)).build()
         adv.startAdvertising(settings, data, resp, advCb)
+        if (!coded) return
+        // U5: a second, extended set on coded PHY. Extended connectable adverts are not scannable: UUID and data in one packet.
+        runCatching { adv.stopAdvertisingSet(codedCb) }
+        val p = AdvertisingSetParameters.Builder().setLegacyMode(false).setConnectable(true).setScannable(false)
+            .setPrimaryPhy(BluetoothDevice.PHY_LE_CODED).setSecondaryPhy(BluetoothDevice.PHY_LE_CODED)
+            .setInterval(AdvertisingSetParameters.INTERVAL_LOW).setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH).build()
+        val all = AdvertiseData.Builder().setIncludeDeviceName(false).addServiceUuid(MESH_SERVICE_UUID)
+            .addServiceData(MESH_SERVICE_UUID, encodeServiceData(prefix, psm)).build()
+        runCatching { adv.startAdvertisingSet(p, all, null, null, null, codedCb) }.onFailure { Log.e(TAG, "ble coded advertise start failed: $it") }
+    }
+
+    private val codedCb = object : AdvertisingSetCallback() {
+        override fun onAdvertisingSetStarted(set: AdvertisingSet?, txPower: Int, status: Int) { Log.i(TAG, "ble coded advertise status=$status tx=$txPower") }
     }
 
     private val scanCb = object : ScanCallback() {
@@ -135,6 +155,8 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
             val sd = r.scanRecord?.getServiceData(MESH_SERVICE_UUID)
             if (sd == null || sd.size != 6 || !running.get()) return
             val peer = sd.copyOf(4)
+            if (seen.size > 64) seen.clear()   // rotating or spoofed addresses must not grow the map
+            seen[r.device.address] = " rssi ${r.rssi}" + if (coded) " phy ${phyName(r.primaryPhy)}" else ""
             if (adapter.bluetoothLeAdvertiser != null && !prefixLess(prefix, peer)) return   // tie-break; also skips ourselves
             // One dialer per prefix, not per address: Android rotates private addresses (~15 min), and an address key
             // re-dials an already-linked peer forever (seen on emulators: 870 duplicate links in 10 min). A spoofed prefix
@@ -161,7 +183,9 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
         val scanner = adapter.bluetoothLeScanner ?: run { Log.w(TAG, "ble scanner unavailable (Bluetooth off?)"); return }
         runCatching { scanner.stopScan(scanCb) }
         val filter = ScanFilter.Builder().setServiceUuid(MESH_SERVICE_UUID).build()
-        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        val b = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+        if (coded) b.setLegacy(false).setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)   // U5: also hears the coded advert
+        val settings = b.build()
         runCatching { scanner.startScan(listOf(filter), settings, scanCb) }.onFailure { Log.e(TAG, "ble scan start failed: $it") }
     }
 
@@ -187,7 +211,9 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
     private fun open(s: BluetoothSocket): Link {
         val l = Link("ble${ids.incrementAndGet()}", s)
         links[l.id] = l
-        listener.onLinkUp(l.id, "ble ${s.remoteDevice.address}")
+        val desc = "ble ${s.remoteDevice.address}${seen[s.remoteDevice.address] ?: ""}"
+        Log.i(TAG, "ble link up ${l.id} $desc")
+        listener.onLinkUp(l.id, desc)
         l.startThreads()
         return l
     }
@@ -217,6 +243,7 @@ class BleL2capTransport(ctx: Context, private val prefix: ByteArray) : Transport
         }
     }
 
+    private fun phyName(p: Int) = when (p) { BluetoothDevice.PHY_LE_1M -> "1m"; BluetoothDevice.PHY_LE_2M -> "2m"; BluetoothDevice.PHY_LE_CODED -> "coded"; else -> "$p" }
     private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
     private fun sleep(ms: Long) = try { Thread.sleep(ms) } catch (_: InterruptedException) {}
     private fun thread(name: String, body: () -> Unit) = Thread(body, name).apply { isDaemon = true; start() }
