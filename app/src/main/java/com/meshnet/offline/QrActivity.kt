@@ -4,8 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -60,11 +58,7 @@ class QrActivity : Activity() {
     }
 
     private fun show(text: String, bytes: ByteArray) {
-        val m = Qr.encode(bytes, 0)   // size 0: one pixel per module, scaled up by the ImageView without smoothing
-        val bmp = Bitmap.createBitmap(m.width, m.height, Bitmap.Config.ARGB_8888)
-        for (y in 0 until m.height) for (x in 0 until m.width) bmp.setPixel(x, y, if (m[x, y]) Color.BLACK else Color.WHITE)
-        val side = resources.displayMetrics.widthPixels - 48
-        qr.setImageBitmap(Bitmap.createScaledBitmap(bmp, side, side, false))
+        qr.setImageBitmap(Qr.bitmap(Qr.encode(bytes, 0), resources.displayMetrics.widthPixels - 48))   // size 0: one pixel per module
         qr.visibility = View.VISIBLE; list.visibility = View.GONE
         status.text = "${bytes.size} bytes: ${text.take(60)}"
         Log.i(TAG, "qr show ${bytes.size} bytes")

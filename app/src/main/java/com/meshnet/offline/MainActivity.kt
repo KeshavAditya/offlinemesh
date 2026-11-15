@@ -30,6 +30,7 @@ class MainActivity : Activity() {
     private var loaded = false
     private var loggedSecure = false
     private var pick: ValueCallback<Array<Uri>>? = null   // pending <input type=file> from the page
+    private var invite: InviteDialog? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,7 +44,8 @@ class MainActivity : Activity() {
         val row = LinearLayout(this).apply {
             setPadding(24, 8, 24, 8)
             addView(toggle("Bluetooth", "ble", true)); addView(toggle("Wi-Fi LAN", "lan", false))
-            addView(toggle("Guest mode", "guest", false))
+            val guest = toggle("Guest mode", "guest", false); addView(guest)
+            addView(Button(this@MainActivity).apply { text = "Invite guests"; setOnClickListener { invite = InviteDialog(this@MainActivity) { guest.isChecked = true }.also { it.show() } } })
             addView(Button(this@MainActivity).apply { text = "QR hop"; setOnClickListener { startActivity(Intent(this@MainActivity, QrActivity::class.java)) } })
             addView(Button(this@MainActivity).apply { text = "Share app"; setOnClickListener { shareApp() } })
             addView(Button(this@MainActivity).apply { text = "Keep alive"; setOnClickListener { KeepAlive.dialog(this@MainActivity) } })
@@ -68,7 +70,30 @@ class MainActivity : Activity() {
             addView(HorizontalScrollView(this@MainActivity).apply { addView(row) }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))   // the row is wider than a phone
             addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         })
+        if (!prefs.getBoolean("fingerprintShown", false)) { prefs.edit().putBoolean("fingerprintShown", true).apply(); firstRun() }
     }
+
+    /** Research "Offline APK sharing": a fresh install can only trust a fingerprint read out by the sharer, so show it once. */
+    private fun firstRun() {
+        val apk = apkSha()
+        android.util.Log.i(TAG, "first run: apk sha256 $apk")
+        AlertDialog.Builder(this).setTitle("Check this app")
+            .setView(TextView(this).apply { setTextIsSelectable(true); setPadding(48, 24, 48, 0)
+                text = "Compare this with the person who shared the app.\n\nApp file SHA-256 (short):\n${shortSha(apk)}\n\n" +
+                    "Full: ${apk.chunked(4).joinToString(" ")}\n\nSigning certificate SHA-256:\n${certSha()}\n\n" +
+                    "If they differ, uninstall it: the copy was changed on the way." })
+            .setPositiveButton("OK", null).show()
+    }
+
+    private fun certSha(): String {
+        val cert = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo!!.apkContentsSigners[0]
+        return MessageDigest.getInstance("SHA-256").digest(cert.toByteArray()).joinToString(":") { "%02X".format(it) }
+    }
+
+    /** Lowercase hex of the installed APK file: the same value the guest page shows for its /app.apk download. */
+    private fun apkSha() = MessageDigest.getInstance("SHA-256").digest(File(applicationInfo.sourceDir).readBytes()).joinToString("") { "%02x".format(it) }
+
+    private fun shortSha(hex: String) = hex.take(16).chunked(4).joinToString(" ")
 
     override fun onResume() { super.onResume(); DmNotifier.foreground = true; MeshService.instance?.dms?.clear(); check() }
 
@@ -84,7 +109,8 @@ class MainActivity : Activity() {
         pick?.onReceiveValue(uris); pick = null   // null on cancel
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) = check()
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) =
+        if (requestCode == InviteDialog.PERM_REQ) invite?.onPermResult(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) ?: Unit else check()
 
     @SuppressLint("MissingPermission")
     private fun check() {
@@ -109,11 +135,10 @@ class MainActivity : Activity() {
 
     /** Shows this APK's signing-cert SHA-256 (the recipient compares it with theirs), then sends the APK through the share sheet (Quick Share, Bluetooth: no internet). */
     private fun shareApp() {
-        val cert = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo!!.apkContentsSigners[0]
-        val sha = MessageDigest.getInstance("SHA-256").digest(cert.toByteArray()).joinToString(":") { "%02X".format(it) }
+        val sha = certSha()
         android.util.Log.i(TAG, "share app: cert sha256 $sha")
         AlertDialog.Builder(this).setTitle("Share OfflineMesh")
-            .setView(TextView(this).apply { text = "Signing certificate SHA-256 (must match on both phones):\n\n$sha";setTextIsSelectable(true); setPadding(48, 24, 48, 0) })
+            .setView(TextView(this).apply { text = "App file SHA-256 (short): ${shortSha(apkSha())}\n\nSigning certificate SHA-256 (must match on both phones):\n\n$sha";setTextIsSelectable(true); setPadding(48, 24, 48, 0) })
             .setNegativeButton("Close", null)
             .setPositiveButton("Share APK") { _, _ ->
                 val apk = File(cacheDir, "apk").apply { mkdirs() }.resolve("OfflineMesh.apk")
