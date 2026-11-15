@@ -2,109 +2,175 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OfflineMesh</title>
 <style>
-:root { --bg: #fff; --fg: #15171a; --mut: #5f6670; --line: #dcdfe4; --card: #f3f4f6; --acc: #0b62c4; --accfg: #fff; --red: #c62828; --amb: #b86e00; --nb: 0px; color-scheme: light dark; }
+:root { --bg: #fff; --fg: #16201e; --mut: #5a6866; --line: #dbe3e1; --sur: #f1f5f4; --acc: #0a7566; --tint: #e2f1ee; --accfg: #fff; --red: #b3372b; --redt: #fbefed; --amb: #a46200; --nb: 0px; color-scheme: light dark; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #111316; --fg: #e9eaec; --mut: #9aa1aa; --line: #2d3137; --card: #1d2025; --acc: #5aa2ff; --accfg: #08121f; --red: #ef6461; --amb: #f0a640; }
+  :root { --bg: #0e1413; --fg: #e4ebe9; --mut: #93a29f; --line: #28332f; --sur: #172120; --acc: #45c3ae; --tint: #12332e; --accfg: #03201b; --red: #f07a6d; --redt: #2b1816; --amb: #e7a347; }
 }
 * { box-sizing: border-box; }
-body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+html { scroll-padding: 120px 0 calc(var(--nb) + 96px); }
+body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); -webkit-tap-highlight-color: transparent; }
 .wrap { max-width: 680px; margin: 0 auto; padding: 0 16px; }
 header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
-.top { display: flex; align-items: center; gap: 8px; min-height: 48px; }
-.top b { font-size: 17px; }
-#me { color: var(--mut); font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pill { font-size: 13px; padding: 2px 10px; border-radius: 12px; border: 1px solid var(--line); color: var(--mut); white-space: nowrap; }
-.pill.on { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
-#conn { background: var(--amb); color: #000; font-size: 13px; text-align: center; padding: 2px; }
-nav { display: flex; }
-nav button { flex: 1; min-height: 44px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--mut); }
-nav button[aria-current] { color: var(--acc); border-bottom-color: var(--acc); font-weight: 600; }
-.n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px; background: var(--acc); color: var(--accfg); font-size: 12px; line-height: 20px; text-align: center; font-weight: 600; }
+.top { display: flex; align-items: center; gap: 12px; min-height: 64px; }
+.mark { flex: none; position: relative; width: 24px; height: 24px; }
+.mark i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--acc); }
+.mark i:nth-child(1) { left: 1px; bottom: 3px; } .mark i:nth-child(2) { right: 1px; bottom: 3px; } .mark i:nth-child(3) { left: 8px; top: 3px; }
+.mark i:nth-child(3)::before, .mark i:nth-child(3)::after { content: ""; position: absolute; top: 6px; left: 3px; width: 2px; height: 12px; background: var(--acc); transform-origin: top; transform: rotate(32deg); }
+.mark i:nth-child(3)::after { transform: rotate(-32deg); }
+.mark i:nth-child(1)::after { content: ""; position: absolute; left: 4px; top: 3px; width: 14px; height: 2px; background: var(--acc); }
+.id { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.brand { font-size: 18px; font-weight: 750; letter-spacing: -.02em; }
+#me { color: var(--mut); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); white-space: nowrap; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .6; }
+.pill.on { background: var(--tint); border-color: var(--acc); color: var(--acc); }
+.pill.on::before { opacity: 1; }
+#conn { background: var(--amb); color: #000; font-size: 13px; font-weight: 600; text-align: center; padding: 2px; }
+nav { display: flex; gap: 4px; }
+nav button { flex: 1; min-height: 48px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--mut); font-weight: 600; font-size: 15px; }
+nav button[aria-current] { color: var(--acc); border-bottom-color: var(--acc); }
+nav button:active { background: var(--sur); }
+.n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 10px; background: var(--acc); color: var(--accfg); font-size: 12px; line-height: 20px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
 .n:empty { display: none; }
 @media (max-width: 599px) {
-  :root { --nb: 56px; }
+  :root { --nb: calc(60px + env(safe-area-inset-bottom)); }
   body { padding-bottom: var(--nb); }
-  nav { position: fixed; left: 0; right: 0; bottom: 0; height: var(--nb); background: var(--bg); border-top: 1px solid var(--line); }
-  nav button { border-bottom: 0; border-top: 2px solid transparent; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; height: var(--nb); padding-bottom: env(safe-area-inset-bottom); background: var(--bg); border-top: 1px solid var(--line); gap: 0; }
+  nav button { border-bottom: 0; border-top: 2px solid transparent; font-size: 14px; }
   nav button[aria-current] { border-top-color: var(--acc); }
 }
-section { display: none; padding-top: 8px; }
+section { display: none; padding: 8px 0 24px; }
 section.on { display: block; }
-h2 { font-size: 18px; margin: 16px 0 8px; }
-button, .btn { font: inherit; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); cursor: pointer; transition: background-color .15s, color .15s; display: inline-flex; align-items: center; justify-content: center; }
+h2 { font-size: 16px; font-weight: 700; margin: 24px 0 8px; display: flex; align-items: baseline; gap: 8px; }
+h2 small { font-weight: 500; }
+button, .btn { font: inherit; font-weight: 600; white-space: nowrap; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--sur); color: var(--fg); cursor: pointer; transition: background-color .15s, color .15s, border-color .15s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 button:active, .btn:active { background: var(--line); }
-button:disabled { opacity: .5; cursor: default; }
+button:disabled { opacity: .45; cursor: default; }
 button.pri { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
-input[type=text] { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
-input[type=text]:focus, button:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+button.pri:active { background: var(--fg); border-color: var(--fg); }
+button.bad { background: var(--red); border-color: var(--red); color: #fff; }
+input[type=text], select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+select { width: auto; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+input[type=text]:focus { outline: 2px solid var(--acc); outline-offset: -1px; border-color: transparent; }
 ul { list-style: none; padding: 0; margin: 0; }
 .mut, small { color: var(--mut); font-size: 13px; }
-.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
-.card { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 8px 0; background: var(--bg); }
-.card .who, .msgs .who { font-weight: 600; font-size: 14px; }
-.pick label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-.pick input { width: 20px; height: 20px; }
-.tag { font-size: 12px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--mut); margin-left: 4px; font-weight: 400; }
+.mono { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; font-size: 13px; letter-spacing: .02em; }
+.av { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--tint); color: var(--acc); font-weight: 700; font-size: 16px; }
+.av.g { border-radius: 12px; }
+.av.me { background: var(--acc); color: var(--accfg); }
+.who { font-weight: 650; font-size: 15px; }
+.tag { font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 8px; background: var(--sur); border: 1px solid var(--line); color: var(--mut); margin-left: 6px; }
 .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
-.compose { position: fixed; bottom: var(--nb); left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; z-index: 1; background: var(--bg); padding: 8px 16px; box-shadow: 0 -2px 6px rgba(0,0,0,.06); }
-#feed, #convoView { padding-bottom: 104px; }
-.row { display: flex; gap: 8px; }
-.compose .mut { min-height: 0; }
-.compose .mut:empty { display: none; }
-.err { color: var(--red); font-size: 13px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.err { color: var(--red); font-size: 13px; font-weight: 500; }
 .err:empty { display: none; }
-.chat { display: flex; width: 100%; text-align: left; gap: 8px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; min-height: 64px; }
-.chat .main { flex: 1; min-width: 0; }
-.chat .line { display: flex; justify-content: space-between; gap: 8px; }
-.chat .prev { color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chead { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; border-bottom: 1px solid var(--line); }
-.chead button { padding: 0 12px; }
-.msgs { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
-.msgs li { max-width: 80%; align-self: flex-start; }
-.msgs li.mine { align-self: flex-end; text-align: right; }
-.bub { display: inline-block; text-align: left; padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
-.mine .bub { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
-.bub img { display: block; max-width: 100%; border-radius: 8px; }
+.empty { color: var(--mut); padding: 48px 16px; text-align: center; }
+/* Feed */
+.post { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin: 8px 0; }
+.post .body { flex: 1; min-width: 0; }
+.post .txt { margin: 2px 0 4px; }
 .meta { display: block; color: var(--mut); font-size: 12px; margin-top: 2px; }
-.rowc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-.rowc .main { flex: 1; min-width: 180px; }
-label.sw { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; cursor: pointer; }
-.sw input { appearance: none; -webkit-appearance: none; width: 40px; height: 24px; margin: 0; border-radius: 12px; background: var(--line); position: relative; cursor: pointer; transition: background-color .15s; }
+/* Compose bar */
+.compose { position: fixed; bottom: var(--nb); left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; z-index: 1; background: var(--bg); padding: 8px 16px; border-top: 1px solid var(--line); box-shadow: 0 -4px 12px rgba(10, 40, 35, .06); }
+.compose input[type=text] { border-radius: 22px; padding: 0 16px; background: var(--sur); border-color: transparent; }
+.compose button { border-radius: 22px; }
+.compose .mut:empty { display: none; }
+#feed, #convoView { padding-bottom: 112px; }
+/* Chats */
+.chead { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.chead h2 { flex: 1; margin: 8px 0; font-size: 20px; }
+.chat { display: flex; align-items: center; width: 100%; text-align: left; gap: 12px; padding: 12px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: 12px; background: none; min-height: 72px; font-weight: 400; }
+.chat:active { background: var(--sur); }
+#convos li + li .chat { border-top: 1px solid var(--line); border-radius: 0; }
+.chat .main { flex: 1; min-width: 0; }
+.chat .line { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.chat .prev { color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.form { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 0 0 8px; background: var(--sur); }
+.form input[type=text] { background: var(--bg); }
+.pick label { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.pick input { width: 20px; height: 20px; margin: 0; accent-color: var(--acc); }
+.pick:empty::before { content: "No contacts to add yet."; color: var(--mut); font-size: 13px; display: block; padding: 8px 0; }
+.convohead { position: sticky; top: 64px; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+@media (min-width: 600px) { .convohead { top: 113px; } }
+.convohead .chead { padding-bottom: 4px; }
+.convohead .chead button { padding: 0 8px 0 4px; margin-left: -4px; border-color: transparent; background: none; color: var(--acc); }
+.convohead .chead button:active { background: var(--sur); }
+.convohead .chead > div { flex: 1; min-width: 0; line-height: 1.3; }
+.path { margin: 4px 0 8px; display: flex; align-items: center; flex-wrap: wrap; row-gap: 4px; font-size: 12px; font-weight: 600; color: var(--mut); }
+.path .hn { padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+.path .hn.me { background: var(--acc); border-color: var(--acc); color: var(--accfg); }
+.path .hn.end { border-color: var(--acc); color: var(--acc); }
+.path .hl { width: 20px; border-top: 2px solid var(--acc); }
+.path.none .hl { border-top-style: dashed; border-color: var(--mut); }
+details { margin-top: 8px; }
+summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--acc); }
+.msgs { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; }
+.msgs li { max-width: 80%; align-self: flex-start; margin-bottom: 8px; }
+.msgs li.mine { align-self: flex-end; text-align: right; }
+.msgs .who { font-size: 13px; color: var(--acc); margin: 0 0 2px 12px; }
+.bub { display: inline-block; text-align: left; padding: 8px 14px; border-radius: 18px 18px 18px 6px; background: var(--sur); border: 1px solid var(--line); }
+.mine .bub { background: var(--acc); border-color: var(--acc); color: var(--accfg); border-radius: 18px 18px 6px 18px; }
+.bub img { display: block; max-width: 100%; border-radius: 12px; margin: 2px -6px; }
+.msgs .meta { margin: 2px 12px 0; }
+/* Network */
+.you { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.you > div { flex: 1 1 260px; min-width: 0; }
+.qr { display: block; width: 176px; height: 176px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+.fpbox .mono { font-size: 15px; }
+.fpbox { line-height: 1.6; word-spacing: .2em; margin: 8px 0; }
+.rowc { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rowc:last-child { border-bottom: 0; }
+.rowc .main { flex: 1; min-width: 170px; }
+.rowc .sws { display: flex; gap: 16px; margin-left: 52px; }
+@media (min-width: 600px) { .rowc .sws { margin-left: 0; } }
+.box { border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; }
+label.sw { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; cursor: pointer; }
+.sw input { appearance: none; -webkit-appearance: none; flex: none; width: 40px; height: 24px; margin: 0; border-radius: 12px; background: var(--line); position: relative; cursor: pointer; transition: background-color .15s; }
 .sw input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
 .sw input:checked { background: var(--acc); }
 .sw input:checked::after { left: 19px; }
-.sw input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
-.qr { display: block; width: 200px; height: 200px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
-.ev { border: 1px solid var(--line); border-left: 4px solid var(--amb); border-radius: 8px; padding: 6px 10px; margin: 6px 0; font-size: 14px; overflow-wrap: anywhere; }
-.ev.bad { border-left-color: var(--red); }
-.ev b { font-weight: 600; }
-fieldset { border: 2px solid var(--red); border-radius: 12px; padding: 8px 12px 12px; margin: 16px 0; }
-legend { font-weight: 600; padding: 0 6px; color: var(--red); }
+.guest { border: 1px solid var(--acc); border-radius: 12px; padding: 12px; margin-top: 16px; }
+.guest h2 { margin-top: 0; }
+.guest b.mono { font-size: 22px; letter-spacing: .15em; }
+table.kv { border-collapse: collapse; width: 100%; font-size: 14px; }
+.kv td { padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.kv tr:last-child td { border-bottom: 0; }
+.kv td + td { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kv:empty { display: none; }
+/* Security and danger zones */
+fieldset { border: 1px solid var(--red); border-radius: 12px; padding: 4px 16px 16px; margin: 24px 0 8px; background: var(--redt); }
+legend { font-weight: 700; padding: 0 8px; color: var(--red); background: var(--bg); border-radius: 6px; }
+fieldset p { margin: 4px 0 12px; }
 fieldset .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-summary { padding: 12px 0; cursor: pointer; }
-.btn[hidden] { display: none; }
-.empty { color: var(--mut); padding: 16px 0; text-align: center; }
-select { font: inherit; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); }
-table.kv { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
-.kv td { padding: 4px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.kv td + td { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; }
+fieldset .btns button { flex: 1; background: var(--bg); }
+.ev { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; border-left: 3px solid var(--amb); padding: 8px 12px; margin: 8px 0; font-size: 14px; overflow-wrap: anywhere; background: var(--sur); border-radius: 0 8px 8px 0; }
+.ev.bad { border-left-color: var(--red); }
+.ev b { font-weight: 700; font-size: 13px; letter-spacing: .01em; }
+.ev.bad b { color: var(--red); }
+.ev span { grid-column: 1 / -1; }
+.btn[hidden], [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header>
   <div class="wrap">
-    <div class="top"><b>OfflineMesh</b> <span id="me"></span> <span id="nlinks" class="pill">no links</span></div>
-    <nav>
+    <div class="top">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <div class="id"><b class="brand">OfflineMesh</b><span id="me"></span></div>
+      <span id="nlinks" class="pill" role="status">no links</span>
+    </div>
+    <nav aria-label="Sections">
       <button data-s="feed" onclick="show('feed')">Feed<span class="n" id="n-feed"></span></button>
       <button data-s="chats" onclick="show('chats')">Chats<span class="n" id="n-chats"></span></button>
       <button data-s="network" onclick="show('network')">Network</button>
       <button data-s="security" onclick="show('security')">Security<span class="n" id="n-security"></span></button>
     </nav>
   </div>
-  <div id="conn" hidden>Reconnecting…</div>
+  <div id="conn" role="status" hidden>Reconnecting…</div>
 </header>
 
 <main class="wrap">
@@ -112,77 +178,86 @@ table.kv { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 
   <ul id="posts"></ul>
   <div class="compose">
     <div class="row">
-      <input type="text" id="postText" placeholder="Write a post" data-max="1000" data-btn="postBtn" data-count="postCount">
+      <input type="text" id="postText" placeholder="Post to everyone nearby" aria-label="Post text" data-max="1000" data-btn="postBtn" data-count="postCount">
       <button id="postBtn" class="pri" disabled onclick="sendPost()">Post</button>
     </div>
-    <span id="postCount" class="mut"></span> <span id="postErr" class="err"></span>
+    <span id="postCount" class="mut"></span> <span id="postErr" class="err" role="alert"></span>
   </div>
 </section>
 
 <section id="chats">
   <div id="chatList">
-    <div class="chead"><h2 style="flex:1;margin:8px 0">Chats</h2>
-      <span id="groupSlot"><button id="newGroupBtn" onclick="$('newGroup').hidden = !$('newGroup').hidden; render()">New group</button></span>
+    <div class="chead"><h2>Chats</h2>
+      <button id="newGroupBtn" aria-expanded="false" onclick="toggleGroupForm()">New group</button>
     </div>
-    <div id="newGroup" class="card" hidden>
+    <div id="newGroup" class="form" hidden>
       <input type="text" id="gName" placeholder="Group name" maxlength="32" aria-label="Group name">
-      <div id="gPick" class="pick"></div>
-      <div class="row"><button id="gCreate" class="pri" onclick="newGroup()">Create</button><button onclick="$('newGroup').hidden = true">Cancel</button></div>
+      <div id="gPick" class="pick" role="group" aria-label="Members"></div>
+      <div class="row"><button id="gCreate" class="pri" onclick="newGroup()">Create group</button><button onclick="toggleGroupForm(false)">Cancel</button></div>
     </div>
     <ul id="convos"></ul>
   </div>
   <div id="convoView" hidden>
-    <div class="chead">
-      <button onclick="closeChat()" aria-label="Back to chats">‹ Chats</button>
-      <div><b id="chatName"></b><br><small id="chatRoute"></small></div>
+    <div class="convohead">
+      <div class="chead">
+        <button onclick="closeChat()" aria-label="Back to chats">‹ Chats</button>
+        <span id="chatAv" class="av" aria-hidden="true"></span>
+        <div><b id="chatName"></b><br><small id="chatRoute"></small></div>
+      </div>
+      <div id="chatPath" class="path" aria-hidden="true"></div>
+      <p id="chatWarn" class="err"></p>
+      <details id="gView" hidden><summary>Edit members</summary><div id="gMem" class="pick" role="group" aria-label="Members"></div>
+        <button id="gSave" class="pri" onclick="saveMembers()">Save members</button></details>
     </div>
-    <p id="chatWarn" class="err"></p>
-    <details id="gView" hidden><summary>Members</summary><div id="gMem" class="pick"></div>
-      <button id="gSave" class="pri" onclick="saveMembers()">Save members</button></details>
-    <ul id="convo" class="msgs"></ul>
+    <ul id="convo" class="msgs" aria-live="polite"></ul>
     <div class="compose">
       <div class="row">
         <label id="photoBtn" class="btn" title="Send a photo" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.lastChild.click()}">Photo<input type="file" accept="image/*" hidden onchange="photo(this)"></label>
-        <input type="text" id="dmText" placeholder="Write a message" data-max="39999" data-btn="dmBtn" data-count="dmCount">
+        <input type="text" id="dmText" placeholder="Message" aria-label="Message text" data-max="39999" data-btn="dmBtn" data-count="dmCount">
         <button id="dmBtn" class="pri" disabled onclick="sendDm()">Send</button>
       </div>
-      <span id="dmCount" class="mut"></span> <span id="dmErr" class="err"></span>
+      <span id="dmCount" class="mut"></span> <span id="dmErr" class="err" role="alert"></span>
     </div>
   </div>
 </section>
 
 <section id="network">
-  <h2>Me</h2>
-  <div class="row">
-    <input type="text" id="myName" aria-label="My name"> <button onclick="send({t:'name',name:val('myName')})">Save name</button>
+  <h2>You</h2>
+  <div class="you">
+    <div>
+      <div class="row">
+        <input type="text" id="myName" aria-label="My name" maxlength="32"> <button onclick="send({t:'name',name:val('myName')})">Save name</button>
+      </div>
+      <div class="fpbox"><small>Fingerprint</small><br><span id="fp" class="mono"></span></div>
+      <p class="mut">To verify a contact, scan their QR or read their screen, check it matches their fingerprint below, then switch on Verified.</p>
+    </div>
+    <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
+    <img id="myQr" class="qr" width="176" height="176" alt="QR code of my fingerprint">
   </div>
-  <p>Fingerprint: <span id="fp" class="mono"></span></p>
-  <!-- shortcut: no in-app scanner; the other phone's camera app shows the QR text. Add a scanner if judges want one tap. -->
-  <img id="myQr" class="qr" width="200" height="200" alt="QR code of my fingerprint">
-  <p class="mut">To verify a contact: scan their QR (or read their screen), check it matches their ID below, then switch on Verified.</p>
   <div id="guest"></div>
-  <h2>Contacts</h2>
+  <h2>Contacts <small id="nContacts"></small></h2>
   <ul id="contacts"></ul>
-  <h2>Links</h2>
+  <h2>Links <small id="nLinks"></small></h2>
   <ul id="links"></ul>
-  <h2>Profile</h2>
+  <h2>Mission profile</h2>
   <select id="profile" aria-label="Mission profile" onchange="send({t:'profile',name:this.value})">
     <option>STANDARD</option><option>CROWD</option><option>TUNNEL</option><option>SPARSE</option>
   </select>
-  <table id="profVals" class="kv"></table>
+  <div class="box" style="margin-top:8px"><table id="profVals" class="kv"></table></div>
+  <h2>Statistics</h2>
+  <div class="box"><table id="stats" class="kv"></table></div>
   <fieldset>
     <legend>Panic wipe</legend>
-    <p class="mut">Tells contacts to delete your conversations, erases this phone's identity and messages, and starts with a new ID.</p>
+    <p class="mut">Tells contacts to delete your conversations, erases this phone's identity and messages, and starts again with a new ID.</p>
     <div class="row"><input type="text" id="wipeText" placeholder="Type WIPE" aria-label="Type WIPE to confirm" autocomplete="off">
-      <button id="wipeBtn" onclick="val('wipeText') === 'WIPE' ? send({t:'panic',confirm:'WIPE'}, 'wipeText') : $('wipeText').focus()">Panic wipe</button></div>
+      <button id="wipeBtn" class="bad" onclick="val('wipeText') === 'WIPE' ? send({t:'panic',confirm:'WIPE'}, 'wipeText') : $('wipeText').focus()">Panic wipe</button></div>
   </fieldset>
-  <h2>Statistics</h2>
-  <table id="stats" class="kv"></table>
 </section>
 
 <section id="security">
   <fieldset>
     <legend>Demo attacks</legend>
+    <p class="mut">For demos only. These misbehave on purpose so the other nodes can catch it.</p>
     <label class="sw"><input type="checkbox" id="tamper" onchange="send({t:'debug',flag:'tamper',on:this.checked})"> Tamper while relaying</label><br>
     <label class="sw"><input type="checkbox" id="drop" onchange="send({t:'debug',flag:'drop',on:this.checked})"> Drop while relaying</label>
     <div class="btns">
@@ -191,12 +266,40 @@ table.kv { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 
       <button onclick="send({t:'attack',kind:'replay'})">Replay</button>
     </div>
   </fieldset>
-  <h2>Security log</h2>
+  <h2>Security log <small id="nSec"></small></h2>
   <ul id="sec"></ul>
 </section>
 </main>
 
 <script>
+// The only code that talks to the node. Another backend (an in-browser node) plugs in by setting window.OM_BACKEND
+// to an object with the same members: connect(), send(cmd) -> Promise (rejects with Error), onEvent(fn), onState(fn(up)),
+// qr(text) -> image URL or '', guest() -> Promise<{pin, urls} | null>. Events and cmds are the JSON of UiServer.kt / Cmd.kt.
+function httpBackend() {
+  const evs = [], sts = [], emit = ev => evs.forEach(f => f(ev));
+  const b = {
+    onEvent: f => evs.push(f),
+    onState: f => sts.push(f),
+    connect() {
+      const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+      ws.onopen = () => sts.forEach(f => f(true));
+      ws.onmessage = e => emit(JSON.parse(e.data));
+      ws.onclose = () => { sts.forEach(f => f(false)); setTimeout(b.connect, 2000); };   // the server pushes a fresh snapshot on reconnect
+    },
+    async send(cmd) {
+      let r;
+      try { r = await fetch('/api/cmd', { method: 'POST', body: JSON.stringify(cmd) }); } catch (e) { throw new Error(String(e)); }
+      if (!r.ok) throw new Error(r.status === 429 ? 'slow down' : await r.text());
+      // No event reports a profile change, so fetch the new values and hand them over as a snapshot.
+      if (cmd.t === 'profile') emit(Object.assign(await (await fetch('/api/snapshot')).json(), { t: 'snapshot' }));
+    },
+    qr: text => '/api/qr?text=' + encodeURIComponent(text),
+    guest: () => fetch('/api/guest').then(r => r.json()),
+  };
+  return b;
+}
+const backend = window.OM_BACKEND || httpBackend();
+
 // All mesh data is untrusted: only ever put it into the page with textContent, never innerHTML.
 let S = null, cur = 'feed', open = null;           // open: {kind: 'dm'|'group', id} of the open conversation, or null for the list
 const unread = { feed: 0, security: 0 }, dmUnread = {};
@@ -213,12 +316,14 @@ function name(id) {
   const c = S && S.contacts.find(c => c.id === id);
   return c && c.name ? c.name + (c.verified ? '' : ' · ' + id.slice(0, 4)) : id.slice(0, 8);   // U8: names can be copied, keys cannot
 }
-const flags = c => [c.suspect ? 'same name as a verified contact' : '', c.revoked ? 'revoked' : ''].filter(x => x).join(' · ');
+const flags = c => [c.suspect ? 'Same name as a verified contact' : '', c.revoked ? 'Revoked' : ''].filter(x => x).join(' · ');
 const grp = id => S.groups.find(g => g.id === id);
+const gname = id => (grp(id) || {}).name || 'Group';   // a left group keeps only its history
 const uk = (kind, id) => kind + ':' + id;            // unread key: a group id may equal a contact id
 const isOpen = (kind, id) => cur === 'chats' && open && open.kind === kind && open.id === id;
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 function add(p, ...kids) { for (const k of kids) p.appendChild(typeof k === 'string' ? document.createTextNode(k) : k); return p; }
+function av(label, cls) { const a = el('span', ([...(label || '?').trim()][0] || '?').toUpperCase(), 'av' + (cls ? ' ' + cls : '')); a.setAttribute('aria-hidden', 'true'); return a; }
 function route(m) { return m.hops == null ? 'no route yet' : m.hops + (m.hops === 1 ? ' hop' : ' hops') + (m.via && m.hops > 1 ? ' via ' + name(m.via) : ''); }
 function status(m) {
   if (m.group) return m.total ? 'Delivered to ' + m.delivered + ' of ' + m.total : 'Sent ✓';
@@ -229,6 +334,7 @@ function status(m) {
 const byOrder = (a, b) => a.lamport - b.lamport || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const atBottom = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
 const toBottom = () => scrollTo(0, document.documentElement.scrollHeight);
+const count = (id, n) => $(id).textContent = n ? String(n) : '';
 
 function show(id) {
   cur = id;
@@ -238,8 +344,9 @@ function show(id) {
   if (id === 'chats' && open) dmUnread[uk(open.kind, open.id)] = 0;
   render(); if (id === 'feed' || (id === 'chats' && open)) toBottom(); else scrollTo(0, 0);
 }
-function openChat(kind, id) { open = { kind, id }; dmUnread[uk(kind, id)] = 0; $('dmErr').textContent = ''; render(); toBottom(); if (matchMedia('(pointer: fine)').matches) $('dmText').focus(); }
+function openChat(kind, id) { open = { kind, id }; dmUnread[uk(kind, id)] = 0; $('dmErr').textContent = ''; $('gView').open = false; render(); toBottom(); if (matchMedia('(pointer: fine)').matches) $('dmText').focus(); }
 function closeChat() { open = null; render(); scrollTo(0, 0); }
+function toggleGroupForm(on = $('newGroup').hidden) { $('newGroup').hidden = !on; $('newGroupBtn').setAttribute('aria-expanded', on); render(); if (on) $('gName').focus(); }
 
 // Compose bars: Enter sends, button disabled while empty or too long, byte counter from 80% of the limit.
 function compose(inp) {
@@ -264,7 +371,7 @@ const picked = div => [...$(div).querySelectorAll('input:checked')].map(b => b.v
 function newGroup() {
   if (!val('gName')) return $('gName').focus();
   send({ t: 'group', name: val('gName'), members: picked('gPick') }, 'gName');
-  $('newGroup').hidden = true;
+  toggleGroupForm(false);
 }
 const saveMembers = () => open && open.kind === 'group' && send({ t: 'group-members', id: open.id, members: picked('gMem') });
 
@@ -290,19 +397,14 @@ async function photo(input) {
 }
 
 function send(cmd, clearId, errId) {
-  const fail = t => errId ? ($(errId).textContent = 'Not sent: ' + t) : alert('Not sent: ' + t);
-  fetch('/api/cmd', { method: 'POST', body: JSON.stringify(cmd) })
-    .then(r => {
-      if (!r.ok) return r.text().then(t => fail(r.status === 429 ? 'slow down' : t));
-      if (errId) $(errId).textContent = '';
-      if (clearId) { $(clearId).value = ''; compose($(clearId)); }
-      // No event reports these back, so keep the local copy in step.
-      if (cmd.t === 'name') S.self.name = cmd.name;
-      if (cmd.t === 'debug') S.debug[cmd.flag] = cmd.on;
-      if (cmd.t === 'profile') return fetch('/api/snapshot').then(r => r.json()).then(s => { apply(Object.assign(s, { t: 'snapshot' })); render(); });
-      render();
-    })
-    .catch(e => fail(e));
+  return backend.send(cmd).then(() => {
+    if (errId) $(errId).textContent = '';
+    if (clearId) { $(clearId).value = ''; if ($(clearId).dataset.max) compose($(clearId)); }
+    // No event reports these back, so keep the local copy in step.
+    if (cmd.t === 'name') S.self.name = cmd.name;
+    if (cmd.t === 'debug') S.debug[cmd.flag] = cmd.on;
+    render();
+  }, e => errId ? ($(errId).textContent = 'Not sent: ' + e.message) : alert('Not sent: ' + e.message));
 }
 
 function upsert(list, m) {
@@ -362,8 +464,9 @@ function renderFeed() {
     const g = /^\[guest ([^\]]*)\] ([\s\S]*)$/.exec(m.text);  // 5.13: signer first, so guest text cannot pose as a sender
     const who = el('div', name(m.from), 'who');
     if (g) who.appendChild(el('span', 'guest of ' + name(m.from) + ': ' + g[1], 'tag'));
-    posts.appendChild(add(el('li', null, 'card'), who, el('div', g ? g[2] : m.text, 'txt'),
-      el('span', hhmm(m.tsMs) + (m.mine ? (status(m) ? ' · ' + status(m) : '') : ' · ' + route(m)), 'meta')));
+    posts.appendChild(add(el('li', null, 'post'), av(g ? g[1] : name(m.from), m.mine ? 'me' : ''),
+      add(el('div', null, 'body'), who, el('div', g ? g[2] : m.text, 'txt'),
+        el('span', hhmm(m.tsMs) + (m.mine ? (status(m) ? ' · ' + status(m) : '') : ' · ' + route(m)), 'meta'))));
   }
 }
 
@@ -380,28 +483,43 @@ function renderChats() {
   for (const r of rows.slice(0, MAX)) {
     const gq = r.kind === 'group', c = S.contacts.find(c => c.id === r.id) || {}, b = el('button', null, 'chat'), g = gq && grp(r.id);
     b.onclick = () => openChat(r.kind, r.id);
+    const title = gq ? gname(r.id) : name(r.id);
     const who = !r.last ? '' : r.last.mine ? 'You: ' : gq ? name(r.last.from) + ': ' : '';
     const prev = r.last ? who + (r.last.img ? 'Photo' : r.last.text) : 'No messages yet';
     const k = uk(r.kind, r.id), n = el('span', dmUnread[k] ? String(dmUnread[k]) : '', 'n');
-    add(b, add(el('div', null, 'main'),
-      add(el('div', null, 'line'), el('b', gq ? gname(r.id) : name(r.id)), el('small', r.last ? hhmm(r.last.tsMs) : '')),
+    add(b, av(title, gq ? 'g' : ''), add(el('div', null, 'main'),
+      add(el('div', null, 'line'), el('b', title), el('small', r.last ? hhmm(r.last.tsMs) : '')),
       add(el('div', null, 'line'), el('span', prev, 'prev'), n),
       el('small', !gq ? route(c) : g ? g.members.length + ' members' : 'you left this group')));
     ul.appendChild(add(el('li'), b));
   }
 }
 
-const gname = id => (grp(id) || {}).name || 'Group';   // a left group keeps only its history
+// The way a DM travels: You, the first relay (when known), any further relays, then the contact.
+function path(c, id) {
+  const stops = ['You'];
+  if (c.hops == null) stops.push('?');
+  else { if (c.hops > 1) stops.push(c.via ? name(c.via) : '…'); if (c.hops > 2) stops.push('+' + (c.hops - 2)); }
+  stops.push(name(id));
+  const d = $('chatPath'); d.replaceChildren(); d.classList.toggle('none', c.hops == null);
+  stops.forEach((s, i) => { if (i) d.appendChild(el('span', null, 'hl')); d.appendChild(el('span', s, 'hn' + (i ? i === stops.length - 1 ? ' end' : '' : ' me'))); });
+}
+
 function renderConvo() {
   const id = open.id, gq = open.kind === 'group', c = S.contacts.find(c => c.id === id) || {}, g = gq && grp(id), own = g && g.owner === S.self.id;
-  $('chatName').textContent = gq ? gname(id) : name(id);
+  const title = gq ? gname(id) : name(id);
+  $('chatName').textContent = title;
+  $('chatAv').textContent = av(title).textContent; $('chatAv').className = 'av' + (gq ? ' g' : '');
   $('chatRoute').textContent = gq ? (g ? g.members.map(name).join(', ') : 'you left this group') : route(c) + (c.verified ? ' · verified' : '');
+  $('chatPath').hidden = gq; if (!gq) path(c, id);
   $('chatWarn').textContent = gq ? '' : flags(c);
   $('photoBtn').hidden = gq; $('dmText').dataset.max = gq ? 1000 : 39999;   // group text: 1,000 bytes, no photos (13.2)
   $('gView').hidden = !own; document.querySelector('#convoView .compose').hidden = gq && !g;
   if (own && !$('gView').open) picker('gMem', g.members);   // rebuilt only while closed, so events do not undo ticks
   const ul = $('convo'); ul.replaceChildren();
-  for (const m of [...((gq ? S.gdms : S.dms)[id] || [])].sort(byOrder).slice(-MAX)) {
+  const list = [...((gq ? S.gdms : S.dms)[id] || [])].sort(byOrder).slice(-MAX);
+  if (!list.length) ul.appendChild(el('li', gq ? 'No messages yet. Say hello to the group.' : 'No messages yet. Messages are end-to-end encrypted and hop through nearby phones.', 'empty'));
+  for (const m of list) {
     const bub = el('div', null, 'bub');
     // "/9j/" is base64 for FF D8 FF: show only real JPEGs, and only via a data: URL (no innerHTML)
     if (m.img && m.img.startsWith('/9j/')) { const im = el('img'); im.src = 'data:image/jpeg;base64,' + m.img; im.alt = 'photo'; bub.appendChild(im); }
@@ -420,20 +538,22 @@ function sw(label, checked, onchange) {
 
 function renderNetwork() {
   $('fp').textContent = fp(S.self.id);
-  const qr = '/api/qr?text=' + encodeURIComponent('omesh:' + S.self.id);
-  if ($('myQr').getAttribute('src') !== qr) $('myQr').src = qr;
+  const qr = backend.qr('omesh:' + S.self.id);
+  $('myQr').hidden = !qr;
+  if (qr && $('myQr').getAttribute('src') !== qr) $('myQr').src = qr;
   if (document.activeElement !== $('myName')) $('myName').value = S.self.name;
-  const ct = $('contacts'); ct.replaceChildren();
-  if (!S.contacts.length) ct.appendChild(el('li', 'No contacts yet.', 'empty'));
+  const ct = $('contacts'); ct.replaceChildren(); count('nContacts', S.contacts.length);
+  if (!S.contacts.length) ct.appendChild(el('li', 'No contacts yet. They appear when another phone is in range.', 'empty'));
   for (const c of S.contacts.slice(0, MAX)) {
-    ct.appendChild(add(el('li', null, 'rowc'),
+    ct.appendChild(add(el('li', null, 'rowc'), av(name(c.id)),
       add(el('div', null, 'main'), el('b', name(c.id)), el('br'), el('span', fp(c.id), 'mono'), el('br'),
         el('small', route(c) + ' · ' + (c.linked ? 'linked' : 'not linked')), el('div', flags(c), 'err')),
-      sw('Verified', c.verified, on => send({ t: 'verify', id: c.id, on })),
-      sw('Muted', c.muted, on => send({ t: 'mute', id: c.id, on }))));
+      add(el('div', null, 'sws'),
+        sw('Verified', c.verified, on => send({ t: 'verify', id: c.id, on })),
+        sw('Muted', c.muted, on => send({ t: 'mute', id: c.id, on })))));
   }
-  const lt = $('links'); lt.replaceChildren();
-  if (!S.links.length) lt.appendChild(el('li', 'No links.', 'empty'));
+  const lt = $('links'); lt.replaceChildren(); count('nLinks', S.links.length);
+  if (!S.links.length) lt.appendChild(el('li', 'No links. Nearby phones connect on their own.', 'empty'));
   for (const l of S.links.slice(0, MAX)) {
     lt.appendChild(add(el('li', null, 'rowc'), add(el('div', null, 'main'),
       el('b', l.peer ? name(l.peer) : l.link), ' ', el('span', l.peer ? fp(l.peer) : '', 'mono'), el('br'),
@@ -451,12 +571,12 @@ function kv(id, o) {
 const renderStats = () => kv('stats', S.stats || {});
 
 function renderSecurity() {
-  const sec = $('sec'); sec.replaceChildren();
-  if (!S.security.length) sec.appendChild(el('li', 'No security events.', 'empty'));
+  const sec = $('sec'); sec.replaceChildren(); count('nSec', S.security.length);
+  if (!S.security.length) sec.appendChild(el('li', 'No security events. Forged, replayed or flooding packets show up here.', 'empty'));
   for (const e of [...S.security].sort((a, b) => b.tsMs - a.tsMs).slice(0, MAX)) {
     sec.appendChild(add(el('li', null, 'ev' + (BAD.includes(e.kind) ? ' bad' : '')),
-      el('small', new Date(e.tsMs).toLocaleTimeString() + ' '), el('b', e.kind), ' ' + e.detail +
-      (e.src ? ' src=' + name(e.src) : '') + (e.link ? ' link=' + e.link : '')));
+      el('b', e.kind), el('small', new Date(e.tsMs).toLocaleTimeString()),
+      el('span', e.detail + (e.src ? ' src=' + name(e.src) : '') + (e.link ? ' link=' + e.link : ''))));
   }
   $('tamper').checked = S.debug.tamper;
   $('drop').checked = S.debug.drop;
@@ -465,31 +585,28 @@ function renderSecurity() {
 // 5.13: while guest mode is on, show each join URL as a QR plus the PIN. Polled, so a rotated PIN shows up within 3 s.
 let guestKey = '';
 function guest() {
-  fetch('/api/guest').then(r => r.json()).then(g => {
+  backend.guest().then(g => {
     const key = JSON.stringify(g);
     if (key === guestKey) return;
     guestKey = key;
-    const d = $('guest'); d.replaceChildren();
+    const d = $('guest'); d.replaceChildren(); d.className = g ? 'guest' : '';
     if (!g) return;
     d.appendChild(el('h2', 'Guest access'));
-    d.appendChild(add(el('p', 'PIN: '), el('b', g.pin, 'mono')));
+    d.appendChild(el('p', 'Phones without the app join from their browser by scanning a code below.', 'mut'));
+    d.appendChild(add(el('p', 'PIN '), el('b', g.pin, 'mono')));
     for (const u of g.urls) {
-      const im = el('img', null, 'qr'); im.width = im.height = 200; im.alt = 'QR code of ' + u;
-      im.src = '/api/qr?text=' + encodeURIComponent(u);
+      const im = el('img', null, 'qr'); im.width = im.height = 176; im.alt = 'QR code of ' + u;
+      im.src = backend.qr(u);
       d.appendChild(im); d.appendChild(el('p', u, 'mono'));
     }
   }).catch(() => {});
 }
 setInterval(guest, 3000); guest();
 
-function connect() {
-  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => $('conn').hidden = true;
-  ws.onmessage = e => { const ev = JSON.parse(e.data); apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'network') renderStats(); };   // stats every 2 s: do not rebuild the switches
-  ws.onclose = () => { $('conn').hidden = false; setTimeout(connect, 2000); };
-}
+backend.onState(up => $('conn').hidden = up);
+backend.onEvent(ev => { apply(ev); if (ev.t !== 'stats') render(); else if (cur === 'network') renderStats(); });   // stats every 2 s: do not rebuild the switches
 show('feed');
-connect();
+backend.connect();
 </script>
 </body>
 </html>
