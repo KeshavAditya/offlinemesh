@@ -477,7 +477,8 @@ class MeshNode(
             is Frame.Graft -> if (treeToken(l)) { if (tree()) l.eager = true; onWant(l, f.ids) }
             Frame.Prune -> if (treeToken(l) && tree()) l.eager = false
             null -> penalize(l, C.SCORE_MALFORMED, SecKind.MALFORMED, "unparseable frame", null)
-            else -> {}
+            // One handshake per link: a second HELLO/HELLO_AUTH is a re-binding attempt (Bridgefy 2022), not a no-op.
+            is Frame.Hello, is Frame.HelloAuth -> { sec(SecKind.LINK_CLOSED, "handshake frame on a bound link", l, l.peer); closeLink(l) }
         }
     }
 
@@ -1045,7 +1046,9 @@ class MeshNode(
     private fun held(mid: String): Envelope? = store.envs[mid]?.env
         ?: (sequenceOf(myPresence) + contacts.values.asSequence().map { it.presence }).firstOrNull { it != null && hex(it.msgId) == mid }
 
-    private fun normName(s: String) = s.trim().lowercase()
+    /** U8: compares names ignoring case, all spaces, invisible/bidi characters (U+200B, U+202E), width (NFKC) and common look-alikes. */
+    private fun normName(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC).lowercase()
+        .filter { !it.isWhitespace() && it.category != CharCategory.FORMAT }.map { c -> LOOKALIKE_FROM.indexOf(c).let { i -> if (i < 0) c else LOOKALIKE_TO[i] } }.joinToString("")
     /** U8: the verified contact whose name an unverified contact [cid] shares, if any. Names can be copied, keys cannot. */
     private fun impersonated(cid: String): String? {
         if (cid in verified) return null
@@ -1080,6 +1083,9 @@ class MeshNode(
     }
 
     private companion object { const val EPOCH_MS = C.EPOCH_SECONDS * 1000L; const val DRAIN_MS = C.BUCKET_WINDOW_MS / C.SEND_BUCKET_SIZE; const val MAX_CONTACTS = 256; const val MAX_GROUP = 16; const val MAX_GROUPS = 32; const val MAX_GROUPS_HARD = 64; const val MAX_GROUPS_PER_OWNER = 4; const val MAX_MISSING = 512; const val IMPERSONATION_LOG_MS = 10 * 60_000L
+        // U8: Cyrillic a e o p c y x i j s d palochka, Greek alpha omicron nu rho tau iota kappa upsilon, then 0 l 1, after lowercase
+        const val LOOKALIKE_FROM = "аеорсухіјѕԁӏαονρτικυ0l1"
+        const val LOOKALIKE_TO = "aeopcyxijsdiaovptikuoii"
         const val REVOKE = "revoke"; const val REVOKE_WAIT_MS = 3_000L; const val FLUSH_MS = 500L }
 }
 
